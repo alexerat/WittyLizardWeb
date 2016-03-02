@@ -1,0 +1,13 @@
+{% extends 'site_frame.html.twig' %}
+
+{% block body %}
+    <article>
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/WaitingList.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        <form action="../{{ roomToken }}" method="post">
+            <input type="submit" value="Join Room">
+        </form>
+    </article>
+{% endblock %}

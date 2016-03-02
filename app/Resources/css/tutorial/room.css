@@ -1,0 +1,36 @@
+#whiteboard-container
+{
+    position: relative;
+    border-style: solid;
+    border-color: red;
+    padding: 0px 0px 0px 0px;
+    box-sizing: border-box;
+}
+
+#whiteBoard-output
+{
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding: 0px 0px 0px 0px;
+    box-sizing: border-box;
+}
+
+#whiteBoard-input
+{
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding: 0px 0px 0px 0px;
+    box-sizing: border-box;
+}

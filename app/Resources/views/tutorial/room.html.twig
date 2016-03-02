@@ -1,0 +1,122 @@
+{% extends 'site_frame.html.twig' %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    {% stylesheets '@AppBundle/Resources/public/css/tutorial/room.css' %}
+        <link rel='stylesheet' href="{{ asset_url }}" />
+    {% endstylesheets %}
+{% endblock %}
+
+{% block body %}
+    <div id="react-app"></div>
+    <div id="whiteboard-app" class="row"></div>
+
+    <article>
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/MediaContainer.js'
+                       '@AppBundle/Resources/public/js/tutorial/Whiteboard.js'
+                       '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+    </article>
+{% endblock %}
+
+{% block javascripts %}
+
+    <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+
+    {% javascripts '@AppBundle/Resources/public/js/tutorial/EventEmitter.js'
+                   '@AppBundle/Resources/public/js/tutorial/util.js'
+                   '@AppBundle/Resources/public/js/tutorial/Negotiator.js'
+                   '@AppBundle/Resources/public/js/tutorial/PeerHandler.js' %}
+        <script src="{{ asset_url }}"></script>
+    {% endjavascripts %}
+
+    <script>
+
+        var mediaSocket;
+        var boardSocket;
+        var localStream;
+        var userData = [];
+        var medCont;
+        var whitCont;
+        var peerHandler;
+
+        if (navigator.mediaDevices.getUserMedia)
+        {
+            var p = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+            p.then(function(mediaStream)
+            {
+                localStream = mediaStream;
+
+                mediaSocket = io('http://40.127.76.25:9001/media');
+                window.setTimeout(initMedia, 100);
+
+                boardSocket = io('http://40.127.76.25:9001/board');
+                window.setTimeout(initBoard, 100);
+            });
+            p.catch(function(err) { console.log(err.name); });
+        }
+        else
+        {
+            console.log("getUserMedia not supported");
+        }
+
+        function initBoard()
+        {
+            boardSocket.on('CONNOK', function()
+            {
+                whitCont = ReactDOM.render(React.createElement(Whiteboard, null), document.getElementById('whiteboard-app'));
+                whitCont.setSocket(boardSocket);
+            });
+
+            boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
+        }
+
+        function initMedia()
+        {
+            peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
+            medCont = ReactDOM.render(React.createElement(MediaContainer, null), document.getElementById('react-app'));
+            userData[0] = {userId: 0, username: 'Me', stream: localStream};
+            medCont.updateList(userData);
+
+
+            peerHandler.on('error', function(err)
+            {
+
+            });
+
+            peerHandler.on('disconnected', function()
+            {
+
+            });
+
+            peerHandler.on('close', function()
+            {
+
+            });
+
+            peerHandler.on('join', function(userId, username)
+            {
+                userData[userId] = {userId: userId, username: username};
+            });
+
+            peerHandler.on('leave', function(userId)
+            {
+
+            });
+
+            peerHandler.on('call', function(userId)
+            {
+                peerHandler.answer(userId, localStream);
+            });
+
+            peerHandler.on('stream', function(userId, remoteStream)
+            {
+                userData[userId].stream = remoteStream;
+                medCont.updateList(userData);
+            });
+        }
+    </script>
+
+{% endblock %}
