@@ -53,7 +53,7 @@
                 localStream = mediaStream;
 
                 mediaSocket = io('http://40.127.76.25:9001/media');
-                window.setTimeout(initMedia, 100);
+                window.setTimeout(initMedia, 1000);
 
                 boardSocket = io('http://40.127.76.25:9001/board');
                 window.setTimeout(initBoard, 1000);
