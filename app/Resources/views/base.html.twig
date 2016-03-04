@@ -7,8 +7,7 @@
 
         {% block framework %}{% endblock %}
 
-        {% stylesheets '@AppBundle/Resources/public/css/normalize.css'
-                       '@AppBundle/Resources/public/css/foundation.css' %}
+        {% stylesheets '@AppBundle/Resources/public/css/foundation.css' %}
             <link rel='stylesheet' href="{{ asset_url }}" />
         {% endstylesheets %}
         {% block stylesheets %}{% endblock %}
