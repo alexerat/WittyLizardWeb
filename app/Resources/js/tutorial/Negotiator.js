@@ -75,7 +75,7 @@ Negotiator._setupListeners = function(connection, pc)
 
             util.log('Received ICE candidates for: ', connection.peer);
 
-            var msgPayload = {candidate: evt.candidate, userId: connection.id};
+            var msgPayload = {candidate: evt.candidate, userId: connection.provider.id};
             var msg = {remoteId: connection.peer, type: 'CANDIDATE', payload: msgPayload};
             connection.provider.socket.emit('RTC-Message', msg);
         }
@@ -154,7 +154,8 @@ Negotiator._makeOffer = function(connection)
         {
             util.log('Set localDescription: offer', 'for:', connection.peer);
 
-            var msgPayload = {sdp: offer, label: connection.label, userId: connection.id, browser: util.browser};
+            // TODO: Remove label.
+            var msgPayload = {sdp: offer, label: connection.label, userId: connection.provider.id, browser: util.browser};
             var msg = {type: 'OFFER', remoteId: connection.peer, payload: msgPayload};
             connection.provider.socket.emit('RTC-Message', msg);
 
@@ -182,7 +183,7 @@ Negotiator._makeAnswer = function(connection)
         {
             util.log('Set localDescription: ANSWER', 'for:', connection.peer);
 
-            var msgPayload = {sdp: answer, userId: connection.id, browser: util.browser};
+            var msgPayload = {sdp: answer, userId: connection.provider.id, browser: util.browser};
             var msg = {type: 'ANSWER', remoteId: connection.peer, payload: msgPayload};
             connection.provider.socket.emit('RTC-Message', msg);
 

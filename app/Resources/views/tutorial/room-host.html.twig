@@ -53,10 +53,9 @@
                 localStream = mediaStream;
 
                 mediaSocket = io('http://40.127.76.25:9001/media');
-                window.setTimeout(initMedia, 1000);
-
+                initMedia();
                 boardSocket = io('http://40.127.76.25:9001/board');
-                window.setTimeout(initBoard, 1000);
+                initBoard();
             });
 
             p.catch(function(err) { console.log(err.name); });
@@ -67,52 +66,58 @@
         }
         function initBoard()
         {
-            boardSocket.on('CONNOK', function()
+            boardSocket.on('READY', function()
             {
-                whitCont = ReactDOM.render(React.createElement(Whiteboard, null), document.getElementById('whiteboard-app'));
-                whitCont.setSocket(boardSocket);
-            });
+                boardSocket.on('CONNOK', function()
+                {
+                    whitCont = ReactDOM.render(React.createElement(Whiteboard, null), document.getElementById('whiteboard-app'));
+                    whitCont.setSocket(boardSocket);
+                });
 
-            boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
+                boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
+            });
         }
 
         function initMedia()
         {
-            peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
-            medCont = ReactDOM.render(React.createElement(MediaContainer, null), document.getElementById('react-app'));
-            userData[0] = {userId: 0, username: 'Me', stream: localStream};
-            medCont.updateList(userData);
-
-            peerHandler.on('error', function(err)
+            mediaSocket.on('READY', function()
             {
-
-            });
-
-            peerHandler.on('disconnected', function()
-            {
-
-            });
-
-            peerHandler.on('close', function()
-            {
-
-            });
-
-            peerHandler.on('join', function(userId, username)
-            {
-                userData[userId] = {userId: userId, username: username};
-                window.setTimeout(callUser(userId),2000);
-            });
-
-            peerHandler.on('call', function(userId)
-            {
-
-            });
-
-            peerHandler.on('stream', function(userId, remoteStream)
-            {
-                userData[userId].stream = remoteStream;
+                peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
+                medCont = ReactDOM.render(React.createElement(MediaContainer, null), document.getElementById('react-app'));
+                userData[0] = {userId: 0, username: 'Me', stream: localStream};
                 medCont.updateList(userData);
+
+                peerHandler.on('error', function(err)
+                {
+
+                });
+
+                peerHandler.on('disconnected', function()
+                {
+
+                });
+
+                peerHandler.on('close', function()
+                {
+
+                });
+
+                peerHandler.on('join', function(userId, username)
+                {
+                    userData[userId] = {userId: userId, username: username};
+                    window.setTimeout(callUser(userId),2000);
+                });
+
+                peerHandler.on('call', function(userId)
+                {
+
+                });
+
+                peerHandler.on('stream', function(userId, remoteStream)
+                {
+                    userData[userId].stream = remoteStream;
+                    medCont.updateList(userData);
+                });
             });
         }
 

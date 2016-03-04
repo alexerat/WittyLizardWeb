@@ -45,7 +45,7 @@ function PeerHandler(roomToken, options, socket)
     this.open = false; // Sockets and such are not yet open.
 
     // Connections for this peer.
-    this.connections = {};
+    this.connections = [];
 
     // Start the server connection
     this._initializeServerConnection();
@@ -71,6 +71,9 @@ PeerHandler.prototype._initializeServerConnection = function()
     {
         self.id = userId;
         self.open = true;
+
+        // TODO: Have a timeout error in case of a no-response
+        self.socket.emit('JOIN-ROOM', self.roomToken);
     });
 
     // Called when a user joins the room, Passes out an event to notify listeners.
@@ -158,9 +161,6 @@ PeerHandler.prototype._initialize = function()
 {
     // TODO: Have a timeout error in case of a no-response
     this.socket.emit('GETID');
-
-    // TODO: Have a timeout error in case of a no-response
-    this.socket.emit('JOIN-ROOM', this.roomToken);
 };
 
 /**

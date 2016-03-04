@@ -19,6 +19,8 @@
     margin-bottom: 0px;
     padding: 0px 0px 0px 0px;
     box-sizing: border-box;
+    height: 100%;
+    width: 100%;
 }
 
 #whiteBoard-input
@@ -33,4 +35,6 @@
     margin-bottom: 0px;
     padding: 0px 0px 0px 0px;
     box-sizing: border-box;
+    height: 100%;
+    width: 100%;
 }

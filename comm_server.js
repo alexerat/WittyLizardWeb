@@ -16,8 +16,6 @@ var txt_io = io.of('/text');
 var med_io = io.of('/media');
 var bor_io = io.of('/board');
 
-var connectedUsers = [];
-
 app.use(parseCookie('7e501ffeb426888ea59e63aa15b931a7f9d28d24'));
 
 //Media signalling server
@@ -38,8 +36,7 @@ med_io.on('connection', function(socket)
     var ScalableBroadcast;
 
     console.log('MEDIA: User Connecting.....');
-
-    sessID = socket.handshake.headers.cookie.split("; ")[1].split("=")[1];
+    sessID = socket.handshake.headers.cookie.split("PHPSESSID=")[1].split(";")[0];
 
     //Disconnect if no room join is attempted within a minute. Prevent spamming.
     joinTimeout = setTimeout(function()
@@ -70,19 +67,39 @@ med_io.on('connection', function(socket)
                             if (rows[0])
                             {
                                 username = rows[0].Username;
-                                connectedUsers[socket.id] = {userId: userID, username: username};
+
+                                connection.query('USE Online_Comms');
+                                connection.query('UPDATE Room_Participants SET Socket_ID = ?, Username = ? WHERE User_ID = ?', [socket.id, username, userID], function(err, rows)
+                                {
+                                    if (!err)
+                                    {
+                                        socket.emit('READY');
+                                        connection.release();
+                                        console.log('MEDIA: User ' + userID + ' passed initial connection.');
+                                    }
+                                    else
+                                    {
+                                        connection.release();
+                                        socket.disconnect();
+                                        console.log('MEDIA: Error setting socket ID in database.');
+                                        return;
+                                    }
+                                });
                             }
                             else
                             {
-                                connection.disconnect();
+                                connection.release();
+                                socket.disconnect();
                                 console.log('MEDIA: User ' + connection.escape(userID) +  ' not found.');
                                 return;
                             }
                         }
                         else
                         {
-                            connection.disconnect();
+                            connection.release();
+                            socket.disconnect();
                             console.log('MEDIA: Error while performing user Query. ' + err);
+                            return;
                         }
                     });
 
@@ -90,21 +107,22 @@ med_io.on('connection', function(socket)
                 }
                 else
                 {
-                    connection.disconnect();
+                    connection.release();
+                    socket.disconnect();
                     console.log('MEDIA: Session ' + connection.escape(sessData) +  ' not found.');
                     return;
                 }
             }
             else
             {
-                connection.disconnect();
+                connection.release();
+                socket.disconnect();
                 console.log('MEDIA: Error while performing session Query. ' + err);
+                return;
             }
 
-            console.log('MEDIA: User ' + userID + ' passed initial connection.');
-        });
 
-        connection.release();
+        });
     });
 
     if (params.enableScalableBroadcast)
@@ -128,6 +146,19 @@ med_io.on('connection', function(socket)
 
         }
         finally
+        {
+
+        }
+    });
+
+    socket.on('GETID', function(extra)
+    {
+        try
+        {
+            console.log('Notifying user ' + userID + ' of their ID.');
+            socket.emit('USERID', userID);
+        }
+        catch (e)
         {
 
         }
@@ -171,23 +202,12 @@ med_io.on('connection', function(socket)
                         }
                     });
 
-                    socket.on('GETID', function(extra)
-                    {
-                        try
-                        {
-                            socket.emit('USERID', userID);
-                        }
-                        catch (e)
-                        {
-
-                        }
-                    });
-
                     socket.on('RTC-Message', function(message, callback)
                     {
                         try
                         {
-                            socket.to(message.remoteId).emit(message.type, message.payload);
+                            console.log(socket.id + ' Fowarding message to ' + message.remoteId + " User ID: " + message.payload.userId);
+                            socket.broadcast.to(message.remoteId).emit(message.type, message.payload);
                         }
                         catch (e)
                         {
@@ -199,12 +219,35 @@ med_io.on('connection', function(socket)
                     //Tell all those in the room that a new user joined
                     med_io.to(roomID).emit('JOIN', userID, username, socket.id);
 
-                    var clients = med_io.adapter.rooms[roomID];
-
-                    for (var client in clients)
+                    if(med_io.adapter.rooms[roomID])
                     {
-                        //Tell the new user about everyone else
-                        socket.emit('JOIN', connectedUsers[client].userId, connectedUsers[client].username, client);
+                        var clients = med_io.adapter.rooms[roomID].sockets;
+                        console.log('Clients: ' + clients);
+                        for (client in clients)
+                        {
+                            console.log('Querying ' + client);
+                            // Tell the new user about everyone else
+                            connection.query('SELECT User_Id, Username, Socket_ID FROM Room_Participants WHERE Socket_ID = ?', [client], function(err, rows)
+                            {
+                                if (!err)
+                                {
+                                    if(rows[0])
+                                    {
+                                        socket.emit('JOIN', rows[0].User_Id, rows[0].Username, rows[0].Socket_ID);
+                                    }
+                                    else
+                                    {
+                                        console.log('MEDIA: HERE. Error querying session participants.');
+                                        return;
+                                    }
+                                }
+                                else
+                                {
+                                    console.log('MEDIA: Error querying session participants.' + err);
+                                    return;
+                                }
+                            });
+                        }
                     }
 
                     //New user joins the specified room
@@ -439,8 +482,7 @@ bor_io.on('connection', function(socket)
 
 
     console.log('BOARD: User Connecting.....');
-
-    sessID = socket.handshake.headers.cookie.split("; ")[1].split("=")[1];
+    sessID = socket.handshake.headers.cookie.split("PHPSESSID=")[1].split(";")[0];
 
     //Disconnect if no room join is attempted within a minute. Prevent spamming.
     joinTimeout = setTimeout(function()
@@ -471,6 +513,8 @@ bor_io.on('connection', function(socket)
                             if (rows[0])
                             {
                                 username = rows[0].Username;
+                                socket.emit('READY');
+                                console.log('BOARD: User ' + userID + ' passed initial connection.');
                             }
                             else
                             {
@@ -500,8 +544,6 @@ bor_io.on('connection', function(socket)
                 connection.disconnect();
                 console.log('BOARD: Error while performing session Query. ' + err);
             }
-
-            console.log('BOARD: User ' + userID + ' passed initial connection.');
         });
 
         connection.release();
@@ -663,9 +705,7 @@ bor_io.on('connection', function(socket)
                                         if(numRecieved[data.id] == numPoints[data.id])
                                         {
                                             // We recived eveything so clear the timeout and give client the OK.
-                                            recievedPoints.splice(data.id, 1);
                                             clearInterval(msgTimeouts[data.id]);
-                                            msgTimeouts.splice(data.id, 1);
                                         }
                                     }
                                     connection2.release();
