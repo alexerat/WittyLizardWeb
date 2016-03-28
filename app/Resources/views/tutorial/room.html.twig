@@ -8,8 +8,8 @@
 {% endblock %}
 
 {% block body %}
-    <div id="react-app"></div>
-    <div id="whiteboard-app" class="row"></div>
+    <div id="media-app"></div>
+    <div id="whiteboard-app"></div>
 
     <article>
         {% javascripts '@AppBundle/Resources/public/js/tutorial/MediaContainer.js'
@@ -49,9 +49,9 @@
             {
                 localStream = mediaStream;
 
-                mediaSocket = io('http://40.127.76.25:9001/media');
+                mediaSocket = io('http://40.127.67.237:9001/media');
                 initMedia();
-                boardSocket = io('http://40.127.76.25:9001/board');
+                boardSocket = io('http://40.127.67.237:9001/board');
                 initBoard();
             });
             p.catch(function(err) { console.log(err.name); });
@@ -63,13 +63,18 @@
 
         function initBoard()
         {
-            boardSocket.on('READY', function()
+            boardSocket.on('READY', function(userId)
             {
+                console.log('Received ready and emitted join room.');
                 boardSocket.on('CONNOK', function()
                 {
-                    whitCont = ReactDOM.render(React.createElement(Whiteboard, null), document.getElementById('whiteboard-app'));
-                    whitCont.setSocket(boardSocket);
+
+
                 });
+
+                ReactDOM.unmountComponentAtNode(document.getElementById('whiteboard-app'));
+                whitCont = ReactDOM.render(React.createElement(Whiteboard, {userId: userId}), document.getElementById('whiteboard-app'));
+                whitCont.setSocket(boardSocket);
 
                 boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
             });
@@ -80,7 +85,7 @@
             mediaSocket.on('READY', function()
             {
                 peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
-                medCont = ReactDOM.render(React.createElement(MediaContainer, null), document.getElementById('react-app'));
+                medCont = ReactDOM.render(React.createElement(MediaContainer, null), document.getElementById('media-app'));
                 userData[0] = {userId: 0, username: 'Me', stream: localStream};
                 medCont.updateList(userData);
 

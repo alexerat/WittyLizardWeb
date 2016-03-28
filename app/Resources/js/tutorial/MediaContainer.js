@@ -6,7 +6,7 @@ var UserMedia = React.createClass({displayName: 'UserMedia',
         var streamUrl = window.URL.createObjectURL(this.props.stream);
         var vidElem = React.createElement('video', {className: "userVideo", src: streamUrl, autoPlay: true});
         var usrName = React.createElement('p', {className: "userName"}, this.props.username);
-        return  (React.createElement("li", { className: "userMedia" }, vidElem, usrName));
+        return  (React.createElement("li", { className: "userContainer"}, vidElem, usrName));
     }
 });
 
@@ -31,5 +31,5 @@ render: function render()
     {
         return React.createElement(UserMedia, { username: user.username, stream: user.stream, key: user.userId });
     });
-    return React.createElement("ul", { className: "mediaContainer" }, mediaNodes);
+    return React.createElement("ul", { className: "small-block-grid-3" }, mediaNodes);
 }});

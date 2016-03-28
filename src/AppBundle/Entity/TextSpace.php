@@ -5,12 +5,12 @@ namespace AppBundle\Entity;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * ChatSpace
+ * TextSpace
  *
- * @ORM\Table(name="Online_Comms.Chat_Space", indexes={@ORM\Index(name="fk_Chat_Space_Tutorial_Room_Table1_idx", columns={"Room_ID"}), @ORM\Index(name="fk_Chat_Space_User_Table1_idx", columns={"User_ID"})})
+ * @ORM\Table(name="Online_Comms.Text_Space", indexes={@ORM\Index(name="fk_Text_Space_Tutorial_Room_Table1_idx", columns={"Room_ID"}), @ORM\Index(name="fk_Text_Space_User_Table1_idx", columns={"User_ID"})})
  * @ORM\Entity
  */
-class ChatSpace
+class TextSpace
 {
 
     /**
@@ -44,7 +44,7 @@ class ChatSpace
     /**
      * @var string
      *
-     * @ORM\Column(name="Chat_Data", type="string", length=200, nullable=true)
+     * @ORM\Column(name="Text_Data", type="string", length=200, nullable=true)
      */
     private $chatData;
 
@@ -53,7 +53,7 @@ class ChatSpace
      *
      * @param \DateTime $postTime
      *
-     * @return ChatSpace
+     * @return TextSpace
      */
     public function setPostTime($postTime)
     {
@@ -77,9 +77,9 @@ class ChatSpace
      *
      * @param string $chatData
      *
-     * @return ChatSpace
+     * @return TextSpace
      */
-    public function setChatData($chatData)
+    public function setTextData($chatData)
     {
         $this->chatData = $chatData;
 
@@ -91,7 +91,7 @@ class ChatSpace
      *
      * @return string
      */
-    public function getChatData()
+    public function getTextData()
     {
         return $this->chatData;
     }
@@ -101,7 +101,7 @@ class ChatSpace
      *
      * @param \AppBundle\Entity\TutorialRoomTable $roomId
      *
-     * @return ChatSpace
+     * @return TextSpace
      */
     public function setRoomId(\AppBundle\Entity\TutorialRoomTable $roomId = null)
     {
@@ -125,7 +125,7 @@ class ChatSpace
      *
      * @param \AppBundle\Entity\UserTable $user
      *
-     * @return ChatSpace
+     * @return TextSpace
      */
     public function setUser(\AppBundle\Entity\UserTable $user = null)
     {

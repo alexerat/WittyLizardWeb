@@ -7,11 +7,12 @@
 
         {% block framework %}{% endblock %}
 
-        {% stylesheets '@AppBundle/Resources/public/css/foundation.css' %}
+        {% stylesheets '@AppBundle/Resources/public/css/foundation.css'
+                       '@AppBundle/Resources/public/css/base.css' %}
             <link rel='stylesheet' href="{{ asset_url }}" />
         {% endstylesheets %}
         {% block stylesheets %}{% endblock %}
-        
+
     </head>
     <body>
         {% block body %}{% endblock %}
