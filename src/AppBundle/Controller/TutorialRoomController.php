@@ -32,6 +32,7 @@ class TutorialRoomController extends Controller
             return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Room does not exist.'));
         }
 
+        $roomServer = $room->getServer();
         $roomPart = $em->getRepository('AppBundle:RoomParticipants')->findOneBy(array('roomId' => $room->getRoomId(), 'user' => $uid));
 
         if(!$roomPart)
@@ -49,7 +50,7 @@ class TutorialRoomController extends Controller
 
         if($room->getStartTime())
         {
-            if($room->getStartTime() + $room->getSessionLength() < $currTime)
+            if($room->getStartTime()->add(new \DateInterval('PT'.$room->getSessionLength().'S')) < $currTime)
             {
                 return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Session has ended.'));
             }
@@ -98,13 +99,18 @@ class TutorialRoomController extends Controller
             return $this->render('tutorial/room-reload.html.twig', array('errorInfo' => 'Host has not started session yet.'));
         }
 
+        if(!$roomServer)
+        {
+            return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Server not assigned.'));
+        }
 
+        $serverToken = $roomServer->getEndPoint();
 
         $roomPart->setJoinTime(new \DateTime("now"));
 
         $em->remove($waitJ);
         $em->flush();
-        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken));
+        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken));
     }
 
     /**
@@ -207,10 +213,27 @@ class TutorialRoomController extends Controller
             {
                 return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Session has ended.'));
             }
+            else
+            {
+                # TODO: Redirect to room.
+            }
         }
 
-        // Set the host join time in DB.
-        $room->setHostJoin(new \DateTime("now"));
+        if(!$room->getHostJoin())
+        {
+            // Set the host join time in DB.
+            $room->setHostJoin(new \DateTime("now"));
+        }
+
+
+        if(!$room->getServer())
+        {
+            $servers = $em->getRepository('AppBundle:TutorialServers')->findBy(array('isUp' => TRUE),array('numRooms' => 'ASC'));
+            $room->setServer($servers[0]);
+            $servers[0]->addRoom();
+        }
+
+
         $em->flush();
 
         // Return the wait room template.
@@ -241,6 +264,7 @@ class TutorialRoomController extends Controller
         }
 
 
+        $roomServer = $room->getServer();
         $tuteSess = $em->getRepository('AppBundle:TutorSession')->findOneBy(array('sessId' => $room->getRoomId()));
         $tutor = $tuteSess->getTutorId();
 
@@ -265,7 +289,7 @@ class TutorialRoomController extends Controller
 
         if($room->getStartTime())
         {
-            if($room->getStartTime() + $room->getSessionLength() < $currTime)
+            if($room->getStartTime()->add(new \DateInterval('PT'.$room->getSessionLength().'S')) < $currTime)
             {
                 return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Session has ended.'));
             }
@@ -276,10 +300,17 @@ class TutorialRoomController extends Controller
             $room->setStartTime(new \DateTime("now"));
         }
 
+        if(!$roomServer)
+        {
+            return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Server not assigned.'));
+        }
+
+        $serverToken = $roomServer->getEndPoint();
+
         $em->flush();
 
         // Return the tutorial room template for tutors.
-        return $this->render('tutorial/room-host.html.twig', array('roomToken' => $roomToken));
+        return $this->render('tutorial/room-host.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken));
     }
 
 

@@ -4,3 +4,8 @@ body
     padding:0px;
     width:100%;
 }
+
+#off-canvas-content
+{
+    height: 100%;
+}

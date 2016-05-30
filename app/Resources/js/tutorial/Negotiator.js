@@ -4,35 +4,52 @@
 var Negotiator = {};
 
 /** Returns a PeerConnection object set up correctly for media. */
-Negotiator.startConnection = function(connection, options)
+Negotiator.startConnection = function(connection)
 {
-    var pc = Negotiator._getPeerConnection(connection, options);
+    console.log('Negotiator starting connection.....');
+    var pc = Negotiator._getPeerConnection(connection);
     connection.pc = pc;
+}
 
-    if (options._stream)
+Negotiator.addTrack = function(connection, track, stream)
+{
+    if(connection.pc)
     {
-        // Add the stream.
-        pc.addStream(options._stream);
-    }
+        var sender = connection.pc.addTrack(track, stream);
+        console.log(sender);
 
-    // What do we need to do now?
-    if (options.originator)
-    {
-        // TODO: Investigate this. Pretty sure it's a chrome interop.
-        if (!util.supports.onnegotiationneeded)
+        if(connection.open)
         {
-            Negotiator._makeOffer(connection);
+            Negotiator.makeOffer(connection);
+        }
+
+        return sender;
+    }
+    else
+    {
+        // TODO: Error
+    }
+}
+
+Negotiator.removeTrack = function(connection, sender)
+{
+    if(connection.pc)
+    {
+        console.log(sender);
+        connection.pc.removeTrack(sender);
+
+        if(connection.open)
+        {
+            Negotiator.makeOffer(connection);
         }
     }
     else
     {
-        Negotiator.handleSDP('OFFER', connection, options.sdp);
+        // TODO: Error
     }
-
-    return pc;
 }
 
-Negotiator._getPeerConnection = function(connection, options)
+Negotiator._getPeerConnection = function(connection)
 {
     var pc = connection.pc;
 
@@ -47,33 +64,46 @@ Negotiator._getPeerConnection = function(connection, options)
 /** Start a PC. */
 Negotiator._startPeerConnection = function(connection)
 {
-    util.log('Creating RTCPeerConnection.');
+    util.log('Creating RTCPeerConnection. With config: ' + JSON.stringify(connection.provider.options.config));
 
     var optional = {};
 
     // TODO: Investigate this.
     // Interop required for chrome.
-    optional = {optional: [{DtlsSrtpKeyAgreement: true}]};
-
-    var pc = new RTCPeerConnection(connection.provider.options.config, optional);
-    Negotiator._setupListeners(connection, pc);
+    var pc = new RTCPeerConnection(connection.provider.options.config);
+    connection.pc = pc;
+    Negotiator._setupListeners(connection);
 
     return pc;
 }
 
+// Return false if the candidate should be dropped, true if not.
+Negotiator._filterIceCandidate = function(candidateObj)
+{
+    var candidateStr = candidateObj.candidate;
+
+    // Always eat TCP candidates. Not needed in this context.
+    if (candidateStr.indexOf('tcp') !== -1)
+    {
+        return false;
+    }
+
+    // TODO: optionally filter relay candidates
+
+    return true;
+};
+
 /** Set up various WebRTC listeners. This handles the p2p signalling through signalling server. */
-Negotiator._setupListeners = function(connection, pc)
+Negotiator._setupListeners = function(connection)
 {
     // ICE CANDIDATES.
     util.log('Listening for ICE candidates.');
 
-    pc.onicecandidate = function(evt)
+    connection.pc.onicecandidate = function(evt)
     {
-        if (evt.candidate && !connection.iceRecieved)
+        if (evt.candidate && Negotiator._filterIceCandidate(evt.candidate))
         {
-            connection.iceRecieved = true;
-
-            util.log('Received ICE candidates for: ', connection.peer);
+            util.log('Sent our ICE candidates to: ', connection.peer);
 
             var msgPayload = {candidate: evt.candidate, userId: connection.provider.id};
             var msg = {remoteId: connection.peer, type: 'CANDIDATE', payload: msgPayload};
@@ -81,51 +111,43 @@ Negotiator._setupListeners = function(connection, pc)
         }
     };
 
-    pc.oniceconnectionstatechange = function()
+    connection.pc.oniceconnectionstatechange = function(evt)
     {
-        switch (pc.iceConnectionState)
+        switch (connection.pc.iceConnectionState)
         {
+            case 'checking':
+                util.log('iceConnectionState is checking');
+                break;
+            case 'completed':
+                util.log('iceConnectionState is completed');
+                break;
             case 'disconnected':
-            case 'failed':
                 util.log('iceConnectionState is disconnected, closing connections to ' + connection.peer);
+                // TODO: This closes all connections, we shouldn't do that.
+                break;
+            case 'failed':
+                util.log('iceConnectionState is failed, closing connections to ' + connection.peer);
                 // TODO: This closes all connections, we shouldn't do that.
                 connection.provider.close(connection.id);
                 break;
             case 'completed':
-                pc.onicecandidate = util.noop;
+                connection.pc.onicecandidate = util.noop;
                 break;
         }
     };
 
-    // Fallback for older Chrome impls.
-    pc.onicechange = pc.oniceconnectionstatechange;
-
-    // ONNEGOTIATIONNEEDED (Chrome)
-    /*
-    util.log('Listening for `negotiationneeded`');
-    pc.onnegotiationneeded = function()
-    {
-        util.log('`negotiationneeded` triggered');
-        if (pc.signalingState == 'stable')
-        {
-            connection.pc = pc;
-            Negotiator._makeOffer(connection);
-        }
-        else
-        {
-            util.log('onnegotiationneeded triggered when not stable. Is another connection being established?');
-        }
-    };
-    */
+    // Fallback for older Chrome versions.
+    connection.pc.onicechange = connection.pc.oniceconnectionstatechange;
 
     // MEDIACONNECTION.
-    util.log('Listening for remote stream');
-    pc.onaddstream = function(evt)
+    util.log('Listening for remote tracks.');
+    connection.pc.ontrack = function(evt)
     {
-        util.log('Received remote stream');
-        var stream = evt.stream;
+        // TODO: Handle this better.
+        util.log('Received a new remote track.');
+        console.log('Track Object: ' + evt.track);
 
-        connection.provider.addStream(connection.id, stream);
+        connection.provider.remoteTrack(connection.id, evt.track);
     };
 }
 
@@ -133,24 +155,27 @@ Negotiator.cleanup = function(connection)
 {
     util.log('Cleaning up PeerConnection to ' + connection.peer);
 
-    var pc = connection.pc;
-
-    if (!!pc && (pc.readyState !== 'closed' || pc.signalingState !== 'closed'))
+    if (!!connection.pc && (connection.pc.readyState !== 'closed' || connection.pc.signalingState !== 'closed'))
     {
-        pc.close();
+        connection.pc.close();
         connection.pc = null;
     }
 }
 
-Negotiator._makeOffer = function(connection)
+Negotiator.makeOffer = function(connection)
 {
-    var pc = connection.pc;
+    var p = connection.pc.createOffer(connection.options.constraints);
 
-    pc.createOffer(function(offer)
+    connection._originator = true;
+
+    p.then(function(offer)
     {
         util.log('Created offer.');
 
-        pc.setLocalDescription(offer, function()
+        connection._hasRemoteSdp = false;
+
+        var p2 = connection.pc.setLocalDescription(offer);
+        p2.then(function()
         {
             util.log('Set localDescription: offer', 'for:', connection.peer);
 
@@ -159,27 +184,31 @@ Negotiator._makeOffer = function(connection)
             var msg = {type: 'OFFER', remoteId: connection.peer, payload: msgPayload};
             connection.provider.socket.emit('RTC-Message', msg);
 
-        }, function(err)
+        });
+        p2.catch(function(err)
         {
             connection.provider.emitError('webrtc', err);
             util.log('Failed to setLocalDescription, ', err);
         });
-    }, function(err)
+    });
+    p.catch(function(err)
     {
         connection.provider.emitError('webrtc', err);
         util.log('Failed to createOffer, ', err);
-    }, connection.options.constraints);
+    });
 }
 
 Negotiator._makeAnswer = function(connection)
 {
-    var pc = connection.pc;
+    var p = connection.pc.createAnswer();
 
-    pc.createAnswer(function(answer)
+    p.then(function(answer)
     {
         util.log('Created answer.');
 
-        pc.setLocalDescription(answer, function()
+        var p2 = connection.pc.setLocalDescription(answer);
+
+        p2.then(function()
         {
             util.log('Set localDescription: ANSWER', 'for:', connection.peer);
 
@@ -187,13 +216,15 @@ Negotiator._makeAnswer = function(connection)
             var msg = {type: 'ANSWER', remoteId: connection.peer, payload: msgPayload};
             connection.provider.socket.emit('RTC-Message', msg);
 
-        }, function(err)
+        });
+        p2.catch(function(err)
         {
             connection.provider.emitError('webrtc', err);
             util.log('Failed to setLocalDescription, ', err);
         });
 
-    }, function(err)
+    });
+    p.catch(function(err)
     {
         connection.provider.emitError('webrtc', err);
         util.log('Failed to create answer, ', err);
@@ -201,13 +232,14 @@ Negotiator._makeAnswer = function(connection)
 }
 
 /** Handle an SDP. */
-Negotiator.handleSDP = function(type, connection, sdp)
+Negotiator.handleSDP = function(type, connection)
 {
-    sdp = new RTCSessionDescription(sdp);
-    var pc = connection.pc;
+    sdp = new RTCSessionDescription(connection.sdp);
 
-    util.log('Setting remote description', sdp);
-    pc.setRemoteDescription(sdp, function()
+    util.log('Setting remote description', connection.sdp);
+    var p = connection.pc.setRemoteDescription(sdp);
+
+    p.then(function()
     {
         util.log('Set remoteDescription:', type, 'for:', connection.peer);
 
@@ -215,7 +247,8 @@ Negotiator.handleSDP = function(type, connection, sdp)
         {
             Negotiator._makeAnswer(connection);
         }
-    }, function(err)
+    });
+    p.catch(function(err)
     {
         connection.provider.emitError('webrtc', err);
         util.log('Failed to setRemoteDescription, ', err);
@@ -227,6 +260,15 @@ Negotiator.handleCandidate = function(connection, ice)
 {
     var candidate = ice.candidate;
     var sdpMLineIndex = ice.sdpMLineIndex;
-    connection.pc.addIceCandidate(new RTCIceCandidate({sdpMLineIndex: sdpMLineIndex, candidate: candidate}));
-    util.log('Added ICE candidate for:', connection.peer);
+    var candidate = new RTCIceCandidate({sdpMLineIndex: sdpMLineIndex, candidate: candidate});
+
+    var p = connection.pc.addIceCandidate(candidate);
+    p.then(function()
+    {
+        util.log('Received ICE candidates from: ', connection.peer);
+    });
+    p.catch(function()
+    {
+        util.log('Failed to add ICE candidate for: ', connection.peer);
+    });
 }

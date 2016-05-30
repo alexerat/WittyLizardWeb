@@ -4,20 +4,12 @@
  */
 function PeerHandler(roomToken, options, socket)
 {
-    //TODO: What is this even?
-    if (!(this instanceof PeerHandler))
-    {
-        return new PeerHandler(roomToken, options, socket);
-    }
-
     // Configurize options. Debug options: 1 Errors, 2 Warnings, 3 log All
     options = util.extend({debug: 3, config: util.defaultConfig}, options);
 
     this.options = options;
     this.socket = socket;
     this.roomToken = roomToken;
-    this.pc = null;
-    this.iceRecieved = false;
 
     EventEmitter.call(this);
 
@@ -46,6 +38,8 @@ function PeerHandler(roomToken, options, socket)
 
     // Connections for this peer.
     this.connections = [];
+    this.users = [];
+    this.tracks = [];
 
     // Start the server connection
     this._initializeServerConnection();
@@ -80,7 +74,33 @@ PeerHandler.prototype._initializeServerConnection = function()
     this.socket.on('JOIN', function(userId, username, remoteId)
     {
         // Create a new connection.
-        self.connections[userId] = {open: false, peer: remoteId, provider: self, id: userId, options: {}};
+        // TODO: Check if this is already a connection
+        if(!self.connections[userId])
+        {
+            self.connections[userId] = {open: false, peer: remoteId, provider: self, id: userId, options: {}, _originator: false, _messageQueue: [], _hasRemoteSdp: false, _started: true, remoteTracks: []};
+            self.users.push(userId);
+        }
+        else
+        {
+            self.connections[userId]._started = true;
+        }
+
+        Negotiator.startConnection(self.connections[userId]);
+
+        for(var i = 0; i < self.tracks.length; i++)
+        {
+            if(self.tracks[i].active)
+            {
+                var sender = Negotiator.addTrack(self.connections[userId], self.tracks[i].track, self.tracks[i].stream);
+                self.tracks[i].senders.push({sender: sender, user: userId});
+            }
+        }
+
+        if (self.connections[userId]._messageQueue.length > 0)
+        {
+            self._drainMessageQueue(self.connections[userId]);
+        }
+
         self.emit('join', userId, username);
     });
 
@@ -98,37 +118,43 @@ PeerHandler.prototype._initializeServerConnection = function()
 
     this.socket.on('OFFER', function(payload)
     {
-        var userId = payload.userId;
-
-        if (self.connections[userId].open)
+        if(!self.connections[payload.userId])
         {
-            util.warn('Offer received for existing Connection ID:', userId);
+            self.connections[payload.userId] = {open: false, peer: null, provider: self, id: userId, options: {}, _originator: false, _messageQueue: [], _hasRemoteSdp: true, _started: false, remoteTracks: []};
         }
         else
         {
-            if (!self.connections[userId])
-            {
-                // The userID does not exist in this room yet
-            }
-
-            self.connections[userId].options.sdp = payload.sdp;
-
-            // Inform callback listeners about the call.
-            self.emit('call', userId);
-
+            self.connections[payload.userId]._hasRemoteSdp = true;
         }
+
+        console.log('MediaConnection:  Received OFFER from: ' + self.connections[payload.userId].peer)
+
+        // Always process offer before candidates.
+        self.connections[payload.userId]._messageQueue.unshift({type: 'OFFER', payload: payload});
+
+        // Inform callback listeners about the call.
+        self.emit('call', payload.userId);
     });
 
     this.socket.on('ANSWER', function(payload)
     {
-        // Forward to negotiator
-        Negotiator.handleSDP('ANSWER', self.connections[payload.userId], payload.sdp);
-        self.connections[payload.userId].open = true;
+        if(!self.connections[payload.userId])
+        {
+            util.log('Received an answer from a peer we did not call.');
+        }
+        else
+        {
+            self.connections[payload.userId]._hasRemoteSdp = true;
+            // Always process offer before candidates.
+            self.connections[payload.userId]._messageQueue.unshift({type: 'ANSWER', payload: payload});
+            self._drainMessageQueue(self.connections[payload.userId]);
+        }
     });
 
     this.socket.on('CANDIDATE', function(payload)
     {
-        Negotiator.handleCandidate(self.connections[payload.userId], payload.candidate);
+        self.connections[payload.userId]._messageQueue.push({type: 'CANDIDATE', payload: payload});
+        self._drainMessageQueue(self.connections[payload.userId]);
     });
 
     this.socket.on('disconnected', function()
@@ -163,13 +189,91 @@ PeerHandler.prototype._initialize = function()
     this.socket.emit('GETID');
 };
 
+
+PeerHandler.prototype._processSignalingMessage = function(message)
+{
+    var userId = message.payload.userId;
+
+    if(!this.connections[userId])
+    {
+        util.error('Attempting to process message for an unknown peer.');
+        return;
+    }
+
+    if (message.type === 'OFFER')
+    {
+        if (this.connections[userId].pc.signalingState !== 'stable')
+        {
+            util.error('remote offer received in unexpected state: ' + this.connections[userId].pc.signalingState);
+            return;
+        }
+
+        util.log('Processing OFFER.');
+
+        this.connections[userId].sdp = message.payload.sdp;
+        Negotiator.handleSDP('OFFER', this.connections[userId]);
+        this.connections[userId].open = true;
+    }
+    else if (message.type === 'ANSWER')
+    {
+        if(this.connections[userId]._originator)
+        {
+            if (this.connections[userId].pc.signalingState !== 'have-local-offer')
+            {
+                util.error('remote answer received in unexpected state: ' + this.connections[userId].pc.signalingState);
+                return;
+            }
+
+            util.log('Processing ANSWER.');
+
+            this.connections[userId].sdp = message.payload.sdp;
+            Negotiator.handleSDP('ANSWER', this.connections[message.payload.userId]);
+            this.connections[userId].open = true;
+        }
+        else
+        {
+            // TODO: ERROR
+            util.error('Answer received for a call we did not start.');
+        }
+    }
+    else if (message.type === 'CANDIDATE')
+    {
+        Negotiator.handleCandidate(this.connections[message.payload.userId], message.payload.candidate);
+    }
+    else
+    {
+        util.warn('unexpected message TYPE: ' + message.type + '. Payload: ' + JSON.stringify(message.payload));
+    }
+};
+
+/**
+ *
+ *
+ */
+PeerHandler.prototype._drainMessageQueue = function(connection)
+{
+    util.log('Processing message queue.');
+
+    if (!connection._started || !connection._hasRemoteSdp)
+    {
+        util.log('Not ready to process messages.');
+        return;
+    }
+    for (var i = 0; i < connection._messageQueue.length; i++)
+    {
+        this._processSignalingMessage(connection._messageQueue[i]);
+    }
+    connection._messageQueue = [];
+};
+
 /**
  * Returns a MediaConnection to the specified peer. See documentation for a complete list of options.
  * Calls are managed externally, so that DOM can be managed independently, returns the call object to be managed.
  * Host will make calls.
  */
-PeerHandler.prototype.call = function(userId, stream, options)
+PeerHandler.prototype.call = function(userId)
 {
+    console.log('Calling Peer.');
     if (this.disconnected)
     {
         util.warn('You cannot connect to a new Peer because you called ' + '.disconnect() on this Peer and ended your connection with the ' + 'server. You can create a new Peer to reconnect.');
@@ -177,26 +281,55 @@ PeerHandler.prototype.call = function(userId, stream, options)
         return;
     }
 
-    if (!stream)
+    if (!this.tracks.length)
     {
+        // TODO: We need to make sure that the track is active
         util.error('To call a peer, you must provide a stream from your browser\'s `getUserMedia`.');
         return;
     }
 
-    if (this.connections[userId])
+    if (!this.connections[userId])
     {
+        // TODO:
         // The userID does not exist in this room yet
     }
 
-    options = options || {};
-    options._stream = stream;
-
-    this.connections[userId].options = options;
-    this.connections[userId].localStream = stream;
-    this.connections[userId].metadata = options.metadata;
-	this.connections[userId].pc = Negotiator.startConnection(this.connections[userId], {_stream: stream, originator: true});
-
+    this.connections[userId].open = true;
+    Negotiator.makeOffer(this.connections[userId]);
 };
+
+PeerHandler.prototype.addTrack = function(track, stream)
+{
+    var trackId = this.tracks.length;
+    var newTrackHandle = {id: trackId, senders: [], track: track, active: true, stream: stream};
+    this.tracks.push(newTrackHandle);
+
+    for(var i = 0; i < this.users.length; i++)
+    {
+        var sender = Negotiator.addTrack(this.connections[this.users[i]], track, stream);
+        newTrackHandle.senders.push({sender: sender, user: this.users[i]});
+    }
+
+    return trackId;
+}
+
+PeerHandler.prototype.swapTrack = function(id, track)
+{
+    // TODO: Investigate options requiring no renogotiation or single renogotiation.
+    this.removeTrack(id);
+    this.addTrack(track);
+}
+
+PeerHandler.prototype.removeTrack = function(id)
+{
+    var senders = this.tracks[id].senders;
+    this.tracks[id].active = false;
+
+    for(var i = 0; i < senders.length; i++)
+    {
+        Negotiator.removeTrack(this.connections[senders[i].user], senders[i].sender);
+    }
+}
 
 PeerHandler.prototype._delayedAbort = function(type, message)
 {
@@ -208,19 +341,16 @@ PeerHandler.prototype._delayedAbort = function(type, message)
 };
 
 
-PeerHandler.prototype.answer = function(userId, stream)
+PeerHandler.prototype.answer = function(userId)
 {
-    // TODO: This is probably the wrong check.
-	if (this.connections[userId].localStream)
+	if (!this.connections[userId].open)
 	{
-		util.warn('Local stream already exists on this MediaConnection. Are you answering a call twice?');
-		return;
+        // TODO: Report error
+        return;
 	}
 
-	this.connections[userId].localStream = stream;
-    this.connections[userId].options._stream = stream;
-	this.connections[userId].pc = Negotiator.startConnection(this.connections[userId], this.connections[userId].options);
-	this.connections[userId].open = true;
+    this.connections[userId]._originator = false;
+    this._drainMessageQueue(this.connections[userId]);
 };
 
 // Called if the RTCPeerConnection fails or closes, passes event to listeners.
@@ -237,14 +367,14 @@ PeerHandler.prototype.close = function(userId)
 	this.emit('close')
 };
 
-PeerHandler.prototype.addStream = function(userId, remoteStream)
+PeerHandler.prototype.remoteTrack = function(userId, track)
 {
-	util.log('Receiving stream', remoteStream);
+	util.log('Receiving new track ', track);
 
-	this.connections[userId].remoteStream = remoteStream;
+	this.connections[userId].remoteTracks.push(track);
 
     // Event emitter, exposed callback for user.
-	this.emit('stream', userId, remoteStream);
+	this.emit('track', userId, track);
 };
 
 /**

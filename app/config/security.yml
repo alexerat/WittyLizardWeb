@@ -18,10 +18,6 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
-        home:
-            pattern: /
-            anonymous: ~
-
         login:
             pattern: ^/login$
             anonymous: ~
@@ -30,7 +26,8 @@ security:
             pattern: ^/register$
             anonymous: ~
 
-        default:
+
+        site:
             pattern: ^/
             form_login:
                 login_path: /login
@@ -39,6 +36,9 @@ security:
             logout:
                 path:   /logout
                 target: /
+
+        default:
+            anonymous: ~
 
 
 

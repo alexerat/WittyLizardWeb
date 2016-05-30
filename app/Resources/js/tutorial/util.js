@@ -1,8 +1,9 @@
-var defaultConfig = {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]};
+var defaultConfig = {'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }]};
 var dataCount = 1;
 var RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection || window.msRTCPeerConnection;
 var RTCSessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription || window.msRTCSessionDescription;
 var RTCIceCandidate = window.RTCIceCandidate || window.mozRTCIceCandidate || window.webkitRTCIceCandidate || window.msRTCIceCandidate;
+var MediaStream = window.MediaStream || window.webkitMediaStream;
 
 var util =
 {

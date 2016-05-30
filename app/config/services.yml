@@ -8,8 +8,8 @@ services:
         class:     Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler
         public:    false
         arguments:
-            - 'mysql:host=%database_host%;port=%database_port%;dbname=%database_name%'
-            - { db_username: '%database_user%', db_password: '%database_password%', db_table: User_Sessions, db_id_col: Session_ID, db_data_col: Session_Data, db_time_col: Session_Time, db_lifetime_col: Session_Lifetime}
+            - 'mysql:host=%database.host%;port=%database.port%;dbname=%database.name%'
+            - { db_username: '%database.user%', db_password: '%database.password%', db_table: User_Sessions, db_id_col: Session_ID, db_data_col: Session_Data, db_time_col: Session_Time, db_lifetime_col: Session_Lifetime}
 #    service_name:
 #        class: AppBundle\Directory\ClassName
 #        arguments: ["@another_service_name", "plain_value", "%parameter_name%"]

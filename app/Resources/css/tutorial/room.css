@@ -1,8 +1,3 @@
-.userContainer
-{
-    height: 100px;
-    width: 100px;
-}
 .userVideo
 {
     height: 80%;
@@ -14,17 +9,25 @@
     width: 100%;
 }
 
+.blinking
+{
+  animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker
+{
+  50% { opacity: 0.0; }
+}
+
 #whiteboard-app
 {
-    height: 70%;
-    width: 100%;
-    max-width: 2400px;
+    display:table-row;
+    height: 100%;
+
 }
 #media-app
 {
-    height: 20%;
-    width: 100%;
-    max-width: 2400px;
+    display:table-row;
 }
 #whiteboard-container
 {
@@ -38,8 +41,6 @@
 #whiteboard-row
 {
     height: 100%;
-    width: 100%;
-    max-width: 2400px;
     display: block;
     margin-left: 0px;
     margin-right: 0px;
@@ -80,15 +81,14 @@
 
 .colour-button
 {
+    border-radius: 0px;
     width: 40px;
     height: 40px;
     margin-bottom: 0px;
 }
-.mode-button
+.pressed-colour
 {
-    width: 40px;
-    height: 40px;
-    margin-bottom: 0px;
+    border: 2px solid white;
 }
 #black-button
 {
@@ -102,9 +102,13 @@
 {
     background-color: #66ff33;
 }
-.pressed-colour
+
+.mode-button
 {
-    border: 2px solid white;
+    border-radius: 0px;
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0px;
 }
 .pressed-mode
 {
@@ -113,4 +117,26 @@
 .whiteboard-controlgroup
 {
     margin-bottom: 16px;
+}
+
+.style-button
+{
+    border-radius: 0px;
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0px;
+}
+.pressed-style
+{
+    border: 2px solid black;
+    background-color: #ff3300;
+}
+
+.noselect
+{
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }

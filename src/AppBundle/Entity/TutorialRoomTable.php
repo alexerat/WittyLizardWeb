@@ -78,6 +78,16 @@ class TutorialRoomTable
     private $waitingJoins;
 
     /**
+     * @var \AppBundle\Entity\TutorialServers
+     *
+     * @ORM\ManyToOne(targetEntity="AppBundle\Entity\TutorialServers")
+     * @ORM\JoinColumns({
+     *   @ORM\JoinColumn(name="Server_ID", referencedColumnName="Server_ID")
+     * })
+     */
+    private $serverId;
+
+    /**
      * Get roomId
      *
      * @return integer
@@ -294,5 +304,29 @@ class TutorialRoomTable
     public function getWaitingJoins()
     {
         return $this->waitingJoins;
+    }
+
+    /**
+     * Set serverId
+     *
+     * @param \AppBundle\Entity\TutorialServers $serverId
+     *
+     * @return TutorialRoomTable
+     */
+    public function setServer(\AppBundle\Entity\TutorialServers $serverId = null)
+    {
+        $this->serverId = $serverId;
+
+        return $this;
+    }
+
+    /**
+     * Get serverId
+     *
+     * @return \AppBundle\Entity\TutorialServers
+     */
+    public function getServer()
+    {
+        return $this->serverId;
     }
 }

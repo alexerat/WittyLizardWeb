@@ -45,11 +45,11 @@ doctrine:
         connections:
             user_conn:
                 driver:   pdo_mysql
-                host:     "%database_host%"
-                port:     "%database_port%"
-                dbname:   "%database_name%"
-                user:     "%database_user%"
-                password: "%database_password%"
+                host:     "%database.host%"
+                port:     "%database.port%"
+                dbname:   "%database.name%"
+                user:     "%database.user%"
+                password: "%database.password%"
                 charset:  UTF8MB4
 
     orm:
