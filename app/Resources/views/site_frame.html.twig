@@ -1,8 +1,15 @@
 {% extends 'base.html.twig' %}
 
 {% block framework %}
-    <script src="https://fb.me/react-15.1.0.js"></script>
-    <script src="https://fb.me/react-dom-15.1.0.js"></script>
+    {% if app.environment == 'dev' %}
+        <script src="https://fb.me/react-15.1.0.js"></script>
+        <script src="https://fb.me/react-dom-15.1.0.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/immutable/3.8.1/immutable.js"></script>
+    {% else %}
+        <script src="https://fb.me/react-15.1.0.min.js"></script>
+        <script src="https://fb.me/react-dom-15.1.0.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/immutable/3.8.1/immutable.min.js"></script>
+    {% endif %}
 {% endblock %}
 
 {% block javascripts %}
@@ -19,4 +26,10 @@
         siteHeader = ReactDOM.render(React.createElement(TopBar, null), document.getElementById('site-header'));
         sideBarEl = ReactDOM.render(React.createElement(SideBar, null), document.getElementById('offCanvasLeft'));
     </script>
+
+    {% if app.environment == 'dev' %}
+        <script src="https://npmcdn.com/expect/umd/expect.min.js"></script>
+        {% block tests %}
+        {% endblock %}
+    {% endif %}
 {% endblock %}

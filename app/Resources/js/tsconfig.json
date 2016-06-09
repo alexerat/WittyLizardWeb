@@ -1,0 +1,9 @@
+{"files": [
+        "./tutorial/WhiteBoardController.ts",
+        "./tutorial/WhiteBoardView.ts",
+        "./tutorial/fitcurves.ts",
+        "./typings/react.d.ts",
+        "./typings/react-dom.d.ts",
+        "./typings/immutable.d.ts",
+        "./typings/whiteboard.d.ts"
+]}
