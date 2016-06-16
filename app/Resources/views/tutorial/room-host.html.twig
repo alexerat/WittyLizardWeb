@@ -16,7 +16,8 @@
 
     <article>
         {% javascripts '@AppBundle/Resources/public/js/tutorial/MediaContainer.js'
-                       '@AppBundle/Resources/public/js/tutorial/Whiteboard.js'
+                       '@AppBundle/Resources/public/js/tutorial/WhiteBoardController.js'
+                       '@AppBundle/Resources/public/js/tutorial/WhiteBoardView.js'
                        '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
             <script src="{{ asset_url }}"></script>
         {% endjavascripts %}
@@ -179,21 +180,25 @@
                 boardSocket = io("{{serverToken}}" + ':9001/board');
                 initBoard();
             });
-
             p.catch(function(err) { console.log(err.name); });
         }
         else
         {
             console.log("getUserMedia not supported");
         }
+
         function initBoard()
         {
             boardSocket.on('READY', function(userId)
             {
-                whitCont = ReactDOM.render(React.createElement(Whiteboard, {userId: userId, isHost: true}), document.getElementById('whiteboard-app'));
+                whiteBoardController = new WhiteBoardController(true, userId);
+                whiteBoardView = ReactDOM.render(React.createElement(WhiteBoardView, {controller: whiteBoardController}), document.getElementById('whiteboard-app'));
+                whiteBoardController.setView(whiteBoardView);
+                console.log('Received ready and emitted join room.');
                 boardSocket.on('CONNOK', function()
                 {
-                    whitCont.setSocket(boardSocket);
+                    whiteBoardController.setSocket(boardSocket);
+
                 });
 
                 boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
@@ -212,4 +217,9 @@
             });
         }
     </script>
+{% endblock %}
+
+{% block tests %}
+    {{ parent() }}
+
 {% endblock %}

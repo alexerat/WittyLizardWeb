@@ -2777,6 +2777,7 @@ calculateTextLines: function(textbox)
         }
 
         computedTextLength = textbox.dist[currPos + word.length] - textbox.dist[currPos];
+        //computedTextLength = this.calculateWordWidth(word, currPos, sizeCheck, textbox.styles);
 
         if(computedTextLength > textbox.width)
         {
@@ -2799,6 +2800,7 @@ calculateTextLines: function(textbox)
             while(computedTextLength > textbox.width && i > 0)
             {
                 computedTextLength = textbox.dist[currPos + word.substring(0, i).length] - textbox.dist[currPos];
+                //computedTextLength = this.calculateWordWidth(word.substring(0, i), currPos, sizeCheck, textbox.styles);
                 i--;
             }
 
@@ -2897,6 +2899,7 @@ calculateTextLines: function(textbox)
             }
 
             computedTextLength = currLength + textbox.dist[currPos + word.length] - textbox.dist[currPos];
+            //computedTextLength = currLength + this.calculateWordWidth(word, currPos, sizeCheck, textbox.styles);
 
             if(computedTextLength > textbox.width)
             {
@@ -2911,6 +2914,7 @@ calculateTextLines: function(textbox)
                         while(computedTextLength > textbox.width && i > 0)
                         {
                             computedTextLength = currLength + textbox.dist[currPos + i] - textbox.dist[currPos];
+                            //computedTextLength = currLength + this.calculateWordWidth(word.substring(0, i), currPos, sizeCheck, textbox.styles);
                             i--;
                         }
 
@@ -2991,6 +2995,7 @@ calculateTextLines: function(textbox)
                         else
                         {
                             computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
+                            //computedTextLength = currLength - this.calculateWordWidth(spacesT[spaceC - 1].slice(spacesT[spaceC - 1].length - 1, spacesT[spaceC - 1].length), currPos - 1, sizeCheck, textbox.styles);
 
                             line = line.substring(0, line.length - 1);
 
@@ -3002,6 +3007,7 @@ calculateTextLines: function(textbox)
                     else
                     {
                         computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
+                        //computedTextLength = currLength - this.calculateWordWidth(spacesT[spaceC - 1].slice(spacesT[spaceC - 1].length - 1, spacesT[spaceC - 1].length), currPos - 1, sizeCheck, textbox.styles);
 
                         line = line.substring(0, line.length - 1);
                         tspanEl.end = currPos - 1;
