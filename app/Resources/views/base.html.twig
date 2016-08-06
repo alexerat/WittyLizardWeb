@@ -19,6 +19,7 @@
     </head>
     <body>
         {% javascripts '@AppBundle/Resources/public/js/jquery.js'
+                       '@AppBundle/Resources/public/js/jquery.contextMenu.js'
                        '@AppBundle/Resources/public/js/what-input.min.js'
                        '@AppBundle/Resources/public/js/foundation.js' %}
             <script src="{{ asset_url }}"></script>
@@ -48,6 +49,10 @@
 
         <script>
             $(document).foundation();
+
+            $(function(){
+                $.contextMenu("html5");
+            });
         </script>
 
         {% block stylesheets %}{% endblock %}

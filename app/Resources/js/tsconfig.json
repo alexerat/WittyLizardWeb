@@ -1,6 +1,7 @@
 {"files": [
         "./tutorial/WhiteBoardController.ts",
         "./tutorial/WhiteBoardView.ts",
+        "./tutorial/TextWorker.ts",
         "./tutorial/fitcurves.ts",
         "./typings/react.d.ts",
         "./typings/react-dom.d.ts",

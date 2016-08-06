@@ -5,21 +5,40 @@
  *
  *
  **************************************************************************************************************************************************************/
+interface OperationBufferElement {
+    type: string;
+    message: UserMessage;
+}
+interface InfoMessage {
+    id: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    header: string;
+    message: string;
+}
 interface BoardElement {
     serverId: number;
     id: number;
     user: number;
+    updateTime: Date;
     isDeleted: boolean;
     type: string;
-    size: number;
+    opBuffer: Array<OperationBufferElement>;
+    hoverTimer: number;
+    infoElement: number;
 }
 interface Point {
     x: number;
     y: number;
 }
 interface Curve extends BoardElement {
+    x: number;
+    y: number;
     curveSet: Array<Point>;
     colour: string;
+    size: number;
 }
 interface CursorElement extends Point {
     height: number;
@@ -77,6 +96,24 @@ interface WhiteBoardText extends BoardElement {
     cursorElems: Array<CursorSelection>;
     dist: Array<number>;
     editCount: number;
+    size: number;
+    waiting: boolean;
+}
+interface Highlight extends BoardElement {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    colour: number;
+}
+interface Upload extends BoardElement {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    isImage: boolean;
+    fType: string;
 }
 interface CurveInBufferElement {
     num_points: number;
@@ -86,6 +123,7 @@ interface CurveInBufferElement {
     colour: string;
     size: number;
     curveSet: Array<Point>;
+    updateTime: Date;
 }
 interface CurveOutBufferElement {
     serverId: number;
@@ -135,11 +173,14 @@ interface TextInNodeElement {
  *
  *
  **************************************************************************************************************************************************************/
-interface ServerBoardJoinMessage {
+interface ServerMessage {
+
+}
+interface ServerBoardJoinMessage extends ServerMessage {
     userId: number;
     colour: number;
 }
-interface ServeBaseMessage {
+interface ServeBaseMessage extends ServerMessage {
     serverId: number;
 }
 interface ServerNewPointMessage extends ServeBaseMessage {
@@ -148,10 +189,13 @@ interface ServerNewPointMessage extends ServeBaseMessage {
     y: number;
 }
 interface ServerNewCurveMessage extends ServeBaseMessage {
+    x: number;
+    y: number;
     userId: number;
     size: number;
     colour: string;
     num_points: number;
+    editTime: Date;
 }
 interface ServerCurveIdMessage extends ServeBaseMessage {
     localId: number;
@@ -162,6 +206,7 @@ interface ServerMissedPointMessage extends ServeBaseMessage {
 interface ServerMoveElementMessage extends ServeBaseMessage {
     x: number;
     y: number;
+    editTime: Date;
 }
 interface ServerNewTextboxMessage extends ServeBaseMessage {
     x: number;
@@ -173,6 +218,7 @@ interface ServerNewTextboxMessage extends ServeBaseMessage {
     userId: number;
     size: number;
     editLock: number;
+    editTime: Date;
 }
 interface ServerStyleNodeMessage extends ServeBaseMessage {
     userId: number;
@@ -195,6 +241,7 @@ interface ServerMissedTextMessage extends ServeBaseMessage {
 interface ServerResizeTextMessage extends ServeBaseMessage {
     width: number;
     height: number;
+    editTime: Date;
 }
 interface ServerJustifyTextMessage extends ServeBaseMessage {
     newState: boolean;
@@ -203,14 +250,15 @@ interface ServerEditTextMessage extends ServeBaseMessage {
     userId: number;
     editId: number;
     num_nodes: number;
+    editTime: Date;
 }
-interface ServerEditIdMessage {
+interface ServerEditIdMessage extends ServerMessage {
     editId: number;
     bufferId: number;
     localId: number;
 }
 interface ServerLockIdMessage extends ServeBaseMessage {
-    serverId: number;
+
 }
 interface ServerLockTextMessage extends ServeBaseMessage {
     userId: number;
@@ -221,7 +269,45 @@ interface ServerReleaseTextMessage extends ServeBaseMessage {
 interface ServerRefusedTextMessage extends ServeBaseMessage {
 
 }
-
+interface ServerHighLightMessage extends ServerMessage {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    userId: number;
+    colour: number;
+}
+interface ServerUploadIdMessage extends ServeBaseMessage {
+    localId: number;
+}
+interface ServerUploadDataMessage extends ServeBaseMessage {
+    place: number;
+    percent: number;
+}
+interface ServerNewUploadMessage extends ServeBaseMessage {
+    fileDesc: string;
+    fileType: string;
+    extension: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    userId: number;
+    editTime: Date;
+    url?: string;
+}
+interface ServerResizeFileMessage extends ServeBaseMessage {
+    width: number;
+    height: number;
+    editTime: Date;
+}
+interface ServerRotateFileMessage extends ServeBaseMessage {
+    rotation: number;
+}
+interface ServerUploadEndMessage extends ServeBaseMessage {
+    fileURL: string;
+}
 /***************************************************************************************************************************************************************
  *
  *
@@ -229,28 +315,33 @@ interface ServerRefusedTextMessage extends ServeBaseMessage {
  *
  *
  **************************************************************************************************************************************************************/
-interface UserNewCurveMessage {
+interface UserMessage {
+
+}
+interface UserNewCurveMessage extends UserMessage {
     localId: number;
+    x: number;
+    y: number;
     colour: string;
     size: number;
     num_points: number;
 }
-interface UserNewPointMessage {
+interface UserNewPointMessage extends UserMessage {
     serverId: number;
     num: number;
     x: number;
     y: number;
 }
-interface UserMoveElementMessage {
+interface UserMoveElementMessage extends UserMessage {
     serverId: number;
     x: number;
     y: number;
 }
-interface UserMissingCurveMessage {
+interface UserMissingCurveMessage extends UserMessage {
     serverId: number;
     seq_num: number;
 }
-interface UserNewTextMessage {
+interface UserNewTextMessage extends UserMessage {
     localId: number;
     size: number;
     x: number;
@@ -259,13 +350,13 @@ interface UserNewTextMessage {
     height: number;
     justified: boolean;
 }
-interface UserEditTextMessage {
+interface UserEditTextMessage extends UserMessage {
     serverId: number;
     localId: number;
     bufferId: number;
     num_nodes: number;
 }
-interface UserStyleNodeMessage {
+interface UserStyleNodeMessage extends UserMessage {
     editId: number;
     num: number;
     start: number;
@@ -276,22 +367,61 @@ interface UserStyleNodeMessage {
     decoration: string;
     colour: string;
 }
-interface UserJustifyTextMessage {
+interface UserJustifyTextMessage extends UserMessage {
     serverId: number;
     newState: boolean;
 }
-interface UserLockTextMessage {
+interface UserLockTextMessage extends UserMessage {
     serverId: number;
 }
-interface UserReleaseTextMessage {
+interface UserReleaseTextMessage extends UserMessage {
     serverId: number;
 }
-interface UserResizeTextMessage {
+interface UserResizeTextMessage extends UserMessage {
     serverId: number;
     width: number;
     height: number;
 }
-interface UserMissingTextMessage {
+interface UserMissingTextMessage extends UserMessage {
     serverId: number;
     seq_num: number;
+}
+interface UserHighLightMessage extends UserMessage {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+interface UserStartUploadMessage extends UserMessage {
+    localId: number;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    extension: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+interface UserRemoteFileMessage extends UserMessage {
+    localId: number;
+    fileURL: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fileDesc: string;
+}
+interface UserUploadDataMessage extends UserMessage {
+    serverId: number;
+    piece: ArrayBuffer;
+}
+interface UserResizeFileMessage extends UserMessage {
+    serverId: number;
+    width: number;
+    height: number;
+}
+interface UserRotateFileMessage extends UserMessage {
+    serverId: number;
+    rotation: number;
 }

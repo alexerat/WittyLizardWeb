@@ -110,7 +110,10 @@ class TutorialRoomController extends Controller
 
         $em->remove($waitJ);
         $em->flush();
-        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken));
+
+        $session = $this->get('session');
+        $sessId = $session->getId();
+        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => false));
     }
 
     /**
@@ -310,7 +313,9 @@ class TutorialRoomController extends Controller
         $em->flush();
 
         // Return the tutorial room template for tutors.
-        return $this->render('tutorial/room-host.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken));
+        $session = $this->get('session');
+        $sessId = $session->getId();
+        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => true));
     }
 
 

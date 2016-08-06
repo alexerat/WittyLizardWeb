@@ -177,9 +177,9 @@
             {
                 localStream = mediaStream;
 
-                mediaSocket = io("{{serverToken}}" + ':9001/media');
+                mediaSocket = io("{{serverToken}}" + ':9001/media', { query: "sessId=" + "{{sessionId}}" });
                 initMedia();
-                boardSocket = io("{{serverToken}}" + ':9001/board');
+                boardSocket = io("{{serverToken}}" + ':9001/board', { query: "sessId=" + "{{sessionId}}" });
                 initBoard();
             });
             p.catch(function(err) { console.log(err.name); });
@@ -193,14 +193,14 @@
         {
             boardSocket.on('READY', function(userId)
             {
-                whiteBoardController = new WhiteBoardController(false, userId);
+                whiteBoardController = new WhiteBoardController("{{isHost}}", userId);
                 whiteBoardView = ReactDOM.render(React.createElement(WhiteBoardView, {controller: whiteBoardController}), document.getElementById('whiteboard-app'));
                 whiteBoardController.setView(whiteBoardView);
                 console.log('Received ready and emitted join room.');
+
                 boardSocket.on('CONNOK', function()
                 {
                     whiteBoardController.setSocket(boardSocket);
-
                 });
 
                 boardSocket.emit('JOIN-ROOM', "{{roomToken}}");
@@ -212,7 +212,7 @@
             mediaSocket.on('READY', function(userId)
             {
                 peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
-                medCont = ReactDOM.render(React.createElement(MediaContainer, {isHost: false}), document.getElementById('media-app'));
+                medCont = ReactDOM.render(React.createElement(MediaContainer, {isHost: "{{isHost}}"}), document.getElementById('media-app'));
 
                 medCont.setStream(localStream);
                 medCont.setHandler(peerHandler, userId);

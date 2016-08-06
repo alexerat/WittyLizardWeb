@@ -3,7 +3,7 @@
 // Definitions by: Asana <https://asana.com>, AssureSign <http://www.assuresign.com>, Microsoft <https://microsoft.com>
 // Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped
 
-declare namespace __React {
+declare namespace React {
 
     //
     // React Elements
@@ -151,7 +151,7 @@ declare namespace __React {
     var PropTypes: ReactPropTypes;
     var Children: ReactChildren;
     var version: string;
-    
+
     //
     // Component API
     // ----------------------------------------------------------------------
@@ -2317,11 +2317,10 @@ declare namespace __React {
 }
 
 declare module "react" {
-    export = __React;
+    export = React;
 }
 
 declare namespace JSX {
-    import React = __React;
 
     interface Element extends React.ReactElement<any> { }
     interface ElementClass extends React.Component<any, any> {
