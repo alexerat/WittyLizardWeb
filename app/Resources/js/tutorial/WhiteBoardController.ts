@@ -751,7 +751,7 @@ interface Window {
  *
  *
  *
- * IINTERFACE DECLARATIONS
+ * INTERFACE DECLARATIONS
  *
  *
  *
@@ -807,6 +807,12 @@ interface WhiteBoardDispatcher
     dragOver: (e: DragEvent) => void;
     drop: (e: DragEvent) => void;
 }
+interface WhiteBoardOperation
+{
+    id: number;
+    undo: () => void;
+    redo: () => void;
+}
 
 /***************************************************************************************************************************************************************
  *
@@ -819,7 +825,7 @@ interface WhiteBoardDispatcher
  **************************************************************************************************************************************************************/
 class WhiteBoardController
 {
-    view;
+    view: {storeUpdate: (WhiteBoardViewState) => void};
     viewState: WhiteBoardViewState;
 
     isHost: boolean = false;
@@ -871,7 +877,17 @@ class WhiteBoardController
     editTimer:      number;
     userHighlight:  number  = -1;
     currentHover:   number  = -1;
+    selectDrag:     boolean = false;
+    selectLeft:     number;
+    selectTop:      number;
+    selectWidth:    number;
+    selectHeight:   number;
     currSelect:     Array<number> = [];
+    groupMoving:    boolean = false;
+    groupMoved:     boolean = false;
+
+    operationStack: Array<WhiteBoardOperation> = [];
+    operationPos:   number = 0;
 
     fileUploads: Array<File>       = [];
     fileReaders: Array<FileReader> = [];
@@ -883,12 +899,12 @@ class WhiteBoardController
     boardElems:  Array<BoardElement> = [];
     infoElems:   Array<InfoMessage>  = [];
 
-    curveOutBuffer: Array<CurveOutBufferElement> = [];
-    curveInBuffer:  Array<CurveInBufferElement>  = [];
-    curveInTimeouts                              = [];
-    curveOutTimeouts                             = [];
-    textOutBuffer:  Array<TextOutBufferElement>  = [];
-    textInBuffer:   Array<TextInBufferElement>   = [];
+    curveOutBuffer:   Array<CurveOutBufferElement> = [];
+    curveInBuffer:    Array<CurveInBufferElement>  = [];
+    curveInTimeouts                                = [];
+    curveOutTimeouts                               = [];
+    textOutBuffer:    Array<TextOutBufferElement>  = [];
+    textInBuffer:     Array<TextInBufferElement>   = [];
 
     constructor(isHost: boolean, userId: number)
     {
@@ -1032,6 +1048,8 @@ class WhiteBoardController
         let element = this.getBoardElement(id);
         element.isDeleted = false;
 
+        // TODO: Send creation data to other users
+
         if(element.type === 'text')
         {
             // TODO
@@ -1042,12 +1060,12 @@ class WhiteBoardController
         }
     }
 
-    addCurve = (curveSet: Array<Point>, userId: number, colour: string, size: number, updateTime: Date, serverId?: number) : number =>
+    addCurve = (x: number, y: number, width: number, height: number, curveSet: Array<Point>, userId: number, colour: string, size: number, updateTime: Date, serverId?: number) : number =>
     {
         let newCurve: Curve =
         {
             type: 'curve', id: -1, user: userId, isDeleted: false, colour: colour, size: size, curveSet: curveSet, serverId: serverId, opBuffer: [],
-            x: curveSet[0].x, y: curveSet[0].y, hoverTimer: null, infoElement: null, updateTime: updateTime
+            x: x, y: y, width: width, height: height, hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
         };
 
         let localId = this.boardElems.length;
@@ -1131,7 +1149,7 @@ class WhiteBoardController
             {
                 text: '', user: userId, isDeleted: false, x: x, y: y, size: size, styles: [], editCount: 0, type: 'text', cursor: null, cursorElems: [],
                 width: width, height: height, editLock: editLock, justified: justified, textNodes: [], dist: [0], serverId: serverId, id: 0, waiting: false,
-                opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime
+                opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
             };
 
             localId = this.boardElems.length;
@@ -1646,6 +1664,28 @@ class WhiteBoardController
         this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
     }
 
+    moveGroup = (isRelative: boolean, x: number, y: number, editTime: Date) : void =>
+    {
+        // Loop over currently selected items, determine type and use appropriate method
+        for(let i = 0; i < this.currSelect.length; i++)
+        {
+            let elem = this.getBoardElement(this.currSelect[i]);
+
+            if(elem.type == 'curve')
+            {
+                this.moveCurve(elem.id, x, y, editTime);
+            }
+            else if(elem.type == 'text')
+            {
+                this.moveTextbox(elem.id, isRelative, x, y, editTime);
+            }
+            else if(elem.type == 'file')
+            {
+                this.moveUpload(elem.id, isRelative, x, y, editTime);
+            }
+        }
+    }
+
     startMove = () : void =>
     {
         this.updateView(Object.assign({}, this.viewState, { itemMoving: true}));
@@ -1656,6 +1696,7 @@ class WhiteBoardController
         this.currTextMove = -1;
         this.currCurveMove = -1;
         this.currFileMove = -1;
+        this.groupMoving = false;
         this.updateView(Object.assign({}, this.viewState, { itemMoving: false }));
     }
 
@@ -1697,6 +1738,25 @@ class WhiteBoardController
     {
         let newInfoList = this.viewState.infoElements.delete(id);
         this.updateView(Object.assign({}, this.viewState, { infoElements: newInfoList}));
+    }
+
+
+    selectElement = (id: number) : void =>
+    {
+        let newElemView = Object.assign({}, this.getViewElement(id), {
+            selected: true
+        });
+        let newElemList = this.viewState.boardElements.set(id, newElemView);
+        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+    }
+
+    deselectElement = (id: number) : void =>
+    {
+        let newElemView = Object.assign({}, this.getViewElement(id), {
+            selected: false
+        });
+        let newElemList = this.viewState.boardElements.set(id, newElemView);
+        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
     }
 
     setViewBox = (panX: number, panY: number, scaleF: number) : void =>
@@ -1828,6 +1888,80 @@ class WhiteBoardController
         return this.infoElems[id];
     }
 
+    undo = () : void =>
+    {
+        // Undo operation at current stack position
+        if(this.operationPos > 0)
+        {
+            this.operationStack[--this.operationPos].undo();
+        }
+    }
+
+    redo = () : void =>
+    {
+        // Redo operation at current stack position
+        if(this.operationPos < this.operationStack.length)
+        {
+            this.operationStack[this.operationPos++].redo();
+        }
+    }
+
+    newOperation = (itemId:  number, undoOp: () => void, redoOp: () => void) : void =>
+    {
+        // Remove redo operations ahead of current position
+        this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+
+        // Add new operation to the stack
+        let newOp: WhiteBoardOperation = { id: itemId, undo: undoOp, redo: redoOp };
+        this.operationStack[this.operationPos++] = newOp;
+    }
+
+    remoteEdit = (id: number) : void =>
+    {
+        // Remove all operations related to this item from operation buffer
+        for(let i = 0; i < this.operationStack.length; i++)
+        {
+            if(this.operationStack[i].id == id)
+            {
+                // Replace operation with one that will just select the item (better user interation that removing or doing nothing)
+                let newOp: WhiteBoardOperation = { id: id, undo: () => { this.selectElement(id) }, redo: () => { this.selectElement(id) } };
+                this.operationStack.splice(i, 1, newOp);
+            }
+        }
+    }
+
+    // TODO: Look at item edit and dispatcher handling, a more generic interface may be better
+    undoItemEdit = (id: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+
+        // Undo item operation at current stack position
+        if(elem.operationPos > 0)
+        {
+            elem.operationStack[--elem.operationPos].undo();
+        }
+    }
+
+    redoItemEdit = (id: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+
+        // Redo operation at current stack position
+        if(elem.operationPos < elem.operationStack.length)
+        {
+            elem.operationStack[elem.operationPos++].redo();
+        }
+    }
+
+    remoteItemEdit = (id: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+
+        // Remove undo redo to preserve integrity
+        elem.operationPos = 0;
+        elem.operationStack = [];
+    }
+
     addHoverInfo = (id: number) : void =>
     {
         // TODO: Only display over whiteboard, and adjust width and height
@@ -1842,6 +1976,28 @@ class WhiteBoardController
         let elem = this.getBoardElement(id);
         elem.infoElement = null;
         this.removeInfoMessage(elem.infoElement);
+    }
+
+    sendGroupMove = () : void =>
+    {
+        // Loop over currently selected items, determine type and send appropriate message
+        for(let i = 0; i < this.currSelect.length; i++)
+        {
+            let elem = this.getBoardElement(this.currSelect[i]);
+
+            if(elem.type == 'curve')
+            {
+                this.sendCurveMove(elem.id);
+            }
+            else if(elem.type == 'text')
+            {
+                this.sendTextMove(elem.id);
+            }
+            else if(elem.type == 'file')
+            {
+                this.sendFileMove(elem.id);
+            }
+        }
     }
 
     newEdit = (textBox: WhiteBoardText) : WhiteBoardText =>
@@ -1874,18 +2030,41 @@ class WhiteBoardController
 
     drawCurve = (points: Array<Point>, size: number, colour: string, scaleF: number, panX: number, panY: number) : void =>
     {
-        var reducedPoints : Array<Point>;
-        var curves : Array<Point>;
+        let reducedPoints : Array<Point>;
+        let curves : Array<Point>;
+
+        let minX = null;
+        let maxX = null;
+        let minY = null;
+        let maxY = null;
 
         if(points.length > 1)
         {
             reducedPoints = SmoothCurve(points);
             reducedPoints = DeCluster(reducedPoints, 10);
 
-            for(var i = 0; i < reducedPoints.length; i++)
+            for(let i = 0; i < reducedPoints.length; i++)
             {
                 reducedPoints[i].x = reducedPoints[i].x * scaleF + panX;
                 reducedPoints[i].y = reducedPoints[i].y * scaleF + panY;
+
+                if(minX == null || reducedPoints[i].x < minX)
+                {
+                    minX = reducedPoints[i].x;
+                }
+                if(maxX == null || reducedPoints[i].x > maxX)
+                {
+                    maxX = reducedPoints[i].x;
+                }
+
+                if(minY == null || reducedPoints[i].y < minY)
+                {
+                    minY = reducedPoints[i].y;
+                }
+                if(maxY == null || reducedPoints[i].y > maxY)
+                {
+                    maxY = reducedPoints[i].y;
+                }
             }
 
             curves = FitCurve(reducedPoints, reducedPoints.length, 5);
@@ -1896,23 +2075,25 @@ class WhiteBoardController
             curves[0] = { x: points[0].x * scaleF + panX, y: points[0].y * scaleF + panY };
         }
 
-        var localId = this.addCurve(curves, this.userId, colour, size, new Date());
-        this.sendCurve(localId, curves, colour, size);
+        var localId = this.addCurve(minX, minY, maxX - minX, maxY - minY, curves, this.userId, colour, size, new Date());
+        this.sendCurve(localId, minX, minY, maxX - minX, maxY - minY, curves, colour, size);
+
+        // this.newOperation(localId, () => { this.deleteElementInput(localId); }, () => {})
     }
 
-    sendCurve = (localId: number, curves: Array<Point>, colour: string, size: number) : void =>
+    sendCurve = (localId: number, x: number, y: number, width: number, height: number, curves: Array<Point>, colour: string, size: number) : void =>
     {
         var self = this;
 
-        this.curveOutBuffer[localId] = {serverId: 0, localId: localId, colour: colour, curveSet: curves, size: size};
+        this.curveOutBuffer[localId] = { serverId: 0, localId: localId, colour: colour, curveSet: curves, size: size };
 
         this.curveOutTimeouts[localId] = setInterval(function()
         {
-            let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: curves[0].x, y: curves[0].y };
+            let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
             self.socket.emit('CURVE', msg);
         }, 60000);
 
-        let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: curves[0].x, y: curves[0].y };
+        let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
         this.socket.emit('CURVE', msg);
     }
 
@@ -3702,8 +3883,8 @@ class WhiteBoardController
             {
                 // Set up the buffers to recieve data.
                 self.curveInBuffer[data.serverId] = {
-                    serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0,
-                    curveSet: new Array, colour: data.colour, updateTime: data.editTime
+                    serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0, curveSet: new Array,
+                    colour: data.colour, updateTime: data.editTime, x: data.x, y: data.y, width: data.width, height: data.height
                 };
 
                 clearInterval(self.curveInTimeouts[data.serverId]);
@@ -3737,7 +3918,7 @@ class WhiteBoardController
                 {
                     clearInterval(self.curveInTimeouts[data.serverId]);
 
-                    self.addCurve(buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
+                    self.addCurve(buffer.x, buffer.y, buffer.width, buffer.height, buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
 
                     self.curveInBuffer[data.serverId] = null;
                 }
@@ -4424,11 +4605,19 @@ class WhiteBoardController
     {
         if(this.viewState.mode == 3)
         {
-            this.currCurveMove = id;
-            this.startMove();
+            if(this.currSelect.length > 0)
+            {
+                this.groupMoving = true;
+                this.startMove();
+            }
+            else
+            {
+                this.currCurveMove = id;
+                this.startMove();
 
-            this.prevX = e.clientX;
-            this.prevY = e.clientY;
+                this.prevX = e.clientX;
+                this.prevY = e.clientY;
+            }
         }
     }
 
@@ -4485,20 +4674,36 @@ class WhiteBoardController
 
     textMouseMoveDown = (id: number, e: MouseEvent) : void =>
     {
-        this.currTextMove = id;
-        this.prevX = e.clientX;
-        this.prevY = e.clientY;
-        this.startMove();
+        if(this.currSelect.length > 0)
+        {
+            this.groupMoving = true;
+            this.startMove();
+        }
+        else
+        {
+            this.currTextMove = id;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            this.startMove();
+        }
     }
 
     textMouseResizeDown = (id: number, vert: boolean, horz: boolean, e: MouseEvent) : void =>
     {
-        this.currTextResize = id;
-        this.prevX = e.clientX;
-        this.prevY = e.clientY;
-        this.vertResize = vert;
-        this.horzResize = horz;
-        this.startResize(horz, vert);
+        if(this.currSelect.length > 0)
+        {
+            this.groupMoving = true;
+            this.startMove();
+        }
+        else
+        {
+            this.currTextResize = id;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            this.vertResize = vert;
+            this.horzResize = horz;
+            this.startResize(horz, vert);
+        }
     }
 
     textMouseMove = (id: number) : void =>
@@ -4565,20 +4770,36 @@ class WhiteBoardController
 
     fileMouseMoveDown = (id: number, e: MouseEvent) : void =>
     {
-        this.currFileMove = id;
-        this.prevX = e.clientX;
-        this.prevY = e.clientY;
-        this.startMove();
+        if(this.currSelect.length > 0)
+        {
+            this.groupMoving = true;
+            this.startMove();
+        }
+        else
+        {
+            this.currFileMove = id;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            this.startMove();
+        }
     }
 
     fileMouseResizeDown = (id: number, vert: boolean, horz: boolean, e: MouseEvent) : void =>
     {
-        this.currFileResize = id;
-        this.prevX = e.clientX;
-        this.prevY = e.clientY;
-        this.vertResize = vert;
-        this.horzResize = horz;
-        this.startResize(horz, vert);
+        if(this.currSelect.length > 0)
+        {
+            this.groupMoving = true;
+            this.startMove();
+        }
+        else
+        {
+            this.currFileResize = id;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            this.vertResize = vert;
+            this.horzResize = horz;
+            this.startResize(horz, vert);
+        }
     }
 
     fileRotateClick = (id: number) : void =>
@@ -4697,204 +4918,6 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    mouseUp = (e: MouseEvent) : void =>
-    {
-        if(this.lMousePress && !this.wMousePress)
-        {
-            if(this.viewState.mode == 0)
-            {
-                var whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-                var context = whitElem.getContext('2d');
-
-                context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                if(this.isPoint)
-                {
-                    var elemRect = whitElem.getBoundingClientRect();
-                    var offsetY  = elemRect.top - document.body.scrollTop;
-                    var offsetX  = elemRect.left - document.body.scrollLeft;
-                }
-
-                this.drawCurve(this.pointList, this.scaleF * this.viewState.baseSize, this.viewState.colour, this.scaleF, this.panX, this.panY);
-            }
-            else if(this.viewState.mode == 1)
-            {
-                if(!this.isWriting)
-                {
-                    let rectLeft;
-                    let rectTop;
-                    let rectWidth;
-                    let rectHeight;
-                    let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-                    let context  = whitElem.getContext('2d');
-                    let elemRect = whitElem.getBoundingClientRect();
-                    let offsetY  = elemRect.top - document.body.scrollTop;
-                    let offsetX  = elemRect.left - document.body.scrollLeft;
-                    let newPoint: Point = {x: 0, y: 0};
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                    newPoint.x = Math.round(e.clientX - offsetX);
-                    newPoint.y = Math.round(e.clientY - offsetY);
-
-
-                    if(newPoint.x > this.downPoint.x)
-                    {
-                        rectLeft = this.downPoint.x;
-                        rectWidth = newPoint.x - this.downPoint.x;
-                    }
-                    else
-                    {
-                        rectLeft = newPoint.x;
-                        rectWidth = this.downPoint.x - newPoint.x;
-                    }
-
-                    if(newPoint.y > this.downPoint.y)
-                    {
-                        rectTop = this.downPoint.y;
-                        rectHeight = newPoint.y - this.downPoint.y;
-                    }
-                    else
-                    {
-                        rectTop = newPoint.y;
-                        rectHeight = this.downPoint.y - newPoint.y;
-                    }
-
-                    if(rectWidth > 10 && rectHeight > 10)
-                    {
-                        let x = rectLeft * this.scaleF + this.panX;
-                        let y = rectTop * this.scaleF + this.panY;
-                        let width = rectWidth * this.scaleF;
-                        let height = rectHeight * this.scaleF;
-
-                        this.isWriting = true;
-                        this.cursorStart = 0;
-                        this.cursorEnd = 0;
-
-                        let localId = this.addTextbox(x, y, width, height, this.scaleF * this.viewState.baseSize * 20, this.viewState.isJustified, this.userId, this.userId, new Date());
-                        this.setTextEdit(localId);
-                    }
-                }
-                else if(this.rMousePress)
-                {
-                    this.isWriting = false;
-
-                    if(this.currTextEdit > -1)
-                    {
-                        let textBox = this.getText(this.currTextEdit);
-                        let lineCount = textBox.textNodes.length;
-
-                        if(lineCount == 0)
-                        {
-                            lineCount = 1;
-                        }
-
-                        if(lineCount * 1.5 * textBox.size < textBox.height)
-                        {
-                            this.resizeText(this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                            this.sendTextResize(this.currTextEdit);
-                        }
-
-                        this.releaseText(this.currTextEdit);
-                    }
-                    else if(this.gettingLock > -1)
-                    {
-                        this.releaseText(this.gettingLock);
-                    }
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                }
-            }
-            else if(this.viewState.mode == 4)
-            {
-                let rectLeft;
-                let rectTop;
-                let rectWidth;
-                let rectHeight;
-                let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-                let context  = whitElem.getContext('2d');
-                let elemRect = whitElem.getBoundingClientRect();
-                let offsetY  = elemRect.top - document.body.scrollTop;
-                let offsetX  = elemRect.left - document.body.scrollLeft;
-                let newPoint: Point = {x: 0, y: 0};
-
-                context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                newPoint.x = Math.round(e.clientX - offsetX);
-                newPoint.y = Math.round(e.clientY - offsetY);
-
-
-                if(newPoint.x > this.downPoint.x)
-                {
-                    rectLeft = this.downPoint.x;
-                    rectWidth = newPoint.x - this.downPoint.x;
-                }
-                else
-                {
-                    rectLeft = newPoint.x;
-                    rectWidth = this.downPoint.x - newPoint.x;
-                }
-
-                if(newPoint.y > this.downPoint.y)
-                {
-                    rectTop = this.downPoint.y;
-                    rectHeight = newPoint.y - this.downPoint.y;
-                }
-                else
-                {
-                    rectTop = newPoint.y;
-                    rectHeight = this.downPoint.y - newPoint.y;
-                }
-
-                if(rectWidth > 10 && rectHeight > 10)
-                {
-                    this.placeHighlight(rectLeft, rectTop, this.scaleF, this.panX, this.panY, rectWidth, rectHeight);
-                }
-            }
-        }
-
-        if(this.curveMoved)
-        {
-            this.curveMoved = false;
-            this.sendCurveMove(this.currCurveMove);
-        }
-        else if(this.textMoved)
-        {
-            this.textMoved = false;
-            this.sendTextMove(this.currTextMove);
-        }
-        else if(this.textResized)
-        {
-            this.textResized = false;
-            this.sendTextResize(this.currTextEdit);
-        }
-        else if(this.fileMoved)
-        {
-            this.fileMoved = false;
-            this.sendFileMove(this.currFileMove);
-        }
-        else if(this.fileResized)
-        {
-            this.fileResized = false;
-            this.sendFileResize(this.currFileResize);
-        }
-
-        this.curveChangeX = 0;
-        this.curveChangeY = 0;
-        this.lMousePress = false;
-        this.wMousePress = false;
-        this.rMousePress = false;
-        this.pointList = [];
-        this.moving = false;
-        this.endMove();
-        this.endResize();
-    }
-
-    touchUp = () : void =>
-    {
-        this.touchPress = false;
-    }
-
     mouseDown = (e: MouseEvent) : void =>
     {
         if(!this.lMousePress && !this.wMousePress && !this.rMousePress)
@@ -4905,16 +4928,16 @@ class WhiteBoardController
             this.rMousePress = e.buttons & 2 ? true : false;
             this.wMousePress = e.buttons & 4 ? true : false;
             this.isPoint = true;
-            var whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY  = elemRect.top - document.body.scrollTop;
-            var offsetX  = elemRect.left - document.body.scrollLeft;
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
             whitElem.width = whitElem.clientWidth;
             whitElem.height = whitElem.clientHeight;
             this.prevX = e.clientX;
             this.prevY = e.clientY;
 
-            var newPoint: Point = {x: 0, y: 0};
+            let newPoint: Point = {x: 0, y: 0};
             this.pointList = [];
             newPoint.x = Math.round(e.clientX - offsetX);
             newPoint.y = Math.round(e.clientY - offsetY);
@@ -4926,17 +4949,29 @@ class WhiteBoardController
             {
                 if(this.currTextEdit > -1)
                 {
-                    var textBox = this.getText(this.currTextEdit);
+                    let textBox = this.getText(this.currTextEdit);
 
                     this.cursorStart = this.findTextPos(textBox, (e.clientX - offsetX) * this.scaleF + this.panX, (e.clientY - offsetY) * this.scaleF + this.panY);
                     this.cursorEnd = this.cursorStart;
                     this.textDown = this.cursorStart;
                     this.changeTextSelect(this.currTextEdit, true);
                 }
+
+                this.selectDrag = true;
+
             }
         }
 
-        this.currSelect = [];
+        if(this.currSelect.length > 0)
+        {
+            // Deselect currently selected items
+            for(let i = 0; i < this.currSelect.length; i++)
+            {
+                this.deselectElement(this.currSelect[i]);
+            }
+            this.currSelect = [];
+        }
+
 
         if(this.currentHover != -1)
         {
@@ -5077,10 +5112,10 @@ class WhiteBoardController
                 }
                 else
                 {
-                    var rectLeft;
-                    var rectTop;
-                    var rectWidth;
-                    var rectHeight;
+                    let rectLeft;
+                    let rectTop;
+                    let rectWidth;
+                    let rectHeight;
 
                     if(newPoint.x > this.downPoint.x)
                     {
@@ -5118,8 +5153,7 @@ class WhiteBoardController
             }
             else if(this.viewState.mode == 2 && !this.rMousePress)
             {
-                // TODO: Group selects
-                
+                // Delete Functions Not Handled Here
             }
             else if(this.viewState.mode == 3)
             {
@@ -5171,6 +5205,62 @@ class WhiteBoardController
                     this.prevX = e.clientX;
                     this.prevY = e.clientY;
                     this.fileResized = true;
+                }
+                else if(this.groupMoving)
+                {
+                    var changeX = (e.clientX - this.prevX) * this.scaleF;
+                    var changeY = (e.clientY - this.prevY) * this.scaleF;
+
+                    this.moveGroup(true, changeX, changeY, new Date());
+
+                    this.prevX = e.clientX;
+                    this.prevY = e.clientY;
+                    this.groupMoved = true;
+                }
+                else if(this.selectDrag)
+                {
+                    let rectLeft;
+                    let rectTop;
+                    let rectWidth;
+                    let rectHeight;
+
+                    if(newPoint.x > this.downPoint.x)
+                    {
+                        rectLeft = this.downPoint.x;
+                        rectWidth = newPoint.x - this.downPoint.x;
+                    }
+                    else
+                    {
+                        rectLeft = newPoint.x;
+                        rectWidth = this.downPoint.x - newPoint.x;
+                    }
+
+                    if(newPoint.y > this.downPoint.y)
+                    {
+                        rectTop = this.downPoint.y;
+                        rectHeight = newPoint.y - this.downPoint.y;
+                    }
+                    else
+                    {
+                        rectTop = newPoint.y;
+                        rectHeight = this.downPoint.y - newPoint.y;
+                    }
+
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                    if(rectWidth > 0 && rectHeight > 0)
+                    {
+                        context.beginPath();
+                        context.strokeStyle = 'black';
+                        context.setLineDash([5]);
+                        context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
+                        context.stroke();
+                    }
+
+                    this.selectLeft = this.panX + rectLeft * this.scaleF;
+                    this.selectTop = this.panY + rectTop * this.scaleF;
+                    this.selectWidth = rectWidth * this.scaleF;
+                    this.selectHeight = rectHeight * this.scaleF;
                 }
             }
             else if(this.viewState.mode == 4 && !this.rMousePress)
@@ -5226,6 +5316,228 @@ class WhiteBoardController
         {
 
         }
+    }
+
+    mouseUp = (e: MouseEvent) : void =>
+    {
+        if(this.lMousePress && !this.wMousePress)
+        {
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let context = whitElem.getContext('2d');
+
+            if(this.viewState.mode == 0)
+            {
+                context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                if(this.isPoint)
+                {
+                    let elemRect = whitElem.getBoundingClientRect();
+                    let offsetY  = elemRect.top - document.body.scrollTop;
+                    let offsetX  = elemRect.left - document.body.scrollLeft;
+                }
+
+                this.drawCurve(this.pointList, this.scaleF * this.viewState.baseSize, this.viewState.colour, this.scaleF, this.panX, this.panY);
+            }
+            else if(this.viewState.mode == 1)
+            {
+                if(!this.isWriting)
+                {
+                    let rectLeft;
+                    let rectTop;
+                    let rectWidth;
+                    let rectHeight;
+                    let elemRect = whitElem.getBoundingClientRect();
+                    let offsetY  = elemRect.top - document.body.scrollTop;
+                    let offsetX  = elemRect.left - document.body.scrollLeft;
+                    let newPoint: Point = {x: 0, y: 0};
+
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                    newPoint.x = Math.round(e.clientX - offsetX);
+                    newPoint.y = Math.round(e.clientY - offsetY);
+
+
+                    if(newPoint.x > this.downPoint.x)
+                    {
+                        rectLeft = this.downPoint.x;
+                        rectWidth = newPoint.x - this.downPoint.x;
+                    }
+                    else
+                    {
+                        rectLeft = newPoint.x;
+                        rectWidth = this.downPoint.x - newPoint.x;
+                    }
+
+                    if(newPoint.y > this.downPoint.y)
+                    {
+                        rectTop = this.downPoint.y;
+                        rectHeight = newPoint.y - this.downPoint.y;
+                    }
+                    else
+                    {
+                        rectTop = newPoint.y;
+                        rectHeight = this.downPoint.y - newPoint.y;
+                    }
+
+                    if(rectWidth > 10 && rectHeight > 10)
+                    {
+                        let x = rectLeft * this.scaleF + this.panX;
+                        let y = rectTop * this.scaleF + this.panY;
+                        let width = rectWidth * this.scaleF;
+                        let height = rectHeight * this.scaleF;
+
+                        this.isWriting = true;
+                        this.cursorStart = 0;
+                        this.cursorEnd = 0;
+
+                        let localId = this.addTextbox(x, y, width, height, this.scaleF * this.viewState.baseSize * 20, this.viewState.isJustified, this.userId, this.userId, new Date());
+                        this.setTextEdit(localId);
+                    }
+                }
+                else if(this.rMousePress)
+                {
+                    this.isWriting = false;
+
+                    if(this.currTextEdit > -1)
+                    {
+                        let textBox = this.getText(this.currTextEdit);
+                        let lineCount = textBox.textNodes.length;
+
+                        if(lineCount == 0)
+                        {
+                            lineCount = 1;
+                        }
+
+                        if(lineCount * 1.5 * textBox.size < textBox.height)
+                        {
+                            this.resizeText(this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
+                            this.sendTextResize(this.currTextEdit);
+                        }
+
+                        this.releaseText(this.currTextEdit);
+                    }
+                    else if(this.gettingLock > -1)
+                    {
+                        this.releaseText(this.gettingLock);
+                    }
+
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+                }
+            }
+            else if(this.viewState.mode == 3)
+            {
+                if(this.selectDrag)
+                {
+                    this.selectDrag = false;
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                    // Cycle through board elements and select those within the rectangle
+                    for(let i = 0; i < this.boardElems.length; i++)
+                    {
+                        let elem = this.boardElems[i];
+                        if(elem.x + elem.width > this.selectLeft && elem.y + elem.height > this.selectTop)
+                        {
+                            if(this.selectLeft + this.selectWidth > elem.x && this.selectTop + this.selectHeight > elem.y)
+                            {
+                                this.currSelect.push(i);
+                                this.selectElement(i);
+                            }
+                        }
+
+                    }
+                }
+            }
+            else if(this.viewState.mode == 4)
+            {
+                let rectLeft;
+                let rectTop;
+                let rectWidth;
+                let rectHeight;
+                let elemRect = whitElem.getBoundingClientRect();
+                let offsetY  = elemRect.top - document.body.scrollTop;
+                let offsetX  = elemRect.left - document.body.scrollLeft;
+                let newPoint: Point = {x: 0, y: 0};
+
+                context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                newPoint.x = Math.round(e.clientX - offsetX);
+                newPoint.y = Math.round(e.clientY - offsetY);
+
+
+                if(newPoint.x > this.downPoint.x)
+                {
+                    rectLeft = this.downPoint.x;
+                    rectWidth = newPoint.x - this.downPoint.x;
+                }
+                else
+                {
+                    rectLeft = newPoint.x;
+                    rectWidth = this.downPoint.x - newPoint.x;
+                }
+
+                if(newPoint.y > this.downPoint.y)
+                {
+                    rectTop = this.downPoint.y;
+                    rectHeight = newPoint.y - this.downPoint.y;
+                }
+                else
+                {
+                    rectTop = newPoint.y;
+                    rectHeight = this.downPoint.y - newPoint.y;
+                }
+
+                if(rectWidth > 10 && rectHeight > 10)
+                {
+                    this.placeHighlight(rectLeft, rectTop, this.scaleF, this.panX, this.panY, rectWidth, rectHeight);
+                }
+            }
+        }
+
+        if(this.curveMoved)
+        {
+            this.curveMoved = false;
+            this.sendCurveMove(this.currCurveMove);
+        }
+        else if(this.textMoved)
+        {
+            this.textMoved = false;
+            this.sendTextMove(this.currTextMove);
+        }
+        else if(this.textResized)
+        {
+            this.textResized = false;
+            this.sendTextResize(this.currTextEdit);
+        }
+        else if(this.fileMoved)
+        {
+            this.fileMoved = false;
+            this.sendFileMove(this.currFileMove);
+        }
+        else if(this.fileResized)
+        {
+            this.fileResized = false;
+            this.sendFileResize(this.currFileResize);
+        }
+        else if(this.groupMoved)
+        {
+            this.groupMoved = false;
+            this.sendGroupMove();
+        }
+
+        this.curveChangeX = 0;
+        this.curveChangeY = 0;
+        this.lMousePress = false;
+        this.wMousePress = false;
+        this.rMousePress = false;
+        this.pointList = [];
+        this.moving = false;
+        this.endMove();
+        this.endResize();
+    }
+
+    touchUp = () : void =>
+    {
+        this.touchPress = false;
     }
 
     windowResize = (e: DocumentEvent) : void =>
@@ -5352,11 +5664,11 @@ class WhiteBoardController
 
     keyPress = (e: KeyboardEvent) : void =>
     {
+        let inputChar = e.key;
         if(this.isWriting)
         {
             e.preventDefault();
             e.stopPropagation();
-            var inputChar = e.key;
             var textItem: WhiteBoardText;
             var i: number;
             var line: TextNode;
@@ -5786,6 +6098,36 @@ class WhiteBoardController
                     this.insertText(textItem, start, end, inputChar);
                 }
                 break;
+            }
+        }
+        else
+        {
+            if(e.ctrlKey)
+            {
+                if(inputChar == 'z')
+                {
+                    // If there is exactly one item selected treat it as being edited.
+                    if(this.currSelect.length == 1)
+                    {
+                        this.undoItemEdit(this.currSelect[0]);
+                    }
+                    else
+                    {
+                        this.undo();
+                    }
+                }
+                else if(inputChar == 'y')
+                {
+                    // If there is exactly one item selected treat it as being edited.
+                    if(this.currSelect.length == 1)
+                    {
+                        this.redoItemEdit(this.currSelect[0]);
+                    }
+                    else
+                    {
+                        this.redo();
+                    }
+                }
             }
         }
     }

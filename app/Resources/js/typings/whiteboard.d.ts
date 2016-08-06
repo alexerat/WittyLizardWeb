@@ -9,6 +9,11 @@ interface OperationBufferElement {
     type: string;
     message: UserMessage;
 }
+interface TextOperation
+{
+    undo: () => void;
+    redo: () => void;
+}
 interface InfoMessage {
     id: number;
     x: number;
@@ -21,6 +26,10 @@ interface InfoMessage {
 interface BoardElement {
     serverId: number;
     id: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
     user: number;
     updateTime: Date;
     isDeleted: boolean;
@@ -28,14 +37,14 @@ interface BoardElement {
     opBuffer: Array<OperationBufferElement>;
     hoverTimer: number;
     infoElement: number;
+    operationStack: Array<TextOperation>;
+    operationPos: number;
 }
 interface Point {
     x: number;
     y: number;
 }
 interface Curve extends BoardElement {
-    x: number;
-    y: number;
     curveSet: Array<Point>;
     colour: string;
     size: number;
@@ -83,10 +92,6 @@ interface StyleNode {
     startPos: number;
 }
 interface WhiteBoardText extends BoardElement {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
     editLock: number;
     styles: Array<TextStyle>;
     text: string;
@@ -100,17 +105,9 @@ interface WhiteBoardText extends BoardElement {
     waiting: boolean;
 }
 interface Highlight extends BoardElement {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
     colour: number;
 }
 interface Upload extends BoardElement {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
     rotation: number;
     isImage: boolean;
     fType: string;
@@ -124,6 +121,10 @@ interface CurveInBufferElement {
     size: number;
     curveSet: Array<Point>;
     updateTime: Date;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
 }
 interface CurveOutBufferElement {
     serverId: number;
@@ -191,6 +192,8 @@ interface ServerNewPointMessage extends ServeBaseMessage {
 interface ServerNewCurveMessage extends ServeBaseMessage {
     x: number;
     y: number;
+    width: number;
+    height: number;
     userId: number;
     size: number;
     colour: string;
@@ -322,6 +325,8 @@ interface UserNewCurveMessage extends UserMessage {
     localId: number;
     x: number;
     y: number;
+    width: number;
+    height: number;
     colour: string;
     size: number;
     num_points: number;

@@ -615,7 +615,12 @@ var WhiteBoardController = (function () {
         this.isWriting = false;
         this.userHighlight = -1;
         this.currentHover = -1;
+        this.selectDrag = false;
         this.currSelect = [];
+        this.groupMoving = false;
+        this.groupMoved = false;
+        this.operationStack = [];
+        this.operationPos = 0;
         this.fileUploads = [];
         this.fileReaders = [];
         this.textDict = [];
@@ -675,10 +680,10 @@ var WhiteBoardController = (function () {
             else if (element.type === 'curve') {
             }
         };
-        this.addCurve = function (curveSet, userId, colour, size, updateTime, serverId) {
+        this.addCurve = function (x, y, width, height, curveSet, userId, colour, size, updateTime, serverId) {
             var newCurve = {
                 type: 'curve', id: -1, user: userId, isDeleted: false, colour: colour, size: size, curveSet: curveSet, serverId: serverId, opBuffer: [],
-                x: curveSet[0].x, y: curveSet[0].y, hoverTimer: null, infoElement: null, updateTime: updateTime
+                x: x, y: y, width: width, height: height, hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
             };
             var localId = _this.boardElems.length;
             _this.boardElems[localId] = newCurve;
@@ -735,7 +740,7 @@ var WhiteBoardController = (function () {
                     {
                         text: '', user: userId, isDeleted: false, x: x, y: y, size: size, styles: [], editCount: 0, type: 'text', cursor: null, cursorElems: [],
                         width: width, height: height, editLock: editLock, justified: justified, textNodes: [], dist: [0], serverId: serverId, id: 0, waiting: false,
-                        opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime
+                        opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
                     };
                 localId = _this.boardElems.length;
                 _this.boardElems[localId] = newText;
@@ -1086,6 +1091,20 @@ var WhiteBoardController = (function () {
             var newElemList = _this.viewState.boardElements.set(id, newFileView);
             _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
         };
+        this.moveGroup = function (isRelative, x, y, editTime) {
+            for (var i = 0; i < _this.currSelect.length; i++) {
+                var elem = _this.getBoardElement(_this.currSelect[i]);
+                if (elem.type == 'curve') {
+                    _this.moveCurve(elem.id, x, y, editTime);
+                }
+                else if (elem.type == 'text') {
+                    _this.moveTextbox(elem.id, isRelative, x, y, editTime);
+                }
+                else if (elem.type == 'file') {
+                    _this.moveUpload(elem.id, isRelative, x, y, editTime);
+                }
+            }
+        };
         this.startMove = function () {
             _this.updateView(Object.assign({}, _this.viewState, { itemMoving: true }));
         };
@@ -1093,6 +1112,7 @@ var WhiteBoardController = (function () {
             _this.currTextMove = -1;
             _this.currCurveMove = -1;
             _this.currFileMove = -1;
+            _this.groupMoving = false;
             _this.updateView(Object.assign({}, _this.viewState, { itemMoving: false }));
         };
         this.startResize = function (horz, vert) {
@@ -1120,6 +1140,20 @@ var WhiteBoardController = (function () {
         this.removeInfoMessage = function (id) {
             var newInfoList = _this.viewState.infoElements.delete(id);
             _this.updateView(Object.assign({}, _this.viewState, { infoElements: newInfoList }));
+        };
+        this.selectElement = function (id) {
+            var newElemView = Object.assign({}, _this.getViewElement(id), {
+                selected: true
+            });
+            var newElemList = _this.viewState.boardElements.set(id, newElemView);
+            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
+        };
+        this.deselectElement = function (id) {
+            var newElemView = Object.assign({}, _this.getViewElement(id), {
+                selected: false
+            });
+            var newElemList = _this.viewState.boardElements.set(id, newElemView);
+            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
         };
         this.setViewBox = function (panX, panY, scaleF) {
             var whitElem = document.getElementById("whiteBoard-input");
@@ -1201,6 +1235,46 @@ var WhiteBoardController = (function () {
         this.getInfoMessage = function (id) {
             return _this.infoElems[id];
         };
+        this.undo = function () {
+            if (_this.operationPos > 0) {
+                _this.operationStack[--_this.operationPos].undo();
+            }
+        };
+        this.redo = function () {
+            if (_this.operationPos < _this.operationStack.length) {
+                _this.operationStack[_this.operationPos++].redo();
+            }
+        };
+        this.newOperation = function (itemId, undoOp, redoOp) {
+            _this.operationStack.splice(_this.operationPos, _this.operationStack.length - _this.operationPos);
+            var newOp = { id: itemId, undo: undoOp, redo: redoOp };
+            _this.operationStack[_this.operationPos++] = newOp;
+        };
+        this.remoteEdit = function (id) {
+            for (var i = 0; i < _this.operationStack.length; i++) {
+                if (_this.operationStack[i].id == id) {
+                    var newOp = { id: id, undo: function () { _this.selectElement(id); }, redo: function () { _this.selectElement(id); } };
+                    _this.operationStack.splice(i, 1, newOp);
+                }
+            }
+        };
+        this.undoItemEdit = function (id) {
+            var elem = _this.getBoardElement(id);
+            if (elem.operationPos > 0) {
+                elem.operationStack[--elem.operationPos].undo();
+            }
+        };
+        this.redoItemEdit = function (id) {
+            var elem = _this.getBoardElement(id);
+            if (elem.operationPos < elem.operationStack.length) {
+                elem.operationStack[elem.operationPos++].redo();
+            }
+        };
+        this.remoteItemEdit = function (id) {
+            var elem = _this.getBoardElement(id);
+            elem.operationPos = 0;
+            elem.operationStack = [];
+        };
         this.addHoverInfo = function (id) {
             var elem = _this.getBoardElement(id);
             var infoId = _this.addInfoMessage(_this.mouseX, _this.mouseY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
@@ -1210,6 +1284,20 @@ var WhiteBoardController = (function () {
             var elem = _this.getBoardElement(id);
             elem.infoElement = null;
             _this.removeInfoMessage(elem.infoElement);
+        };
+        this.sendGroupMove = function () {
+            for (var i = 0; i < _this.currSelect.length; i++) {
+                var elem = _this.getBoardElement(_this.currSelect[i]);
+                if (elem.type == 'curve') {
+                    _this.sendCurveMove(elem.id);
+                }
+                else if (elem.type == 'text') {
+                    _this.sendTextMove(elem.id);
+                }
+                else if (elem.type == 'file') {
+                    _this.sendFileMove(elem.id);
+                }
+            }
         };
         this.newEdit = function (textBox) {
             textBox.editCount++;
@@ -1232,12 +1320,28 @@ var WhiteBoardController = (function () {
         this.drawCurve = function (points, size, colour, scaleF, panX, panY) {
             var reducedPoints;
             var curves;
+            var minX = null;
+            var maxX = null;
+            var minY = null;
+            var maxY = null;
             if (points.length > 1) {
                 reducedPoints = SmoothCurve(points);
                 reducedPoints = DeCluster(reducedPoints, 10);
                 for (var i = 0; i < reducedPoints.length; i++) {
                     reducedPoints[i].x = reducedPoints[i].x * scaleF + panX;
                     reducedPoints[i].y = reducedPoints[i].y * scaleF + panY;
+                    if (minX == null || reducedPoints[i].x < minX) {
+                        minX = reducedPoints[i].x;
+                    }
+                    if (maxX == null || reducedPoints[i].x > maxX) {
+                        maxX = reducedPoints[i].x;
+                    }
+                    if (minY == null || reducedPoints[i].y < minY) {
+                        minY = reducedPoints[i].y;
+                    }
+                    if (maxY == null || reducedPoints[i].y > maxY) {
+                        maxY = reducedPoints[i].y;
+                    }
                 }
                 curves = FitCurve(reducedPoints, reducedPoints.length, 5);
             }
@@ -1245,17 +1349,17 @@ var WhiteBoardController = (function () {
                 curves = [];
                 curves[0] = { x: points[0].x * scaleF + panX, y: points[0].y * scaleF + panY };
             }
-            var localId = _this.addCurve(curves, _this.userId, colour, size, new Date());
-            _this.sendCurve(localId, curves, colour, size);
+            var localId = _this.addCurve(minX, minY, maxX - minX, maxY - minY, curves, _this.userId, colour, size, new Date());
+            _this.sendCurve(localId, minX, minY, maxX - minX, maxY - minY, curves, colour, size);
         };
-        this.sendCurve = function (localId, curves, colour, size) {
+        this.sendCurve = function (localId, x, y, width, height, curves, colour, size) {
             var self = _this;
             _this.curveOutBuffer[localId] = { serverId: 0, localId: localId, colour: colour, curveSet: curves, size: size };
             _this.curveOutTimeouts[localId] = setInterval(function () {
-                var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: curves[0].x, y: curves[0].y };
+                var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
                 self.socket.emit('CURVE', msg);
             }, 60000);
-            var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: curves[0].x, y: curves[0].y };
+            var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
             _this.socket.emit('CURVE', msg);
         };
         this.sendCurveMove = function (id) {
@@ -2480,8 +2584,8 @@ var WhiteBoardController = (function () {
                 console.log('Recieved curve ID:' + data.serverId);
                 if (!self.curveDict[data.serverId] && !self.curveInBuffer[data.serverId]) {
                     self.curveInBuffer[data.serverId] = {
-                        serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0,
-                        curveSet: new Array, colour: data.colour, updateTime: data.editTime
+                        serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0, curveSet: new Array,
+                        colour: data.colour, updateTime: data.editTime, x: data.x, y: data.y, width: data.width, height: data.height
                     };
                     clearInterval(self.curveInTimeouts[data.serverId]);
                     self.curveInTimeouts[data.serverId] = setInterval(function (id) {
@@ -2504,7 +2608,7 @@ var WhiteBoardController = (function () {
                     }
                     if (buffer.num_recieved == buffer.num_points) {
                         clearInterval(self.curveInTimeouts[data.serverId]);
-                        self.addCurve(buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
+                        self.addCurve(buffer.x, buffer.y, buffer.width, buffer.height, buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
                         self.curveInBuffer[data.serverId] = null;
                     }
                 }
@@ -2963,10 +3067,16 @@ var WhiteBoardController = (function () {
         };
         this.curveMouseDown = function (id, e) {
             if (_this.viewState.mode == 3) {
-                _this.currCurveMove = id;
-                _this.startMove();
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
+                if (_this.currSelect.length > 0) {
+                    _this.groupMoving = true;
+                    _this.startMove();
+                }
+                else {
+                    _this.currCurveMove = id;
+                    _this.startMove();
+                    _this.prevX = e.clientX;
+                    _this.prevY = e.clientY;
+                }
             }
         };
         this.textMouseClick = function (id) {
@@ -3003,18 +3113,30 @@ var WhiteBoardController = (function () {
             }
         };
         this.textMouseMoveDown = function (id, e) {
-            _this.currTextMove = id;
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-            _this.startMove();
+            if (_this.currSelect.length > 0) {
+                _this.groupMoving = true;
+                _this.startMove();
+            }
+            else {
+                _this.currTextMove = id;
+                _this.prevX = e.clientX;
+                _this.prevY = e.clientY;
+                _this.startMove();
+            }
         };
         this.textMouseResizeDown = function (id, vert, horz, e) {
-            _this.currTextResize = id;
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-            _this.vertResize = vert;
-            _this.horzResize = horz;
-            _this.startResize(horz, vert);
+            if (_this.currSelect.length > 0) {
+                _this.groupMoving = true;
+                _this.startMove();
+            }
+            else {
+                _this.currTextResize = id;
+                _this.prevX = e.clientX;
+                _this.prevY = e.clientY;
+                _this.vertResize = vert;
+                _this.horzResize = horz;
+                _this.startResize(horz, vert);
+            }
         };
         this.textMouseMove = function (id) {
             if (_this.viewState.mode == 2 && _this.lMousePress) {
@@ -3057,18 +3179,30 @@ var WhiteBoardController = (function () {
             _this.setViewBox(newPanX, newPanY, _this.scaleF);
         };
         this.fileMouseMoveDown = function (id, e) {
-            _this.currFileMove = id;
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-            _this.startMove();
+            if (_this.currSelect.length > 0) {
+                _this.groupMoving = true;
+                _this.startMove();
+            }
+            else {
+                _this.currFileMove = id;
+                _this.prevX = e.clientX;
+                _this.prevY = e.clientY;
+                _this.startMove();
+            }
         };
         this.fileMouseResizeDown = function (id, vert, horz, e) {
-            _this.currFileResize = id;
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-            _this.vertResize = vert;
-            _this.horzResize = horz;
-            _this.startResize(horz, vert);
+            if (_this.currSelect.length > 0) {
+                _this.groupMoving = true;
+                _this.startMove();
+            }
+            else {
+                _this.currFileResize = id;
+                _this.prevX = e.clientX;
+                _this.prevY = e.clientY;
+                _this.vertResize = vert;
+                _this.horzResize = horz;
+                _this.startResize(horz, vert);
+            }
         };
         this.fileRotateClick = function (id) {
             var file = _this.getUpload(id);
@@ -3137,150 +3271,6 @@ var WhiteBoardController = (function () {
                 _this.placeRemoteFile(x, y, _this.scaleF, _this.panX, _this.panY, url);
             }
         };
-        this.mouseUp = function (e) {
-            if (_this.lMousePress && !_this.wMousePress) {
-                if (_this.viewState.mode == 0) {
-                    var whitElem = document.getElementById("whiteBoard-input");
-                    var context = whitElem.getContext('2d');
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                    if (_this.isPoint) {
-                        var elemRect = whitElem.getBoundingClientRect();
-                        var offsetY = elemRect.top - document.body.scrollTop;
-                        var offsetX = elemRect.left - document.body.scrollLeft;
-                    }
-                    _this.drawCurve(_this.pointList, _this.scaleF * _this.viewState.baseSize, _this.viewState.colour, _this.scaleF, _this.panX, _this.panY);
-                }
-                else if (_this.viewState.mode == 1) {
-                    if (!_this.isWriting) {
-                        var rectLeft = void 0;
-                        var rectTop = void 0;
-                        var rectWidth = void 0;
-                        var rectHeight = void 0;
-                        var whitElem_1 = document.getElementById("whiteBoard-input");
-                        var context_1 = whitElem_1.getContext('2d');
-                        var elemRect_1 = whitElem_1.getBoundingClientRect();
-                        var offsetY_1 = elemRect_1.top - document.body.scrollTop;
-                        var offsetX_1 = elemRect_1.left - document.body.scrollLeft;
-                        var newPoint = { x: 0, y: 0 };
-                        context_1.clearRect(0, 0, whitElem_1.width, whitElem_1.height);
-                        newPoint.x = Math.round(e.clientX - offsetX_1);
-                        newPoint.y = Math.round(e.clientY - offsetY_1);
-                        if (newPoint.x > _this.downPoint.x) {
-                            rectLeft = _this.downPoint.x;
-                            rectWidth = newPoint.x - _this.downPoint.x;
-                        }
-                        else {
-                            rectLeft = newPoint.x;
-                            rectWidth = _this.downPoint.x - newPoint.x;
-                        }
-                        if (newPoint.y > _this.downPoint.y) {
-                            rectTop = _this.downPoint.y;
-                            rectHeight = newPoint.y - _this.downPoint.y;
-                        }
-                        else {
-                            rectTop = newPoint.y;
-                            rectHeight = _this.downPoint.y - newPoint.y;
-                        }
-                        if (rectWidth > 10 && rectHeight > 10) {
-                            var x = rectLeft * _this.scaleF + _this.panX;
-                            var y = rectTop * _this.scaleF + _this.panY;
-                            var width = rectWidth * _this.scaleF;
-                            var height = rectHeight * _this.scaleF;
-                            _this.isWriting = true;
-                            _this.cursorStart = 0;
-                            _this.cursorEnd = 0;
-                            var localId = _this.addTextbox(x, y, width, height, _this.scaleF * _this.viewState.baseSize * 20, _this.viewState.isJustified, _this.userId, _this.userId, new Date());
-                            _this.setTextEdit(localId);
-                        }
-                    }
-                    else if (_this.rMousePress) {
-                        _this.isWriting = false;
-                        if (_this.currTextEdit > -1) {
-                            var textBox = _this.getText(_this.currTextEdit);
-                            var lineCount = textBox.textNodes.length;
-                            if (lineCount == 0) {
-                                lineCount = 1;
-                            }
-                            if (lineCount * 1.5 * textBox.size < textBox.height) {
-                                _this.resizeText(_this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                                _this.sendTextResize(_this.currTextEdit);
-                            }
-                            _this.releaseText(_this.currTextEdit);
-                        }
-                        else if (_this.gettingLock > -1) {
-                            _this.releaseText(_this.gettingLock);
-                        }
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                    }
-                }
-                else if (_this.viewState.mode == 4) {
-                    var rectLeft = void 0;
-                    var rectTop = void 0;
-                    var rectWidth = void 0;
-                    var rectHeight = void 0;
-                    var whitElem_2 = document.getElementById("whiteBoard-input");
-                    var context_2 = whitElem_2.getContext('2d');
-                    var elemRect_2 = whitElem_2.getBoundingClientRect();
-                    var offsetY_2 = elemRect_2.top - document.body.scrollTop;
-                    var offsetX_2 = elemRect_2.left - document.body.scrollLeft;
-                    var newPoint = { x: 0, y: 0 };
-                    context_2.clearRect(0, 0, whitElem_2.width, whitElem_2.height);
-                    newPoint.x = Math.round(e.clientX - offsetX_2);
-                    newPoint.y = Math.round(e.clientY - offsetY_2);
-                    if (newPoint.x > _this.downPoint.x) {
-                        rectLeft = _this.downPoint.x;
-                        rectWidth = newPoint.x - _this.downPoint.x;
-                    }
-                    else {
-                        rectLeft = newPoint.x;
-                        rectWidth = _this.downPoint.x - newPoint.x;
-                    }
-                    if (newPoint.y > _this.downPoint.y) {
-                        rectTop = _this.downPoint.y;
-                        rectHeight = newPoint.y - _this.downPoint.y;
-                    }
-                    else {
-                        rectTop = newPoint.y;
-                        rectHeight = _this.downPoint.y - newPoint.y;
-                    }
-                    if (rectWidth > 10 && rectHeight > 10) {
-                        _this.placeHighlight(rectLeft, rectTop, _this.scaleF, _this.panX, _this.panY, rectWidth, rectHeight);
-                    }
-                }
-            }
-            if (_this.curveMoved) {
-                _this.curveMoved = false;
-                _this.sendCurveMove(_this.currCurveMove);
-            }
-            else if (_this.textMoved) {
-                _this.textMoved = false;
-                _this.sendTextMove(_this.currTextMove);
-            }
-            else if (_this.textResized) {
-                _this.textResized = false;
-                _this.sendTextResize(_this.currTextEdit);
-            }
-            else if (_this.fileMoved) {
-                _this.fileMoved = false;
-                _this.sendFileMove(_this.currFileMove);
-            }
-            else if (_this.fileResized) {
-                _this.fileResized = false;
-                _this.sendFileResize(_this.currFileResize);
-            }
-            _this.curveChangeX = 0;
-            _this.curveChangeY = 0;
-            _this.lMousePress = false;
-            _this.wMousePress = false;
-            _this.rMousePress = false;
-            _this.pointList = [];
-            _this.moving = false;
-            _this.endMove();
-            _this.endResize();
-        };
-        this.touchUp = function () {
-            _this.touchPress = false;
-        };
         this.mouseDown = function (e) {
             if (!_this.lMousePress && !_this.wMousePress && !_this.rMousePress) {
                 _this.clearHighlight();
@@ -3310,9 +3300,15 @@ var WhiteBoardController = (function () {
                         _this.textDown = _this.cursorStart;
                         _this.changeTextSelect(_this.currTextEdit, true);
                     }
+                    _this.selectDrag = true;
                 }
             }
-            _this.currSelect = [];
+            if (_this.currSelect.length > 0) {
+                for (var i = 0; i < _this.currSelect.length; i++) {
+                    _this.deselectElement(_this.currSelect[i]);
+                }
+                _this.currSelect = [];
+            }
             if (_this.currentHover != -1) {
                 var elem = _this.getBoardElement(_this.currentHover);
                 if (elem.infoElement) {
@@ -3410,32 +3406,32 @@ var WhiteBoardController = (function () {
                         _this.changeTextSelect(_this.currTextSel, true);
                     }
                     else {
-                        var rectLeft;
-                        var rectTop;
-                        var rectWidth;
-                        var rectHeight;
+                        var rectLeft_1;
+                        var rectTop_1;
+                        var rectWidth_1;
+                        var rectHeight_1;
                         if (newPoint.x > _this.downPoint.x) {
-                            rectLeft = _this.downPoint.x;
-                            rectWidth = newPoint.x - _this.downPoint.x;
+                            rectLeft_1 = _this.downPoint.x;
+                            rectWidth_1 = newPoint.x - _this.downPoint.x;
                         }
                         else {
-                            rectLeft = newPoint.x;
-                            rectWidth = _this.downPoint.x - newPoint.x;
+                            rectLeft_1 = newPoint.x;
+                            rectWidth_1 = _this.downPoint.x - newPoint.x;
                         }
                         if (newPoint.y > _this.downPoint.y) {
-                            rectTop = _this.downPoint.y;
-                            rectHeight = newPoint.y - _this.downPoint.y;
+                            rectTop_1 = _this.downPoint.y;
+                            rectHeight_1 = newPoint.y - _this.downPoint.y;
                         }
                         else {
-                            rectTop = newPoint.y;
-                            rectHeight = _this.downPoint.y - newPoint.y;
+                            rectTop_1 = newPoint.y;
+                            rectHeight_1 = _this.downPoint.y - newPoint.y;
                         }
                         context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        if (rectWidth > 0 && rectHeight > 0) {
+                        if (rectWidth_1 > 0 && rectHeight_1 > 0) {
                             context.beginPath();
                             context.strokeStyle = 'black';
                             context.setLineDash([5]);
-                            context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
+                            context.strokeRect(rectLeft_1, rectTop_1, rectWidth_1, rectHeight_1);
                             context.stroke();
                         }
                     }
@@ -3478,6 +3474,48 @@ var WhiteBoardController = (function () {
                         _this.prevY = e.clientY;
                         _this.fileResized = true;
                     }
+                    else if (_this.groupMoving) {
+                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
+                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
+                        _this.moveGroup(true, changeX, changeY, new Date());
+                        _this.prevX = e.clientX;
+                        _this.prevY = e.clientY;
+                        _this.groupMoved = true;
+                    }
+                    else if (_this.selectDrag) {
+                        var rectLeft_2;
+                        var rectTop_2;
+                        var rectWidth_2;
+                        var rectHeight_2;
+                        if (newPoint.x > _this.downPoint.x) {
+                            rectLeft_2 = _this.downPoint.x;
+                            rectWidth_2 = newPoint.x - _this.downPoint.x;
+                        }
+                        else {
+                            rectLeft_2 = newPoint.x;
+                            rectWidth_2 = _this.downPoint.x - newPoint.x;
+                        }
+                        if (newPoint.y > _this.downPoint.y) {
+                            rectTop_2 = _this.downPoint.y;
+                            rectHeight_2 = newPoint.y - _this.downPoint.y;
+                        }
+                        else {
+                            rectTop_2 = newPoint.y;
+                            rectHeight_2 = _this.downPoint.y - newPoint.y;
+                        }
+                        context.clearRect(0, 0, whitElem.width, whitElem.height);
+                        if (rectWidth_2 > 0 && rectHeight_2 > 0) {
+                            context.beginPath();
+                            context.strokeStyle = 'black';
+                            context.setLineDash([5]);
+                            context.strokeRect(rectLeft_2, rectTop_2, rectWidth_2, rectHeight_2);
+                            context.stroke();
+                        }
+                        _this.selectLeft = _this.panX + rectLeft_2 * _this.scaleF;
+                        _this.selectTop = _this.panY + rectTop_2 * _this.scaleF;
+                        _this.selectWidth = rectWidth_2 * _this.scaleF;
+                        _this.selectHeight = rectHeight_2 * _this.scaleF;
+                    }
                 }
                 else if (_this.viewState.mode == 4 && !_this.rMousePress) {
                     var rectLeft;
@@ -3517,6 +3555,165 @@ var WhiteBoardController = (function () {
         this.touchMove = function (e) {
             if (_this.touchPress) {
             }
+        };
+        this.mouseUp = function (e) {
+            if (_this.lMousePress && !_this.wMousePress) {
+                var whitElem = document.getElementById("whiteBoard-input");
+                var context = whitElem.getContext('2d');
+                if (_this.viewState.mode == 0) {
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+                    if (_this.isPoint) {
+                        var elemRect = whitElem.getBoundingClientRect();
+                        var offsetY = elemRect.top - document.body.scrollTop;
+                        var offsetX = elemRect.left - document.body.scrollLeft;
+                    }
+                    _this.drawCurve(_this.pointList, _this.scaleF * _this.viewState.baseSize, _this.viewState.colour, _this.scaleF, _this.panX, _this.panY);
+                }
+                else if (_this.viewState.mode == 1) {
+                    if (!_this.isWriting) {
+                        var rectLeft = void 0;
+                        var rectTop = void 0;
+                        var rectWidth = void 0;
+                        var rectHeight = void 0;
+                        var elemRect = whitElem.getBoundingClientRect();
+                        var offsetY = elemRect.top - document.body.scrollTop;
+                        var offsetX = elemRect.left - document.body.scrollLeft;
+                        var newPoint = { x: 0, y: 0 };
+                        context.clearRect(0, 0, whitElem.width, whitElem.height);
+                        newPoint.x = Math.round(e.clientX - offsetX);
+                        newPoint.y = Math.round(e.clientY - offsetY);
+                        if (newPoint.x > _this.downPoint.x) {
+                            rectLeft = _this.downPoint.x;
+                            rectWidth = newPoint.x - _this.downPoint.x;
+                        }
+                        else {
+                            rectLeft = newPoint.x;
+                            rectWidth = _this.downPoint.x - newPoint.x;
+                        }
+                        if (newPoint.y > _this.downPoint.y) {
+                            rectTop = _this.downPoint.y;
+                            rectHeight = newPoint.y - _this.downPoint.y;
+                        }
+                        else {
+                            rectTop = newPoint.y;
+                            rectHeight = _this.downPoint.y - newPoint.y;
+                        }
+                        if (rectWidth > 10 && rectHeight > 10) {
+                            var x = rectLeft * _this.scaleF + _this.panX;
+                            var y = rectTop * _this.scaleF + _this.panY;
+                            var width = rectWidth * _this.scaleF;
+                            var height = rectHeight * _this.scaleF;
+                            _this.isWriting = true;
+                            _this.cursorStart = 0;
+                            _this.cursorEnd = 0;
+                            var localId = _this.addTextbox(x, y, width, height, _this.scaleF * _this.viewState.baseSize * 20, _this.viewState.isJustified, _this.userId, _this.userId, new Date());
+                            _this.setTextEdit(localId);
+                        }
+                    }
+                    else if (_this.rMousePress) {
+                        _this.isWriting = false;
+                        if (_this.currTextEdit > -1) {
+                            var textBox = _this.getText(_this.currTextEdit);
+                            var lineCount = textBox.textNodes.length;
+                            if (lineCount == 0) {
+                                lineCount = 1;
+                            }
+                            if (lineCount * 1.5 * textBox.size < textBox.height) {
+                                _this.resizeText(_this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
+                                _this.sendTextResize(_this.currTextEdit);
+                            }
+                            _this.releaseText(_this.currTextEdit);
+                        }
+                        else if (_this.gettingLock > -1) {
+                            _this.releaseText(_this.gettingLock);
+                        }
+                        context.clearRect(0, 0, whitElem.width, whitElem.height);
+                    }
+                }
+                else if (_this.viewState.mode == 3) {
+                    if (_this.selectDrag) {
+                        _this.selectDrag = false;
+                        context.clearRect(0, 0, whitElem.width, whitElem.height);
+                        for (var i = 0; i < _this.boardElems.length; i++) {
+                            var elem = _this.boardElems[i];
+                            if (elem.x + elem.width > _this.selectLeft && elem.y + elem.height > _this.selectTop) {
+                                if (_this.selectLeft + _this.selectWidth > elem.x && _this.selectTop + _this.selectHeight > elem.y) {
+                                    _this.currSelect.push(i);
+                                    _this.selectElement(i);
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (_this.viewState.mode == 4) {
+                    var rectLeft = void 0;
+                    var rectTop = void 0;
+                    var rectWidth = void 0;
+                    var rectHeight = void 0;
+                    var elemRect = whitElem.getBoundingClientRect();
+                    var offsetY = elemRect.top - document.body.scrollTop;
+                    var offsetX = elemRect.left - document.body.scrollLeft;
+                    var newPoint = { x: 0, y: 0 };
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+                    newPoint.x = Math.round(e.clientX - offsetX);
+                    newPoint.y = Math.round(e.clientY - offsetY);
+                    if (newPoint.x > _this.downPoint.x) {
+                        rectLeft = _this.downPoint.x;
+                        rectWidth = newPoint.x - _this.downPoint.x;
+                    }
+                    else {
+                        rectLeft = newPoint.x;
+                        rectWidth = _this.downPoint.x - newPoint.x;
+                    }
+                    if (newPoint.y > _this.downPoint.y) {
+                        rectTop = _this.downPoint.y;
+                        rectHeight = newPoint.y - _this.downPoint.y;
+                    }
+                    else {
+                        rectTop = newPoint.y;
+                        rectHeight = _this.downPoint.y - newPoint.y;
+                    }
+                    if (rectWidth > 10 && rectHeight > 10) {
+                        _this.placeHighlight(rectLeft, rectTop, _this.scaleF, _this.panX, _this.panY, rectWidth, rectHeight);
+                    }
+                }
+            }
+            if (_this.curveMoved) {
+                _this.curveMoved = false;
+                _this.sendCurveMove(_this.currCurveMove);
+            }
+            else if (_this.textMoved) {
+                _this.textMoved = false;
+                _this.sendTextMove(_this.currTextMove);
+            }
+            else if (_this.textResized) {
+                _this.textResized = false;
+                _this.sendTextResize(_this.currTextEdit);
+            }
+            else if (_this.fileMoved) {
+                _this.fileMoved = false;
+                _this.sendFileMove(_this.currFileMove);
+            }
+            else if (_this.fileResized) {
+                _this.fileResized = false;
+                _this.sendFileResize(_this.currFileResize);
+            }
+            else if (_this.groupMoved) {
+                _this.groupMoved = false;
+                _this.sendGroupMove();
+            }
+            _this.curveChangeX = 0;
+            _this.curveChangeY = 0;
+            _this.lMousePress = false;
+            _this.wMousePress = false;
+            _this.rMousePress = false;
+            _this.pointList = [];
+            _this.moving = false;
+            _this.endMove();
+            _this.endResize();
+        };
+        this.touchUp = function () {
+            _this.touchPress = false;
         };
         this.windowResize = function (e) {
             var whitElem = document.getElementById("whiteBoard-input");
@@ -3597,10 +3794,10 @@ var WhiteBoardController = (function () {
         this.keyUp = function (e) {
         };
         this.keyPress = function (e) {
+            var inputChar = e.key;
             if (_this.isWriting) {
                 e.preventDefault();
                 e.stopPropagation();
-                var inputChar = e.key;
                 var textItem;
                 var i;
                 var line;
@@ -3902,6 +4099,26 @@ var WhiteBoardController = (function () {
                             _this.insertText(textItem, start, end, inputChar);
                         }
                         break;
+                }
+            }
+            else {
+                if (e.ctrlKey) {
+                    if (inputChar == 'z') {
+                        if (_this.currSelect.length == 1) {
+                            _this.undoItemEdit(_this.currSelect[0]);
+                        }
+                        else {
+                            _this.undo();
+                        }
+                    }
+                    else if (inputChar == 'y') {
+                        if (_this.currSelect.length == 1) {
+                            _this.redoItemEdit(_this.currSelect[0]);
+                        }
+                        else {
+                            _this.redo();
+                        }
+                    }
                 }
             }
         };
