@@ -5,10 +5,184 @@
  *
  *
  **************************************************************************************************************************************************************/
-interface OperationBufferElement {
-    type: string;
-    message: UserMessage;
+interface ComponentRegistrationData {
+    element: BoardElement;
+
 }
+interface ElementCursor {
+    cursor: string;
+    url: Array<string>;
+    offset: Point;
+}
+interface InfoMessageData {
+    x: number;
+    y: number;
+    width: number;
+    height:  number;
+    header: string;
+    message: string;
+}
+interface AlertMessageData {
+    header: string;
+    message: string;
+}
+interface BoardPalleteViewState {
+
+}
+interface BoardPalleteChange {
+    type: number,
+    data: number
+}
+interface BoardElementParameters {
+    id: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    user: number;
+    updateTime: Date;
+}
+interface ElementCallbacks {
+    sendServerMsg: (msg: UserMessage) => void;
+    createAlert: (header: string, message: string) => void;
+    createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) => number;
+    removeInfo: (id: number) => void;
+    updateBoardView: (newView: ComponentViewState) => void;
+    getAudioStream: (id: number) => void;
+    getVideoStream: (id: number) => void;
+}
+interface ElementInputReturn {
+    newView:  ComponentViewState;
+    undoOp: () => ElementUndoRedoReturn;
+    redoOp: () => ElementUndoRedoReturn;
+    serverMessages: Array<UserMessage>;
+    palleteChanges: Array<BoardPalleteChange>;
+    infoMessage: InfoMessageData;
+    alertMessage: AlertMessageData;
+    isSelected: boolean;
+    newViewCentre: Point;
+}
+interface ElementInputStartReturn extends ElementInputReturn {
+    cursor: ElementCursor;
+}
+interface ElementMessageReturn {
+    newView: ComponentViewState;
+    serverMessages: Array<UserMessage>;
+    infoMessage: InfoMessageData;
+    alertMessage: AlertMessageData;
+    wasEdit?: boolean;
+    wasDelete?: boolean;
+}
+interface ElementUndoRedoReturn {
+    id: number;
+    newView:  ComponentViewState;
+    serverMessages: Array<ServerMessage>;
+    palleteChanges: Array<BoardPalleteChange>;
+    newViewCentre: Point;
+    wasDelete?: boolean;
+}
+interface ElementMoveReturn {
+    newView:  ComponentViewState;
+    serverMessages: Array<UserMessage>;
+}
+interface ElementPalleteReturn {
+    newView:  ComponentViewState;
+    undoOp: () => ElementUndoRedoReturn;
+    redoOp: () => ElementUndoRedoReturn;
+    serverMessages: Array<UserMessage>;
+}
+interface PalleteChangeReturn {
+    newView: BoardPalleteViewState;
+    cursor: string;
+    cursorURL: Array<string>;
+}
+interface HoverMessage {
+    header: string;
+    message: string;
+}
+interface DrawData {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    pointList?: Array<Point>;
+    palleteState?: BoardPallete;
+}
+interface CreationData {
+    id: number;
+    userId: number;
+    callbacks: ElementCallbacks;
+    palleteState?: BoardPallete;
+
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    pointList?: Array<Point>;
+    scaleF?: number;
+    panX?: number;
+    panY?: number;
+
+    pasteEvent?: ClipboardEvent;
+    dropEvent?: DragEvent;
+
+    serverMsg?: ServerPayload;
+    serverId?: number;
+
+    audio?;
+    video?;
+}
+interface ComponentViewState {
+    id: number;
+    mode: string;
+    updateTime: Date;
+    isSelected: boolean;
+}
+interface ComponentDispatcher {
+    mouseOver:   (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseOut:   (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseDown:   (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseMove:   (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseUp:     (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseClick:  (e: MouseEvent, component?: number, subComp?: number) => void;
+    doubleClick: (e: MouseEvent, component?: number, subComp?: number) => void;
+
+    touchStart: (e: TouchEvent, component?: number, subComp?: number) => void;
+    touchMove: (e: TouchEvent, component?: number, subComp?: number) => void;
+    touchEnd: (e: TouchEvent, component?: number, subComp?: number) => void;
+    touchCancel: (e: TouchEvent, component?: number, subComp?: number) => void;
+
+    dragOver: (e: DragEvent, component?: number, subComp?: number) => void;
+    drop: (e: DragEvent, component?: number, subComp?: number) => void;
+}
+interface ComponentProp {
+    state: ComponentViewState;
+    dispatcher: ComponentDispatcher;
+    mode: string;
+    viewScale: number;
+    eraseSize: number;
+}
+interface ModeProp {
+    mode: string;
+    dispatcher: (string) => void;
+}
+interface PalleteProp {
+    state: BoardPalleteViewState;
+    dispatcher: (change: BoardPalleteChange) => void;
+}
+interface ComponenetProp {
+
+}
+interface Point {
+    x: number;
+    y: number;
+}
+interface BoardTouch {
+    x: number;
+    y: number;
+    identifer: number;
+}
+
 interface TextOperation
 {
     undo: () => void;
@@ -23,32 +197,8 @@ interface InfoMessage {
     header: string;
     message: string;
 }
-interface BoardElement {
-    serverId: number;
-    id: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    user: number;
-    updateTime: Date;
-    isDeleted: boolean;
-    type: string;
-    opBuffer: Array<OperationBufferElement>;
-    hoverTimer: number;
-    infoElement: number;
-    operationStack: Array<TextOperation>;
-    operationPos: number;
-}
-interface Point {
-    x: number;
-    y: number;
-}
-interface Curve extends BoardElement {
-    curveSet: Array<Point>;
-    colour: string;
-    size: number;
-}
+
+
 interface CursorElement extends Point {
     height: number;
 }
@@ -107,32 +257,6 @@ interface WhiteBoardText extends BoardElement {
 interface Highlight extends BoardElement {
     colour: number;
 }
-interface Upload extends BoardElement {
-    rotation: number;
-    isImage: boolean;
-    fType: string;
-}
-interface CurveInBufferElement {
-    num_points: number;
-    num_recieved: number;
-    serverId: number;
-    user: number;
-    colour: string;
-    size: number;
-    curveSet: Array<Point>;
-    updateTime: Date;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
-interface CurveOutBufferElement {
-    serverId: number;
-    localId: number;
-    colour: string;
-    size: number;
-    curveSet: Array<Point>;
-}
 interface TextInBufferElement {
     x: number;
     y: number;
@@ -174,37 +298,29 @@ interface TextInNodeElement {
  *
  *
  **************************************************************************************************************************************************************/
+interface ServerMessageContainer {
+    serverId: number;
+    userId: number;
+    type: string;
+    payload: ServerMessage;
+}
 interface ServerMessage {
+    header: number;
+    payload: ServerPayload;
+}
+interface ServerPayload {
 
 }
-interface ServerBoardJoinMessage extends ServerMessage {
+interface ServerBoardJoinMessage {
     userId: number;
     colour: number;
 }
-interface ServeBaseMessage extends ServerMessage {
+interface ServeBaseMessage extends ServerPayload {
     serverId: number;
 }
-interface ServerNewPointMessage extends ServeBaseMessage {
-    num: number;
-    x: number;
-    y: number;
-}
-interface ServerNewCurveMessage extends ServeBaseMessage {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    userId: number;
-    size: number;
-    colour: string;
-    num_points: number;
-    editTime: Date;
-}
-interface ServerCurveIdMessage extends ServeBaseMessage {
+interface ServerIdMessage {
+    serverId: number;
     localId: number;
-}
-interface ServerMissedPointMessage extends ServeBaseMessage {
-    num: number;
 }
 interface ServerMoveElementMessage extends ServeBaseMessage {
     x: number;
@@ -234,9 +350,6 @@ interface ServerStyleNodeMessage extends ServeBaseMessage {
     end: number;
     text: string;
     num: number;
-}
-interface ServerTextIdMessage extends ServeBaseMessage {
-    localId: number;
 }
 interface ServerMissedTextMessage extends ServeBaseMessage {
     editId: number;
@@ -280,37 +393,7 @@ interface ServerHighLightMessage extends ServerMessage {
     userId: number;
     colour: number;
 }
-interface ServerUploadIdMessage extends ServeBaseMessage {
-    localId: number;
-}
-interface ServerUploadDataMessage extends ServeBaseMessage {
-    place: number;
-    percent: number;
-}
-interface ServerNewUploadMessage extends ServeBaseMessage {
-    fileDesc: string;
-    fileType: string;
-    extension: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    rotation: number;
-    userId: number;
-    editTime: Date;
-    url?: string;
-}
-interface ServerResizeFileMessage extends ServeBaseMessage {
-    width: number;
-    height: number;
-    editTime: Date;
-}
-interface ServerRotateFileMessage extends ServeBaseMessage {
-    rotation: number;
-}
-interface ServerUploadEndMessage extends ServeBaseMessage {
-    fileURL: string;
-}
+
 /***************************************************************************************************************************************************************
  *
  *
@@ -318,34 +401,40 @@ interface ServerUploadEndMessage extends ServeBaseMessage {
  *
  *
  **************************************************************************************************************************************************************/
-interface UserMessage {
+
+interface UserMessagePayload {
 
 }
-interface UserNewCurveMessage extends UserMessage {
+interface UserMessage {
+    header: number;
+    payload: UserMessagePayload;
+}
+interface UserNewElementPayload extends UserMessagePayload {
     localId: number;
     x: number;
     y: number;
     width: number;
     height: number;
-    colour: string;
-    size: number;
-    num_points: number;
 }
-interface UserNewPointMessage extends UserMessage {
-    serverId: number;
-    num: number;
+interface UserNewElementMessage {
+    type: string;
+    payload: UserNewElementPayload;
+}
+interface UserMessageContainer {
+    id: number;
+    type: string;
+    payload: UserMessage;
+}
+interface UserUnknownElement {
+    type: string;
+    id: number;
+}
+
+interface UserMoveElementMessage extends UserMessagePayload {
     x: number;
     y: number;
 }
-interface UserMoveElementMessage extends UserMessage {
-    serverId: number;
-    x: number;
-    y: number;
-}
-interface UserMissingCurveMessage extends UserMessage {
-    serverId: number;
-    seq_num: number;
-}
+
 interface UserNewTextMessage extends UserMessage {
     localId: number;
     size: number;
@@ -355,13 +444,12 @@ interface UserNewTextMessage extends UserMessage {
     height: number;
     justified: boolean;
 }
-interface UserEditTextMessage extends UserMessage {
-    serverId: number;
+interface UserEditTextMessage extends UserMessagePayload {
     localId: number;
     bufferId: number;
     num_nodes: number;
 }
-interface UserStyleNodeMessage extends UserMessage {
+interface UserStyleNodeMessage extends UserMessagePayload {
     editId: number;
     num: number;
     start: number;
@@ -372,23 +460,19 @@ interface UserStyleNodeMessage extends UserMessage {
     decoration: string;
     colour: string;
 }
-interface UserJustifyTextMessage extends UserMessage {
-    serverId: number;
+interface UserJustifyTextMessage extends UserMessagePayload {
     newState: boolean;
 }
-interface UserLockTextMessage extends UserMessage {
+interface UserLockTextMessage extends UserMessagePayload {
+}
+interface UserReleaseTextMessage extends UserMessagePayload {
     serverId: number;
 }
-interface UserReleaseTextMessage extends UserMessage {
-    serverId: number;
-}
-interface UserResizeTextMessage extends UserMessage {
-    serverId: number;
+interface UserResizeTextMessage extends UserMessagePayload {
     width: number;
     height: number;
 }
-interface UserMissingTextMessage extends UserMessage {
-    serverId: number;
+interface UserMissingTextMessage extends UserMessagePayload {
     seq_num: number;
 }
 interface UserHighLightMessage extends UserMessage {
@@ -396,37 +480,4 @@ interface UserHighLightMessage extends UserMessage {
     y: number;
     width: number;
     height: number;
-}
-interface UserStartUploadMessage extends UserMessage {
-    localId: number;
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    extension: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
-interface UserRemoteFileMessage extends UserMessage {
-    localId: number;
-    fileURL: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    fileDesc: string;
-}
-interface UserUploadDataMessage extends UserMessage {
-    serverId: number;
-    piece: ArrayBuffer;
-}
-interface UserResizeFileMessage extends UserMessage {
-    serverId: number;
-    width: number;
-    height: number;
-}
-interface UserRotateFileMessage extends UserMessage {
-    serverId: number;
-    rotation: number;
 }

@@ -1,3 +1,8 @@
+var EraseSize = {
+    SMALL: 1,
+    MEDIUM: 5,
+    LARGE: 10
+};
 var SVGSpinner = React.createClass({ displayName: 'SVGSpinner',
     render: function () {
         var background = React.createElement('circle', {
@@ -33,785 +38,181 @@ var SVGProgress = React.createClass({ displayName: 'SVGProgress',
         return React.createElement('g', null, text, background, bar);
     }
 });
-var SVGBezier = React.createClass({ displayName: 'SVGBezier',
-    render: function () {
-        var items = [];
-        var self = this;
-        if (this.props.type == 'circle') {
-            if (this.props.mode == 2) {
-                items.push(React.createElement('circle', {
-                    key: 'delete', cx: this.props.x, cy: this.props.y, r: this.props.size * 3, fill: this.props.colour,
-                    onClick: self.props.mouseClick, opacity: 0
-                }));
-            }
-            else if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing) {
-                items.push(React.createElement('circle', {
-                    key: 'move', cx: this.props.x, cy: this.props.y, r: this.props.size * 3, fill: this.props.colour,
-                    onMouseDown: self.props.mouseDown, opacity: 0, cursor: 'move'
-                }));
-            }
-            items.push(React.createElement('circle', {
-                key: 'display', cx: this.props.x, cy: this.props.y, r: this.props.size, fill: this.props.colour, stroke: this.props.colour,
-                onMouseMove: self.props.mouseMove
-            }));
-            return React.createElement('g', null, items);
-        }
-        else if (this.props.type == 'path') {
-            if (this.props.mode == 2) {
-                items.push(React.createElement('path', {
-                    key: 'delete', d: this.props.param, fill: 'none', stroke: this.props.colour, strokeWidth: this.props.size * 3, strokeLinecap: 'round',
-                    onClick: this.props.mouseClick, opacity: 0, pointerEvents: 'stroke'
-                }));
-            }
-            else if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing) {
-                items.push(React.createElement('path', {
-                    key: 'move', d: this.props.param, fill: 'none', stroke: this.props.colour, strokeWidth: this.props.size * 3, strokeLinecap: 'round',
-                    onMouseDown: this.props.mouseDown, opacity: 0, cursor: 'move', pointerEvents: 'stroke'
-                }));
-            }
-            items.push(React.createElement('path', {
-                key: 'display', d: this.props.param, fill: 'none', stroke: this.props.colour, strokeWidth: this.props.size, strokeLinecap: 'round',
-                onMouseMove: this.props.mouseMove
-            }));
-            return React.createElement('g', null, items);
-        }
-        else {
-            console.error('ERROR: Unrecognized type for SVGBezier.');
-            return null;
-        }
-    }
-});
-var SVGText = React.createClass({ displayName: 'SVGText',
-    render: function () {
-        var hightLightBoxes = [];
-        var borderBoxes = [];
-        var selCount = 0;
-        var displayElement;
-        var self = this;
-        var tspanElems = this.props.textNodes.map(function (textElem) {
-            var styleNodeElems = textElem.styles.map(function (node) {
-                if (node.text.match(/\s/)) {
-                    return React.createElement('tspan', { key: node.key, dx: node.dx }, node.text);
-                }
-                else {
-                    return React.createElement('tspan', { key: node.key, fill: node.colour, dx: node.dx, fontWeight: node.weight, fontStyle: node.style, textDecoration: node.decoration }, node.text);
-                }
-            });
-            return React.createElement('tspan', {
-                key: textElem.lineNum, x: textElem.x, y: textElem.y, xmlSpace: 'preserve' }, styleNodeElems);
-        });
-        if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing && !this.props.remEdit) {
-            borderBoxes.push(React.createElement('rect', {
-                key: 'move', x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                fill: 'none', strokeWidth: this.props.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
-                onMouseDown: this.props.mouseMoveDown
-            }));
-            borderBoxes.push(React.createElement('rect', {
-                key: 'selBox', x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height, fill: 'none', opacity: 0, pointerEvents: 'fill',
-                onClick: function (e) { if (e.detail == 2) {
-                    self.props.doubleClick();
-                } }
-            }));
-        }
-        if (this.props.cursor) {
-            hightLightBoxes.push(React.createElement('line', {
-                x1: this.props.cursor.x, y1: this.props.cursor.y,
-                x2: this.props.cursor.x, y2: this.props.cursor.y + this.props.cursor.height,
-                stroke: 'black', strokeWidth: 1, className: 'blinking', key: 'cursor'
-            }));
-        }
-        if (this.props.cursorElems) {
-            for (var i = 0; i < this.props.cursorElems.length; i++) {
-                var selElem = this.props.cursorElems[i];
-                selCount++;
-                hightLightBoxes.push(React.createElement('rect', {
-                    x: selElem.x, y: selElem.y, width: selElem.width, height: selElem.height,
-                    fill: '#0066ff', stroke: 'none', fillOpacity: 0.3, key: selCount
-                }));
-            }
-        }
-        if (this.props.isEditing) {
-            borderBoxes.push(React.createElement('rect', {
-                key: 'locEdit', x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                fill: 'none', stroke: 'black', strokeWidth: 2, strokeDasharray: '5,5', className: 'blinking'
-            }));
-            if (!this.props.isMoving && !this.props.isResizing) {
-                borderBoxes.push(React.createElement('line', {
-                    key: 'moveTop', x1: this.props.x, y1: this.props.y, x2: this.props.x + this.props.width - this.props.size * 0.25, y2: this.props.y,
-                    fill: 'none', strokeWidth: this.props.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
-                    onMouseDown: this.props.mouseMoveDown
-                }));
-                borderBoxes.push(React.createElement('line', {
-                    key: 'moveLeft', x1: this.props.x, y1: this.props.y, x2: this.props.x, y2: this.props.y + this.props.height - this.props.size * 0.25,
-                    fill: 'none', strokeWidth: this.props.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
-                    onMouseDown: this.props.mouseMoveDown
-                }));
-                borderBoxes.push(React.createElement('line', {
-                    key: 'resizeBottom', x1: this.props.x, y1: this.props.y + this.props.height, x2: this.props.x + this.props.width - this.props.size * 0.25, y2: this.props.y + this.props.height,
-                    fill: 'none', strokeWidth: this.props.size * 0.5, opacity: 0, cursor: 'ns-resize', pointerEvents: 'stroke',
-                    onMouseDown: function (e) { self.props.mouseResizeDown(e, true, false); }
-                }));
-                borderBoxes.push(React.createElement('line', {
-                    key: 'resizeRight', x1: this.props.x + this.props.width, y1: this.props.y, x2: this.props.x + this.props.width, y2: this.props.y + this.props.height - this.props.size * 0.25,
-                    fill: 'none', strokeWidth: this.props.size * 0.5, opacity: 0, cursor: 'ew-resize', pointerEvents: 'stroke',
-                    onMouseDown: function (e) { self.props.mouseResizeDown(e, false, true); }
-                }));
-                borderBoxes.push(React.createElement('rect', {
-                    key: 'resizeCorner', x: this.props.x + this.props.width - this.props.size * 0.25, y: this.props.y + this.props.height - this.props.size * 0.25,
-                    width: this.props.size * 0.5, height: this.props.size * 0.5, opacity: 0, cursor: 'nwse-resize', pointerEvents: 'fill',
-                    onMouseDown: function (e) { self.props.mouseResizeDown(e, true, true); }
-                }));
-            }
-        }
-        else if (this.props.getLock) {
-            borderBoxes.push(React.createElement('rect', {
-                key: 'getEdit', x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height, fill: 'none', stroke: 'red', strokeWidth: 2
-            }));
-        }
-        else if (this.props.remEdit) {
-            borderBoxes.push(React.createElement('rect', {
-                key: 'remEdit', x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                fill: 'none', stroke: 'red', strokeWidth: 2, strokeDasharray: '5,5', className: 'blinking'
-            }));
-        }
-        if (this.props.isEditing) {
-            displayElement = React.createElement('text', {
-                className: 'noselect', x: this.props.x, y: this.props.y, fontSize: this.props.size
-            }, tspanElems);
-        }
-        else if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing) {
-            displayElement = React.createElement('text', {
-                className: 'noselect', x: this.props.x, y: this.props.y, fontSize: this.props.size
-            }, tspanElems);
-        }
-        else if (this.props.mode == 2) {
-            displayElement = React.createElement('text', {
-                className: 'noselect', x: this.props.x, y: this.props.y, fontSize: this.props.size,
-                onClick: this.props.mouseClick, onMouseMove: this.props.mouseMove
-            }, tspanElems);
-        }
-        else {
-            displayElement = React.createElement('text', {
-                className: 'noselect', x: this.props.x, y: this.props.y, fontSize: this.props.size, pointerEvents: 'none'
-            }, tspanElems);
-        }
-        return React.createElement('g', null, hightLightBoxes, displayElement, borderBoxes);
-    }
-});
-var SVGImage = React.createClass({ displayName: 'SVGImage',
-    render: function () {
-        var loadBar = null;
-        var waitSpin = null;
-        var borderBoxes = [];
-        var displayElement;
-        var actWidth = this.props.rotation == 90 || this.props.rotation == 270 ? this.props.height : this.props.width;
-        var actHeight = this.props.rotation == 90 || this.props.rotation == 270 ? this.props.width : this.props.height;
-        var self = this;
-        if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing) {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2.0
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: actWidth, height: actHeight, xlinkHref: this.props.URL,
-                    pointerEvents: 'none', cursor: 'move', className: 'noselect', preserveAspectRatio: 'none',
-                    transform: 'rotate(' + this.props.rotation + ' ' + (this.props.x + actWidth / 2.0) + ' ' + (this.props.y + actHeight / 2.0) + ')'
-                });
-            }
-            borderBoxes.push(React.createElement('rect', {
-                key: 'moveFull', x: this.props.x, y: this.props.y,
-                width: this.props.width, height: this.props.height, opacity: 0, cursor: 'move', pointerEvents: 'all',
-                onMouseDown: function (e) { self.props.mouseMoveDown(e); }
-            }));
-            borderBoxes.push(React.createElement('line', {
-                key: 'resizeBottom', x1: this.props.x, y1: this.props.y + this.props.height, x2: this.props.x + this.props.width - 1, y2: this.props.y + this.props.height,
-                fill: 'none', strokeWidth: 2, opacity: 0, cursor: 'ns-resize', pointerEvents: 'stroke',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, true, false); }
-            }));
-            borderBoxes.push(React.createElement('line', {
-                key: 'resizeRight', x1: this.props.x + this.props.width, y1: this.props.y, x2: this.props.x + this.props.width, y2: this.props.y + this.props.height - 1,
-                fill: 'none', strokeWidth: 2, opacity: 0, cursor: 'ew-resize', pointerEvents: 'stroke',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, false, true); }
-            }));
-            borderBoxes.push(React.createElement('rect', {
-                key: 'resizeCorner', x: this.props.x + this.props.width - 1, y: this.props.y + this.props.height - 1,
-                width: 2, height: 2, opacity: 0, cursor: 'nwse-resize', pointerEvents: 'fill',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, true, true); }
-            }));
-            borderBoxes.push(React.createElement('rect', {
-                key: 'rotateCorner', x: this.props.x - 1, y: this.props.y - 1, width: 2, height: 2, opacity: 0, cursor: 'grab', pointerEvents: 'fill',
-                onClick: function (e) { self.props.rotateClick(); }
-            }));
-        }
-        else if (this.props.mode == 2) {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: actWidth, height: actHeight, xlinkHref: this.props.URL, preserveAspectRatio: 'none',
-                    transform: 'rotate(' + this.props.rotation + ' ' + (this.props.x + actWidth / 2.0) + ' ' + (this.props.y + actHeight / 2.0) + ')',
-                    onClick: this.props.mouseClick, onMouseMove: this.props.mouseMove, onMouseDown: function (e) { e.preventDefault(); }
-                });
-            }
-        }
-        else {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: actWidth, height: actHeight, xlinkHref: this.props.URL, preserveAspectRatio: 'none',
-                    transform: 'rotate(' + this.props.rotation + ' ' + (this.props.x + actWidth / 2.0) + ' ' + (this.props.y + actHeight / 2.0) + ')',
-                    onMouseDown: function (e) { e.preventDefault(); }
-                });
-            }
-        }
-        return React.createElement('g', {}, displayElement, borderBoxes, waitSpin, loadBar);
-    } });
-var SVGFile = React.createClass({ displayName: 'SVGFile',
-    render: function () {
-        var loadBar = null;
-        var waitSpin = null;
-        var borderBoxes = [];
-        var displayElement;
-        var self = this;
-        var viewBox = '0 0 ' + this.props.width + ' ' + this.props.height;
-        if (this.props.mode == 3 && !this.props.isMoving && !this.props.isResizing) {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                    xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg',
-                    pointerEvents: 'none', cursor: 'move', className: 'noselect', preserveAspectRatio: 'none'
-                });
-            }
-            borderBoxes.push(React.createElement('rect', {
-                key: 'moveFull', x: this.props.x, y: this.props.y,
-                width: this.props.width, height: this.props.height, opacity: 0, cursor: 'move', pointerEvents: 'all',
-                onMouseDown: function (e) { self.props.mouseMoveDown(e); }
-            }));
-            borderBoxes.push(React.createElement('line', {
-                key: 'resizeBottom', x1: this.props.x, y1: this.props.y + this.props.height, x2: this.props.x + this.props.width - 1, y2: this.props.y + this.props.height,
-                fill: 'none', strokeWidth: 2, opacity: 0, cursor: 'ns-resize', pointerEvents: 'stroke',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, true, false); }
-            }));
-            borderBoxes.push(React.createElement('line', {
-                key: 'resizeRight', x1: this.props.x + this.props.width, y1: this.props.y, x2: this.props.x + this.props.width, y2: this.props.y + this.props.height - 1,
-                fill: 'none', strokeWidth: 2, opacity: 0, cursor: 'ew-resize', pointerEvents: 'stroke',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, false, true); }
-            }));
-            borderBoxes.push(React.createElement('rect', {
-                key: 'resizeCorner', x: this.props.x + this.props.width - 1, y: this.props.y + this.props.height - 1,
-                width: 2, height: 2, opacity: 0, cursor: 'nwse-resize', pointerEvents: 'fill',
-                onMouseDown: function (e) { self.props.mouseResizeDown(e, true, true); }
-            }));
-        }
-        else if (this.props.mode == 2) {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                    xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg', preserveAspectRatio: 'none',
-                    onClick: this.props.mouseClick, onMouseMove: this.props.mouseMove, onMouseDown: function (e) { e.preventDefault(); }
-                });
-            }
-        }
-        else {
-            if (this.props.isLoading) {
-                waitSpin = React.createElement(SVGSpinner, {
-                    x: this.props.x, y: this.props.y, size: this.props.width / 2
-                });
-                if (this.props.isUploader) {
-                    loadBar = React.createElement(SVGProgress, {
-                        x: this.props.x, y: this.props.y, max: 100, value: this.props.percentUp, size: this.props.width / 2
-                    });
-                }
-            }
-            else {
-                displayElement = React.createElement('image', {
-                    x: this.props.x, y: this.props.y, width: this.props.width, height: this.props.height,
-                    xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg', preserveAspectRatio: 'none',
-                    onMouseDown: function (e) { e.preventDefault(); }
-                });
-            }
-        }
-        var text = React.createElement('text', {
-            key: 'text', className: 'noselect', x: this.props.x, y: this.props.y + this.props.height * 0.6, fontSize: this.props.width * 0.4,
-            fill: '#000000'
-        }, '.' + this.props.extension);
-        return React.createElement('g', {}, displayElement, borderBoxes, waitSpin, loadBar, text);
-    } });
-var SVGHighlight = React.createClass({ displayName: 'SVGHighlight',
-    render: function () {
-        return React.createElement('rect', {
-            key: 'hightlight', x: this.props.x, y: this.props.y, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6),
-            width: this.props.width, height: this.props.height, opacity: 0.4
-        });
-    } });
-var SVGHighlightTag = React.createClass({ displayName: 'SVGHighlightTag',
-    render: function () {
-        if (this.props.viewX + this.props.viewWidth < this.props.x + 0.5 * this.props.width) {
-            if (this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height) {
-                var points = [
-                    { x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + this.props.viewHeight },
-                    { x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + this.props.viewHeight - 14.14 * this.props.viewScale },
-                    { x: this.props.viewX + this.props.viewWidth - 49.50 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 63.64 * this.props.viewScale },
-                    { x: this.props.viewX + this.props.viewWidth - 63.64 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 49.50 * this.props.viewScale },
-                    { x: this.props.viewX + this.props.viewWidth - 14.14 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if (this.props.viewY < this.props.y + 0.5 * this.props.height) {
-                var yPosMid = this.props.y + 0.5 * this.props.height;
-                var xPosMid = this.props.viewX + this.props.viewWidth - 40 * this.props.viewScale;
-                console.log('Drawing right side, viewWidth is: ' + this.props.viewWidth);
-                var points = [
-                    { x: xPosMid + 40 * this.props.viewScale, y: yPosMid },
-                    { x: xPosMid + 30 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale },
-                    { x: xPosMid - 40 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale },
-                    { x: xPosMid - 40 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale },
-                    { x: xPosMid + 30 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else {
-                var points = [
-                    { x: this.props.viewX + this.props.viewWidth, y: this.props.viewY },
-                    { x: this.props.viewX + this.props.viewWidth - 14.14 * this.props.viewScale, y: this.props.viewY },
-                    { x: this.props.viewX + this.props.viewWidth - 63.64 * this.props.viewScale, y: this.props.viewY + 49.50 * this.props.viewScale },
-                    { x: this.props.viewX + this.props.viewWidth - 49.50 * this.props.viewScale, y: this.props.viewY + 63.64 * this.props.viewScale },
-                    { x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + 14.14 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-        else if (this.props.viewX < this.props.x + 0.5 * this.props.width) {
-            var xPosMid = this.props.x - 0.5 * this.props.width;
-            if (this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height) {
-                var yPosMid = this.props.viewY + this.props.viewHeight - 40 * this.props.viewScale;
-                var points = [
-                    { x: xPosMid, y: yPosMid + 40 * this.props.viewScale },
-                    { x: xPosMid - 10 * this.props.viewScale, y: yPosMid + 30 * this.props.viewScale },
-                    { x: xPosMid - 10 * this.props.viewScale, y: yPosMid - 40 * this.props.viewScale },
-                    { x: xPosMid + 10 * this.props.viewScale, y: yPosMid - 40 * this.props.viewScale },
-                    { x: xPosMid + 10 * this.props.viewScale, y: yPosMid + 30 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if (this.props.viewY < this.props.y + 0.5 * this.props.height) {
-                return null;
-            }
-            else {
-                var yPosMid = this.props.viewY + 40 * this.props.viewScale;
-                var points = [
-                    { x: xPosMid, y: yPosMid - 40 * this.props.viewScale },
-                    { x: xPosMid - 10 * this.props.viewScale, y: yPosMid - 30 * this.props.viewScale },
-                    { x: xPosMid - 10 * this.props.viewScale, y: yPosMid + 40 * this.props.viewScale },
-                    { x: xPosMid + 10 * this.props.viewScale, y: yPosMid + 40 * this.props.viewScale },
-                    { x: xPosMid + 10 * this.props.viewScale, y: yPosMid - 30 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-        else {
-            if (this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height) {
-                var points = [
-                    { x: this.props.viewX, y: this.props.viewY + this.props.viewHeight },
-                    { x: this.props.viewX, y: this.props.viewY + this.props.viewHeight - 14.14 * this.props.viewScale },
-                    { x: this.props.viewX + 49.50 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 63.64 * this.props.viewScale },
-                    { x: this.props.viewX + 63.64 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 49.50 * this.props.viewScale },
-                    { x: this.props.viewX + 14.14 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if (this.props.viewY < this.props.y + 0.5 * this.props.height) {
-                var yPosMid = this.props.y + 0.5 * this.props.height;
-                var xPosMid = this.props.viewX + 40 * this.props.viewScale;
-                var points = [
-                    { x: xPosMid - 40 * this.props.viewScale, y: yPosMid },
-                    { x: xPosMid - 30 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale },
-                    { x: xPosMid + 40 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale },
-                    { x: xPosMid + 40 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale },
-                    { x: xPosMid - 30 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else {
-                var points = [
-                    { x: this.props.viewX, y: this.props.viewY },
-                    { x: this.props.viewX + 14.14 * this.props.viewScale, y: this.props.viewY },
-                    { x: this.props.viewX + 63.64 * this.props.viewScale, y: this.props.viewY + 49.50 * this.props.viewScale },
-                    { x: this.props.viewX + 49.50 * this.props.viewScale, y: this.props.viewY + 63.64 * this.props.viewScale },
-                    { x: this.props.viewX, y: this.props.viewY + 14.14 * this.props.viewScale }
-                ];
-                var pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-                return React.createElement('polygon', {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-    } });
 var SVGComponent = React.createClass({ displayName: 'SVGComponent',
     render: function () {
         var displayElements = [];
         var highlights = [];
         var state = this.props.state;
         var dispatcher = state.dispatcher;
-        var cursorType = 'auto';
-        if (state.itemMoving) {
-            cursorType = 'move';
+        var cursorType;
+        if (state.cursorURL.length > 0) {
+            cursorType = 'url(' + state.cursorURL[0] + ') ' + state.cursorOffset.x + ' ' + state.cursorOffset.y;
+            for (var i_1 = 1; i_1 < state.cursorURL.length; i_1++) {
+                cursorType += ',url(' + state.cursorURL[i_1] + ') ' + state.cursorOffset.x + ' ' + state.cursorOffset.y;
+            }
+            cursorType += ',auto';
         }
-        else if (state.itemResizing) {
-            if (state.resizeHorz) {
-                if (state.resizeVert) {
-                    cursorType = 'nwse-resize';
-                }
-                else {
-                    cursorType = 'ew-resize';
-                }
-            }
-            else {
-                cursorType = 'ns-resize';
-            }
+        else {
+            cursorType = state.cursor;
         }
         state.boardElements.forEach(function (element) {
-            if (element.type == 'text') {
-                var tElement = element;
-                displayElements.push(React.createElement(SVGText, {
-                    key: tElement.id, size: tElement.size, x: tElement.x, y: tElement.y, width: tElement.width, height: tElement.height, mode: state.mode,
-                    isMoving: state.itemMoving, isResizing: state.itemResizing, isEditing: tElement.isEditing, cursor: tElement.cursor, isWaiting: tElement.waiting,
-                    cursorElems: tElement.cursorElems, textNodes: tElement.textNodes, remEdit: tElement.remLock, getLock: tElement.getLock,
-                    mouseClick: (function (id) { return function () { dispatcher.textMouseClick(id); }; })(element.id),
-                    doubleClick: (function (id) { return function () { dispatcher.textMouseDblClick(id); }; })(element.id),
-                    mouseMove: (function (id) { return function () { dispatcher.textMouseMove(id); }; })(element.id),
-                    mouseMoveDown: (function (id) { return function (e) { dispatcher.textMouseMoveDown(id, e); }; })(element.id),
-                    mouseResizeDown: (function (id) { return function (e, vert, horz) { dispatcher.textMouseResizeDown(id, vert, horz, e); }; })(element.id)
-                }));
-            }
-            else if (element.type == 'circle') {
-                var cElement = element;
-                displayElements.push(React.createElement(SVGBezier, {
-                    key: cElement.id, x: cElement.point.x, y: cElement.point.y, colour: cElement.colour, size: cElement.size, mode: state.mode, type: 'circle',
-                    isMoving: state.itemMoving, isResizing: state.itemResizing,
-                    mouseMove: (function (id) { return function () { dispatcher.curveMouseMove(id); }; })(element.id),
-                    mouseClick: (function (id) { return function () { dispatcher.curveMouseClick(id); }; })(element.id),
-                    mouseDown: (function (id) { return function (e) { dispatcher.curveMouseDown(id, e); }; })(element.id)
-                }));
-            }
-            else if (element.type == 'path') {
-                var cElement = element;
-                displayElements.push(React.createElement(SVGBezier, {
-                    key: cElement.id, param: cElement.param, colour: cElement.colour, size: cElement.size, mode: state.mode, type: 'path',
-                    isMoving: state.itemMoving, isResizing: state.itemResizing,
-                    mouseMove: (function (id) { return function () { dispatcher.curveMouseMove(id); }; })(element.id),
-                    mouseClick: (function (id) { return function () { dispatcher.curveMouseClick(id); }; })(element.id),
-                    mouseDown: (function (id) { return function (e) { dispatcher.curveMouseDown(id, e); }; })(element.id)
-                }));
-            }
-            else if (element.type == 'highlight') {
-                var hElement = element;
-                if (hElement.x >= state.viewX + state.viewWidth || hElement.x + hElement.width <= state.viewX) {
-                    highlights.push(React.createElement(SVGHighlightTag, {
-                        key: 'tag' + hElement.id, x: hElement.x, y: hElement.y, width: hElement.width, height: hElement.height, colour: hElement.colour,
-                        viewX: state.viewX, viewY: state.viewY, viewWidth: state.viewWidth, viewHeight: state.viewHeight, viewScale: state.viewScale,
-                        mouseClick: (function (id) { return function () { console.log('Registered in view.'); dispatcher.highlightTagClick(id); }; })(element.id),
-                    }));
-                }
-                else if (hElement.y >= state.viewY + state.viewHeight || hElement.y + hElement.height <= state.viewY) {
-                    highlights.push(React.createElement(SVGHighlightTag, {
-                        key: 'tag' + hElement.id, x: hElement.x, y: hElement.y, width: hElement.width, height: hElement.height, colour: hElement.colour,
-                        viewX: state.viewX, viewY: state.viewY, viewWidth: state.viewWidth, viewHeight: state.viewHeight, viewScale: state.viewScale,
-                        mouseClick: (function (id) { return function () { console.log('Registered in view.'); dispatcher.highlightTagClick(id); }; })(element.id),
-                    }));
-                }
-                highlights.push(React.createElement(SVGHighlight, {
-                    key: hElement.id, x: hElement.x, y: hElement.y, width: hElement.width, height: hElement.height,
-                    colour: hElement.colour
-                }));
-            }
-            else if (element.type == 'file') {
-                var fElement = element;
-                if (fElement.isImage) {
-                    displayElements.push(React.createElement(SVGImage, {
-                        key: fElement.id, x: fElement.x, y: fElement.y, width: fElement.width, height: fElement.height, percentUp: fElement.percentUp,
-                        mode: state.mode, isMoving: state.itemMoving, isResizing: state.itemResizing, URL: fElement.URL, isLoading: fElement.isLoading,
-                        isUploader: fElement.isUploader, rotation: fElement.rotation,
-                        mouseClick: (function (id) { return function () { dispatcher.fileMouseClick(id); }; })(element.id),
-                        mouseMove: (function (id) { return function () { dispatcher.fileMouseMove(id); }; })(element.id),
-                        rotateClick: (function (id) { return function () { dispatcher.fileRotateClick(id); }; })(element.id),
-                        mouseMoveDown: (function (id) { return function (e) { dispatcher.fileMouseMoveDown(id, e); }; })(element.id),
-                        mouseResizeDown: (function (id) { return function (e, vert, horz) { dispatcher.fileMouseResizeDown(id, vert, horz, e); }; })(element.id)
-                    }));
-                }
-                else {
-                    displayElements.push(React.createElement(SVGFile, {
-                        key: fElement.id, x: fElement.x, y: fElement.y, width: fElement.width, height: fElement.height, percentUp: fElement.percentUp,
-                        mode: state.mode, isMoving: state.itemMoving, isResizing: state.itemResizing, URL: fElement.URL, isLoading: fElement.isLoading,
-                        isUploader: fElement.isUploader, extension: fElement.extension,
-                        mouseClick: (function (id) { return function () { dispatcher.fileMouseClick(id); }; })(element.id),
-                        mouseMove: (function (id) { return function () { dispatcher.fileMouseMove(id); }; })(element.id),
-                        mouseMoveDown: (function (id) { return function (e) { dispatcher.fileMouseMoveDown(id, e); }; })(element.id),
-                        mouseResizeDown: (function (id) { return function (e, vert, horz) { dispatcher.fileMouseResizeDown(id, vert, horz, e); }; })(element.id)
-                    }));
-                }
-            }
+            var dispater = {
+                mouseOver: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseOver(id, e, component, subComp); };
+                })(element.id),
+                mouseOut: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseOut(id, e, component, subComp); };
+                })(element.id),
+                mouseDown: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseDown(id, e, component, subComp); };
+                })(element.id),
+                mouseMove: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseMove(id, e, component, subComp); };
+                })(element.id),
+                mouseUp: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseUp(id, e, component, subComp); };
+                })(element.id),
+                mouseClick: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseClick(id, e, component, subComp); };
+                })(element.id),
+                doubleClick: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementMouseDoubleClick(id, e, component, subComp); };
+                })(element.id),
+                touchStart: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementTouchStart(id, e, component, subComp); };
+                })(element.id),
+                touchMove: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementTouchMove(id, e, component, subComp); };
+                })(element.id),
+                touchEnd: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementTouchEnd(id, e, component, subComp); };
+                })(element.id),
+                touchCancel: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementTouchCancel(id, e, component, subComp); };
+                })(element.id),
+                dragOver: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementDragOver(id, e, component, subComp); };
+                })(element.id),
+                drop: (function (id) {
+                    return function (e, component, subComp) { dispatcher.elementDrop(id, e, component, subComp); };
+                })(element.id),
+            };
+            displayElements.push(React.createElement(state.components.get(element.mode).ElementView, {
+                key: element.id, mode: state.mode, state: element, dispatcher: dispater, viewScale: state.viewScale, eraseSize: state.eraseSize
+            }));
         });
-        return React.createElement('svg', { className: 'svgcomponent', id: 'whiteBoard-output', viewBox: state.viewBox, cursor: cursorType }, displayElements, highlights);
+        return React.createElement('svg', {
+            key: 'whiteBoard-output', className: 'svgcomponent', id: 'whiteBoard-output', viewBox: state.viewBox, cursor: cursorType
+        }, displayElements);
     }
 });
 var ControlComponent = React.createClass({ displayName: 'ControlComponent',
     render: function () {
         var state = this.props.state;
-        var dispatcher = state.dispatcher;
-        var blackButt = React.createElement('button', { className: 'button colour-button', id: 'black-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.colourChange('black'); } });
-        var blueButt = React.createElement('button', { className: 'button colour-button', id: 'blue-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.colourChange('blue'); } });
-        var redButt = React.createElement('button', { className: 'button colour-button', id: 'red-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.colourChange('red'); } });
-        var greenButt = React.createElement('button', { className: 'button colour-button', id: 'green-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.colourChange('green'); } });
-        var drawButt = React.createElement('button', { className: 'button mode-button', id: 'draw-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.modeChange(0); } }, 'D');
-        var textButt = React.createElement('button', { className: 'button mode-button', id: 'text-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.modeChange(1); } }, 'T');
-        var eraseButt = React.createElement('button', { className: 'button mode-button', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.modeChange(2); } }, 'E');
-        var selectButt = React.createElement('button', { className: 'button mode-button', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.modeChange(3); } }, 'S');
-        var highlightButt = React.createElement('button', { className: 'button mode-button', id: 'highlight-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.modeChange(4); } }, 'H');
-        var smallButt = React.createElement('button', { className: 'button mode-button', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.sizeChange(0); } }, 'S');
-        var medButt = React.createElement('button', { className: 'button mode-button', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.sizeChange(1); } }, 'M');
-        var largeButt = React.createElement('button', { className: 'button mode-button', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.sizeChange(2); } }, 'L');
-        var boldButt;
-        var italButt;
-        var ulineButt;
-        var tlineButt;
-        var olineButt;
-        var justButt;
-        if (state.colour == 'black') {
-            blackButt = React.createElement('button', { className: 'button colour-button pressed-colour', id: 'black-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } });
+        var dispatcher = this.props.dispatcher;
+        var modeButtons = [];
+        state.components.forEach(function (component) {
+            modeButtons.push(React.createElement(component.ModeView, { key: state.mode, mode: state.mode, dispatcher: dispatcher.modeChange }));
+        });
+        var pallete = null;
+        var eraseButt = React.createElement('button', {
+            className: 'button mode-button', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); },
+            onClick: function () { return dispatcher.modeChange(BoardModes.ERASE); }
+        }, 'E');
+        var selectButt = React.createElement('button', {
+            className: 'button mode-button', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); },
+            onClick: function () { return dispatcher.modeChange(BoardModes.SELECT); }
+        }, 'S');
+        if (state.mode == BoardModes.ERASE) {
+            eraseButt = React.createElement('button', {
+                className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+            }, 'E');
+            var smallButt = React.createElement('button', {
+                className: 'button mode-button', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); },
+                onClick: function () { return dispatcher.changeEraseSize(EraseSize.SMALL); }
+            }, 'S');
+            var medButt = React.createElement('button', {
+                className: 'button mode-button', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); },
+                onClick: function () { return dispatcher.changeEraseSize(EraseSize.MEDIUM); }
+            }, 'M');
+            var largeButt = React.createElement('button', {
+                className: 'button mode-button', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); },
+                onClick: function () { return dispatcher.changeEraseSize(EraseSize.LARGE); }
+            }, 'L');
+            if (state.eraseSize == EraseSize.SMALL) {
+                smallButt = React.createElement('button', {
+                    className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                }, 'S');
+            }
+            else if (state.eraseSize == EraseSize.MEDIUM) {
+                medButt = React.createElement('button', {
+                    className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                }, 'M');
+            }
+            else if (state.eraseSize == EraseSize.LARGE) {
+                largeButt = React.createElement('button', {
+                    className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                }, 'L');
+            }
+            var sizeCont = React.createElement('div', {
+                className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
+            }, smallButt, medButt, largeButt);
+            pallete = React.createElement('div', null, sizeCont);
         }
-        else if (state.colour == 'blue') {
-            blueButt = React.createElement('button', { className: 'button colour-button pressed-colour', id: 'blue-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } });
+        else if (state.mode == BoardModes.SELECT) {
+            selectButt = React.createElement('button', {
+                className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+            }, 'S');
         }
-        else if (state.colour == 'red') {
-            redButt = React.createElement('button', { className: 'button colour-button pressed-colour', id: 'red-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } });
+        else if (state.mode != '') {
+            pallete = React.createElement(state.components.get(state.mode).PalleteView, { state: state.palleteState, dispatcher: dispatcher.palleteChange });
         }
-        else if (state.colour == 'green') {
-            greenButt = React.createElement('button', { className: 'button colour-button pressed-colour', id: 'green-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } });
-        }
-        if (state.mode == 0) {
-            drawButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'draw-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'D');
-        }
-        else if (state.mode == 1) {
-            textButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'text-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'T');
-        }
-        else if (state.mode == 2) {
-            eraseButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'E');
-        }
-        else if (state.mode == 3) {
-            selectButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'S');
-        }
-        else if (state.mode == 4) {
-            highlightButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'highlight-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'H');
-        }
-        if (state.sizeMode == 0) {
-            smallButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'S');
-        }
-        else if (state.sizeMode == 1) {
-            medButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'M');
-        }
-        else if (state.sizeMode == 2) {
-            largeButt = React.createElement('button', { className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { } }, 'L');
-        }
-        if (state.isBold) {
-            boldButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'bold-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.boldChange(false); }
-            }, 'B');
-        }
-        else {
-            boldButt = React.createElement('button', {
-                className: 'button style-button', id: 'bold-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.boldChange(true); }
-            }, 'B');
-        }
-        if (state.isItalic) {
-            italButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'italic-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.italicChange(false); }
-            }, 'I');
-        }
-        else {
-            italButt = React.createElement('button', {
-                className: 'button style-button', id: 'italic-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.italicChange(true); }
-            }, 'I');
-        }
-        if (state.isULine) {
-            ulineButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'uline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.underlineChange(false); }
-            }, 'U');
-        }
-        else {
-            ulineButt = React.createElement('button', {
-                className: 'button style-button', id: 'uline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.underlineChange(true); }
-            }, 'U');
-        }
-        if (state.isTLine) {
-            tlineButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'tline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.throughlineChange(false); }
-            }, 'T');
-        }
-        else {
-            tlineButt = React.createElement('button', {
-                className: 'button style-button', id: 'tline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.throughlineChange(true); }
-            }, 'T');
-        }
-        if (state.isOLine) {
-            olineButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'oline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.overlineChange(false); }
-            }, 'O');
-        }
-        else {
-            olineButt = React.createElement('button', {
-                className: 'button style-button', id: 'oline-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.overlineChange(true); }
-            }, 'O');
-        }
-        if (state.isJustified) {
-            justButt = React.createElement('button', {
-                className: 'button style-button pressed-style', id: 'justify-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.justifiedChange(false); }
-            }, 'J');
-        }
-        else {
-            justButt = React.createElement('button', {
-                className: 'button style-button', id: 'justify-button',
-                onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { return dispatcher.justifiedChange(true); }
-            }, 'J');
-        }
-        var colourCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-colourgroup' }, blackButt, blueButt, redButt, greenButt);
-        var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, drawButt, textButt, eraseButt, selectButt, highlightButt);
-        var sizeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup' }, smallButt, medButt, largeButt);
-        var styleCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-stylegroup' }, boldButt, italButt, ulineButt, tlineButt, olineButt, justButt);
-        return React.createElement('div', { className: 'large-1 small-2 columns', id: 'whiteboard-controler' }, colourCont, modeCont, sizeCont, styleCont);
+        var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, selectButt, eraseButt, modeButtons);
+        return React.createElement('div', { className: 'large-1 small-2 columns', id: 'whiteboard-controler' }, modeCont, pallete);
     } });
 var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
     getInitialState: function () {
         return {
             viewBox: '0 0 0 0',
-            mode: 0,
-            sizeMode: 1,
+            components: Immutable.Map(),
+            mode: '',
+            palleteState: {},
+            cursor: 'auto',
+            cursorURL: [],
+            cursorOffset: { x: 0, y: 0 },
             baseSize: 1,
+            eraseSize: 1.0,
             viewX: 0,
             viewY: 0,
             viewWidth: 0,
             viewHeight: 0,
             viewScale: 1,
-            colour: 'black',
-            isBold: false,
-            isItalic: false,
-            isULine: false,
-            isOLine: false,
-            isTLine: false,
-            isJustified: true,
             itemMoving: false,
             itemResizing: false,
             resizeVert: false,
             resizeHorz: false,
+            blockAlert: false,
             boardElements: Immutable.OrderedMap(),
             infoElements: Immutable.List(),
             alertElements: Immutable.List(),
             dispatcher: {
-                curveMouseDown: function (id, e) { },
-                curveMouseClick: function (id) { },
-                curveMouseMove: function (id) { },
-                textMouseClick: function (id) { },
-                textMouseDblClick: function (id) { },
-                textMouseMove: function (id) { },
-                textMouseMoveDown: function (id, e) { },
-                textMouseResizeDown: function (id, vert, horz, e) { },
-                fileMouseClick: function (id) { },
-                fileMouseMove: function (id) { },
-                fileMouseMoveDown: function (id, e) { },
-                fileMouseResizeDown: function (id, vert, horz, e) { },
+                palleteChange: function (change) { },
+                changeEraseSize: function (newSize) { },
+                elementMouseOver: function (id, e) { },
+                elementMouseOut: function (id, e) { },
+                elementMouseDown: function (id, e) { },
+                elementMouseMove: function (id, e) { },
+                elementMouseUp: function (id, e) { },
+                elementMouseClick: function (id, e) { },
+                elementMouseDoubleClick: function (id, e) { },
+                elementTouchStart: function (id, e) { },
+                elementTouchMove: function (id, e) { },
+                elementTouchEnd: function (id, e) { },
+                elementTouchCancel: function (id, e) { },
+                elementDragOver: function (id, e) { },
+                elementDrop: function (id, e) { },
                 clearAlert: function (id) { },
-                colourChange: function (newColour) { },
                 modeChange: function (newMode) { },
-                boldChange: function (newState) { },
-                italicChange: function (newState) { },
-                underlineChange: function (newState) { },
-                overlineChange: function (newState) { },
-                throughlineChange: function (newState) { },
-                justifiedChange: function (newState) { },
                 onCopy: function (e) { },
                 onCut: function (e) { },
                 onPaste: function (e) { },
@@ -821,7 +222,14 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
                 mouseDown: function (e) { },
                 mouseWheel: function (e) { },
                 mouseMove: function (e) { },
-                mouseUp: function (e) { } }
+                mouseUp: function (e) { },
+                touchStart: function (e) { },
+                touchMove: function (e) { },
+                touchEnd: function (e) { },
+                touchCancel: function (e) { },
+                dragOver: function (e) { },
+                drop: function (e) { }
+            }
         };
     },
     storeUpdate: function (newState) {
@@ -833,25 +241,27 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
         var inElem = React.createElement('canvas', { className: 'inputSpace', id: 'whiteBoard-input' });
         document.body.addEventListener('mouseup', this.mouseUp, false);
         var outElem = React.createElement(SVGComponent, {
-            className: "renderSpace", id: "whiteBoard-output", state: state
+            className: "renderSpace", id: "whiteBoard-output", key: 'output', state: state
         });
         var whitElem = React.createElement('div', {
-            className: "large-11 small-10 columns", id: "whiteboard-container", onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
+            className: "large-11 small-10 columns", id: "whiteboard-container", key: 'whiteboard', onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
             onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onMouseLeave: dispatcher.mouseUp,
             onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut, contextMenu: 'whiteboard-context'
         }, outElem, inElem);
         var contElem = React.createElement(ControlComponent, {
-            className: "controlPanel", id: "whiteboard-controller", state: state
+            className: "controlPanel", id: "whiteboard-controller", key: 'controlPanel',
+            state: { mode: state.mode, components: state.components, palleteState: state.palleteState, eraseSize: state.eraseSize },
+            dispatcher: { modeChange: dispatcher.modeChange, palleteChange: dispatcher.palleteChange, changeEraseSize: dispatcher.changeEraseSize }
         });
-        var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }), React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
+        var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context', key: 'context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }), React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
         var infoElems = [];
-        for (var i = 0; i < state.infoElements.size; i++) {
-            var info = state.infoElements.get(i);
-            var elemStyle = 'position: absolute; z-index: 10; x: ' + info.x + '; y: ' + info.y + '; width: ' + info.width + '; height: ' + info.height + ';';
-            var infoElem = React.createElement('div', { className: 'callout secondary', style: elemStyle }, React.createElement('h5', null, info.header), React.createElement('p', null, info.message));
+        for (var i_2 = 0; i_2 < state.infoElements.size; i_2++) {
+            var info = state.infoElements.get(i_2);
+            var elemStyle = { position: 'absolute', zIndex: 10, left: info.x, top: info.y, width: info.width, height: info.height };
+            var infoElem = React.createElement('div', { key: i_2, className: 'callout secondary', style: elemStyle }, React.createElement('h5', null, info.header), React.createElement('p', null, info.message));
             infoElems.push(infoElem);
         }
-        if (state.alertElements.size > 0) {
+        if (state.alertElements.size > 0 && !state.blockAlert) {
             var alertMsg = state.alertElements.first();
             var alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: dispatcher.clearAlert }, React.createElement('h5', null, alertMsg.type), React.createElement('p', null, alertMsg.message));
             return (React.createElement("div", { className: "expanded row", id: "whiteboard-row" }, whitElem, contElem, alertElem, infoElems, contextMenu));

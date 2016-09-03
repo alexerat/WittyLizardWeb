@@ -747,15 +747,15 @@ interface Window {
 }(self));
 
 
-/***************************************************************************************************************************************************************
- *
- *
- *
- * INTERFACE DECLARATIONS
- *
- *
- *
- **************************************************************************************************************************************************************/
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//
+//
+// INTERFACE DECLARATIONS
+//
+//
+//
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 declare var io : {
  connect(url: string): Socket;
 }
@@ -768,53 +768,354 @@ interface ObjectConstructor {
 }
 interface WhiteBoardDispatcher
 {
-    elementMouseOver: (id: number, e: MouseEvent) => void;
-    elementMouseOut: (id: number, e: MouseEvent) => void;
-    curveMouseDown: (id: number, e: MouseEvent) => void;
-    curveMouseClick: (id: number) => void;
-    curveMouseMove: (id: number) => void;
-    textMouseClick: (id: number) => void;
-    textMouseDblClick: (id: number) => void;
-    textMouseMove: (id: number) => void;
-    textMouseMoveDown: (id: number, e: MouseEvent) => void;
-    textMouseResizeDown: (id: number, vert: boolean, horz: boolean, e: MouseEvent) => void;
-    fileMouseClick: (id: number) => void;
-    fileMouseMove: (id: number) => void;
-    fileMouseMoveDown: (id: number, e: MouseEvent) => void;
-    fileMouseResizeDown: (id: number, vert: boolean, horz: boolean, e: MouseEvent) => void;
-    fileRotateClick: (id: number) => void;
-    highlightTagClick: (id: number) => void;
+    elementMouseOver: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseOut: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseDown: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseMove: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseUp: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseClick: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseDoubleClick: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+
+    elementTouchStart: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
+    elementTouchMove: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
+    elementTouchEnd: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
+    elementTouchCancel: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
+
+    elementDragOver: (id: number, e: DragEvent, component?: number, subId?: number) => void;
+    elementDrop: (id: number, e: DragEvent, component?: number, subId?: number) => void;
+
+    palleteChange: (change: BoardPalleteChange) => void;
+    changeEraseSize: (newSize: number) => void;
+
     clearAlert: (id: number) => void;
-    colourChange: (newColour: string) => void;
-    modeChange: (newMode: number) => void;
-    sizeChange: (newSize: number) => void;
-    boldChange: (newState: boolean) => void;
-    italicChange: (newState: boolean) => void;
-    underlineChange:  (newState: boolean) => void;
-    overlineChange:  (newState: boolean) => void;
-    throughlineChange:  (newState: boolean) => void;
-    justifiedChange: (newState: boolean) => void;
-    mouseDown: (e: MouseEvent) => void;
+    modeChange: (newMode: string) => void;
+
     mouseWheel: (e: MouseEvent) => void;
+    mouseDown: (e: MouseEvent) => void;
     mouseMove: (e: MouseEvent) => void;
     mouseUp: (e: MouseEvent) => void;
+
+    touchStart: (e: TouchEvent) => void;
+    touchMove: (e: TouchEvent) => void;
+    touchEnd: (e: TouchEvent) => void;
+    touchCancel: (e: TouchEvent) => void;
+
     contextCopy: (e: MouseEvent) => void;
     contextCut: (e: MouseEvent) => void;
     contextPaste: (e: MouseEvent) => void;
     onCopy: (e: ClipboardEvent) => void;
     onPaste: (e: ClipboardEvent) => void;
     onCut: (e: ClipboardEvent) => void;
+
     dragOver: (e: DragEvent) => void;
     drop: (e: DragEvent) => void;
 }
+
+interface Operation
+{
+    undo: () => ElementUndoRedoReturn;
+    redo: () => ElementUndoRedoReturn;
+}
 interface WhiteBoardOperation
 {
-    id: number;
-    undo: () => void;
-    redo: () => void;
+    ids: Array<number>;
+    undos: Array<() => ElementUndoRedoReturn>;
+    redos: Array<() => ElementUndoRedoReturn>;
 }
 
-/***************************************************************************************************************************************************************
+const BoardModes = {
+    SELECT: 'SELECT',
+    ERASE: 'ERASE'
+}
+
+const enum WorkerMessageTypes {
+    START,
+    SETSOCKET,
+    UPDATEVIEW,
+    SETVBOX,
+    AUDIOSTREAM,
+    VIDEOSTREAM,
+    NEWVIEWCENTRE,
+    NEWELEMENT,
+    ELEMENTVIEW,
+    ELEMENTDELETE,
+    NEWALERT,
+    REMOVEALERT,
+    NEWINFO,
+    REMOVEINFO
+}
+
+abstract class BoardElement {
+    serverId: number;
+    readonly id: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    user: number;
+    updateTime: Date;
+    isDeleted: boolean;
+    type: string;
+    opBuffer: Array<UserMessage>;
+    hoverTimer: number;
+    infoElement: number;
+    operationStack: Array<Operation>;
+    operationPos: number;
+    isSelected: boolean;
+    isComplete: boolean;
+    isEditing: boolean;
+
+    currentViewState: ComponentViewState;
+
+    // Callback Functions for Internal Element Induced Updates
+    sendServerMsg: (msg: UserMessage) => void;
+    createAlert: (header: string, message: string) => void;
+    createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) => void;
+    updateBoardView: (newView: ComponentViewState) => void;
+    getAudioStream: () => void;
+    getVideoStream: () => void;
+
+    constructor(type: string, id: number, x: number, y: number, width: number, height: number,
+        callbacks: ElementCallbacks, serverId?: number, updateTime?: Date)
+    {
+        this.id = id;
+        this.type = type;
+        this.sendServerMsg = callbacks.sendServerMsg;
+        this.createAlert = callbacks.createAlert;
+        this.createInfo = callbacks.createInfo;
+        this.updateBoardView = callbacks.updateBoardView;
+        this.getAudioStream = callbacks.getAudioStream;
+        this.getVideoStream = callbacks.getVideoStream;
+        this.serverId = serverId;
+        this.opBuffer = [];
+        this.infoElement = -1;
+        this.isEditing = false;
+        this.isSelected = false;
+
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+
+        if(updateTime)
+        {
+            this.updateTime = updateTime;
+        }
+        else
+        {
+            this.updateTime = new Date();
+        }
+    }
+
+    /** Update the view state of this object.
+     *
+     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
+     *
+     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
+     *
+     * @return {ComponentViewState} The new view state
+     */
+    protected updateView(updatedParams: Object)
+    {
+        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
+        return this.currentViewState;
+    }
+
+    /**   Get the current view state for this element.
+     *
+     *    @return {ComponentViewState} The view state of this element given it's current internal state
+     */
+    public getCurrentViewState()
+    {
+        return this.currentViewState;
+    }
+
+    /** Remove undo redo to preserve integrity
+     *
+     *
+     *
+     */
+    protected remoteEdit()
+    {
+        this.operationPos = 0;
+        this.operationStack = [];
+    }
+
+    protected getDefaultInputReturn()
+    {
+        let retVal: ElementInputReturn =
+        {
+            newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: this.isSelected,
+            newViewCentre: null, infoMessage: null, alertMessage: null
+        };
+
+        return retVal;
+    }
+
+    protected checkForServerId(messages: Array<UserMessage>)
+    {
+        if(!this.serverId)
+        {
+            for(let i = 0; i < messages.length; i++)
+            {
+                console.log('No serverId, adding message to buffer.');
+                this.opBuffer.push(messages[i]);
+            }
+
+            return [];
+        }
+        else
+        {
+            return messages;
+        }
+    }
+
+    /**   Undo the last internal state edit
+     *
+     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server,
+     *    required changes to the pallete state
+     */
+    public handleUndo()
+    {
+        let retVal: ElementUndoRedoReturn = null;
+
+        // Undo item operation at current stack position
+        if(this.operationPos > 0)
+        {
+            retVal = this.operationStack[--this.operationPos].undo();
+        }
+
+        return retVal;
+    }
+
+    /**   Redo the last undone internal state edit
+     *
+     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server
+     *    required changes to the pallete state
+     */
+    public handleRedo()
+    {
+        let retVal: ElementUndoRedoReturn = null;
+
+        // Redo operation at current stack position
+        if(this.operationPos < this.operationStack.length)
+        {
+            retVal = this.operationStack[this.operationPos++].redo();
+        }
+
+        return retVal;
+    }
+
+    abstract setServerId(id: number): Array<UserMessage>;
+    abstract getNewMsg(): UserNewElementPayload;
+
+    abstract erase(): ElementUndoRedoReturn;
+    abstract restore(): ElementUndoRedoReturn;
+    abstract handleErase(): ElementInputReturn;
+
+    abstract handleMouseDown(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputStartReturn;
+    abstract handleMouseMove(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleMouseUp(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleMouseClick(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleDoubleClick(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleTouchStart(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputStartReturn;
+    abstract handleTouchMove(e: TouchEvent, touchChange: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleTouchEnd(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+    abstract handleTouchCancel(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
+        ElementInputReturn;
+
+    abstract handleBoardMouseDown(e: MouseEvent, x: number, y: number, palleteState: BoardPallete): ElementInputStartReturn;
+    abstract handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleBoardMouseUp(e: MouseEvent, x: number, y: number, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleBoardTouchStart(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputStartReturn;
+    abstract handleBoardTouchMove(e: TouchEvent, toucheChange: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleBoardTouchEnd(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleBoardTouchCancel(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleKeyPress(e: KeyboardEvent, input: string, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleCopy(e: ClipboardEvent, palleteState: BoardPallete): void;
+    abstract handlePaste(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleCut(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleCustomContext(item: number, palleteState: BoardPallete): ElementInputReturn;
+
+    abstract handleServerMessage(message): ElementMessageReturn;
+
+    abstract handleDeselect(): ComponentViewState;
+    abstract handleSelect(): ComponentViewState;
+
+    abstract handleHover(): HoverMessage;
+
+    abstract handlePalleteChange(changes: BoardPalleteChange): ElementPalleteReturn;
+
+    abstract audioStream(stream: MediaStream): void;
+    abstract videoStream(stream: MediaStream): void;
+
+    abstract startMove(): ComponentViewState;
+    abstract handleMove(changeX: number, changeY: number): ComponentViewState;
+    abstract endMove(): ElementMoveReturn;
+}
+
+abstract class BoardPallete {
+
+    currentViewState: BoardPalleteViewState;
+
+    abstract getCurrentViewState() : BoardPalleteViewState;
+
+    /** Update the view state of this object.
+     *
+     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
+     *
+     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
+     *
+     * @return {ComponentViewState} The new view state
+     */
+    protected updateView(updatedParams: Object)
+    {
+        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
+        return this.currentViewState;
+    }
+
+    abstract handleChange(changeMsg: BoardPalleteChange) : BoardPalleteViewState;
+
+    abstract getCursor() : ElementCursor;
+}
+
+interface BoardComponent {
+    componentName: string;
+    pallete: BoardPallete;
+    Element;
+    ElementView;
+    PalleteView;
+    ModeView
+    DrawHandle: (data: DrawData, context: CanvasRenderingContext2D) => void;
+}
+
+let components: Immutable.Map<string, BoardComponent> = Immutable.Map<string, BoardComponent>();
+
+let registerComponent = (componentName: string, Element, ElementView, Pallete, PalleteView, ModeView, DrawHandle) =>
+{
+    let pallete = null;
+    if(Pallete)
+    {
+        pallete = new Pallete();
+    }
+
+    let newComp: BoardComponent =
+    {
+        componentName: componentName, Element: Element, ElementView: ElementView, pallete: pallete, PalleteView: PalleteView,
+        ModeView: ModeView, DrawHandle: DrawHandle
+    };
+    components = components.set(componentName, newComp);
+}
+
+/**************************************************************************************************************************************************************
  *
  *
  *
@@ -837,8 +1138,6 @@ class WhiteBoardController
     rMousePress: boolean = false;
     touchPress:  boolean = false;
     moving:      boolean = false;
-    mouseX:      number;
-    mouseY:      number;
 
     scaleF:   number = 1;
     panX:     number = 0;
@@ -849,34 +1148,17 @@ class WhiteBoardController
     isPoint:      boolean      = true;
     prevX:        number       = 0;
     prevY:        number       = 0;
-    curveChangeX: number       = 0;
-    curveChangeY: number       = 0;
-    downPoint:    Point;
+    prevTouch:    TouchList;
 
-    currTextEdit:   number  = -1;
-    currTextSel:    number  = -1;
-    currTextMove:   number  = -1;
-    currTextResize: number  = -1;
-    currCurveMove:  number  = -1;
-    currFileMove:   number  = -1;
-    currFileResize: number  = -1;
-    vertResize:     boolean = false;
-    horzResize:     boolean = false;
-    cursorStart:    number  = 0;
-    cursorEnd:      number  = 0;
-    startLeft:      boolean = false;
-    textDown:       number  = 0;
-    textIdealX:     number  = 0;
-    gettingLock:    number  = -1;
-    curveMoved:     boolean = false;
-    textMoved:      boolean = false;
-    fileMoved:      boolean = false;
-    textResized:    boolean = false;
-    fileResized:    boolean = false;
-    isWriting:      boolean = false;
-    editTimer:      number;
-    userHighlight:  number  = -1;
+    downPoint:    Point;
+    groupStartX:  number       = 0;
+    groupStartY:  number       = 0;
+
+    mouseDownHandled:   boolean = false;
+    touchStartHandled:  boolean = false;
+
     currentHover:   number  = -1;
+    blockAlert:     boolean = false;
     selectDrag:     boolean = false;
     selectLeft:     number;
     selectTop:      number;
@@ -892,17 +1174,15 @@ class WhiteBoardController
     fileUploads: Array<File>       = [];
     fileReaders: Array<FileReader> = [];
 
-    textDict:    Array<number>       = [];
-    curveDict:   Array<number>       = [];
-    uploadDict:  Array<number>       = [];
-    hilightDict: Array<number>       = [];
-    boardElems:  Array<BoardElement> = [];
-    infoElems:   Array<InfoMessage>  = [];
+    elementDict:  Array<number>       = [];
+    boardElems:   Array<BoardElement> = [];
+    infoElems:    Array<InfoMessage>  = [];
+    cursor:       string;
+    cursorURL:    Array<string>;
+    cursorOffset: Point;
 
-    curveOutBuffer:   Array<CurveOutBufferElement> = [];
-    curveInBuffer:    Array<CurveInBufferElement>  = [];
-    curveInTimeouts                                = [];
-    curveOutTimeouts                               = [];
+
+
     textOutBuffer:    Array<TextOutBufferElement>  = [];
     textInBuffer:     Array<TextInBufferElement>   = [];
 
@@ -911,37 +1191,38 @@ class WhiteBoardController
         this.isHost = isHost;
         this.userId = userId;
 
-        var dispatcher: WhiteBoardDispatcher = {
+        let dispatcher: WhiteBoardDispatcher = {
             elementMouseOver: this.elementMouseOver,
             elementMouseOut: this.elementMouseOut,
-            curveMouseDown: this.curveMouseDown,
-            curveMouseClick: this.curveMouseClick,
-            curveMouseMove: this.curveMouseMove,
-            textMouseClick: this.textMouseClick,
-            textMouseDblClick: this.textMouseDblClick,
-            textMouseMove: this.textMouseMove,
-            textMouseMoveDown: this.textMouseMoveDown,
-            textMouseResizeDown: this.textMouseResizeDown,
-            fileMouseClick: this.fileMouseClick,
-            fileMouseMove: this.fileMouseMove,
-            fileMouseMoveDown: this.fileMouseMoveDown,
-            fileMouseResizeDown: this.fileMouseResizeDown,
-            fileRotateClick: this.fileRotateClick,
-            highlightTagClick: this.highlightTagClick,
+            elementMouseDown: this.elementMouseDown,
+            elementMouseMove: this.elementMouseMove,
+            elementMouseUp: this.elementMouseUp,
+            elementMouseClick: this.elementMouseClick,
+            elementMouseDoubleClick: this.elementMouseDoubleClick,
+
+            elementTouchStart: this.elementTouchStart,
+            elementTouchMove: this.elementTouchMove,
+            elementTouchEnd: this.elementTouchEnd,
+            elementTouchCancel: this.elementTouchCancel,
+
+            elementDragOver: this.elementDragOver,
+            elementDrop: this.elementDrop,
+
             clearAlert: this.clearAlert,
-            colourChange: this.colourChange,
             modeChange: this.modeChange,
-            sizeChange: this.sizeChange,
-            boldChange: this.boldChange,
-            italicChange: this.italicChange,
-            underlineChange: this.underlineChange,
-            overlineChange: this.overlineChange,
-            throughlineChange: this.throughlineChange,
-            justifiedChange: this.justifiedChange,
-            mouseDown: this.mouseDown,
+            palleteChange: this.palleteChange,
+            changeEraseSize: this.changeEraseSize,
+
             mouseWheel: this.mouseWheel,
+            mouseDown: this.mouseDown,
             mouseMove: this.mouseMove,
             mouseUp: this.mouseUp,
+
+            touchStart: this.touchStart,
+            touchMove: this.touchMove,
+            touchEnd: this.touchEnd,
+            touchCancel: this.touchCancel,
+
             contextCopy: this.contextCopy,
             contextCut: this.contextCut,
             contextPaste: this.contextPaste,
@@ -959,24 +1240,31 @@ class WhiteBoardController
             viewWidth: 0,
             viewHeight: 0,
             viewScale: 1,
-            mode: 0,
-            sizeMode: 1,
+            mode: BoardModes.SELECT,
             baseSize: 1.0,
-            colour: 'black',
-            isBold: false,
-            isItalic: false,
-            isOLine: false,
-            isULine: false,
-            isTLine: false,
-            isJustified: true,
+            eraseSize: 1.0,
+            blockAlert: false,
+
+
+
             itemMoving: false,
             itemResizing: false,
             resizeHorz: false,
             resizeVert: false,
-            boardElements: Immutable.OrderedMap<number, DisplayElement>(),
+
+
+
+            palleteState: {},
+            boardElements: Immutable.OrderedMap<number, ComponentViewState>(),
             infoElements:  Immutable.List<InfoElement>(),
             alertElements: Immutable.List<AlertElement>(),
-            dispatcher: dispatcher
+
+            cursor: 'auto',
+            cursorURL: [],
+            cursorOffset: { x: 0, y: 0 },
+
+            dispatcher: dispatcher,
+            components: components
         };
     }
 
@@ -990,6 +1278,7 @@ class WhiteBoardController
         whitElem.width = whitElem.clientWidth;
         whitElem.height = whitElem.clientHeight;
         window.addEventListener('resize', this.windowResize);
+        window.addEventListener('beforeunload', this.windowUnload);
         document.addEventListener('keypress', this.keyPress);
         document.addEventListener('keydown', this.keyDown);
 
@@ -1019,6 +1308,26 @@ class WhiteBoardController
         this.view.storeUpdate(this.viewState);
     }
 
+    setElementView = (id: number, newView: ComponentViewState) : void =>
+    {
+        if(newView == null)
+        {
+            console.log("Issue tracked here.");
+        }
+        let newElemList = this.viewState.boardElements.set(id, newView);
+        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+    }
+
+    getAudioStream = () : MediaStream =>
+    {
+        return null;
+    }
+
+    getVideoStream = () : MediaStream =>
+    {
+        return null;
+    }
+
     newAlert = (type: string, message: string) : void =>
     {
         let newMsg : AlertElement = { type: type, message: message };
@@ -1031,685 +1340,399 @@ class WhiteBoardController
     {
         let newElemList = this.viewState.alertElements.shift();
 
-        this.updateView(Object.assign({}, this.viewState, { alertElements: newElemList}));
+        this.updateView(Object.assign({}, this.viewState, { alertElements: newElemList }));
     }
 
     deleteElement = (id: number) : void =>
     {
-        let element = this.getBoardElement(id);
-        element.isDeleted = true;
-
-        let newElemList = this.viewState.boardElements.filter(elem => elem.id !== id);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    restoreElement = (id: number) : void =>
-    {
-        let element = this.getBoardElement(id);
-        element.isDeleted = false;
-
-        // TODO: Send creation data to other users
-
-        if(element.type === 'text')
-        {
-            // TODO
-        }
-        else if(element.type === 'curve')
-        {
-            // TODO
-        }
-    }
-
-    addCurve = (x: number, y: number, width: number, height: number, curveSet: Array<Point>, userId: number, colour: string, size: number, updateTime: Date, serverId?: number) : number =>
-    {
-        let newCurve: Curve =
-        {
-            type: 'curve', id: -1, user: userId, isDeleted: false, colour: colour, size: size, curveSet: curveSet, serverId: serverId, opBuffer: [],
-            x: x, y: y, width: width, height: height, hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
-        };
-
-        let localId = this.boardElems.length;
-        this.boardElems[localId] = newCurve;
-        newCurve.id = localId;
-
-        if(serverId)
-        {
-            this.curveDict[serverId] = localId;
-        }
-
-        let newCurveView : CurveElement;
-
-        if(curveSet.length > 1)
-        {
-            var pathText = this.createCurveText(curveSet);
-            newCurveView = {
-                type: 'path', id: localId, size: newCurve.size, colour: newCurve.colour, param: pathText, updateTime: updateTime, selected: false
-            };
-        }
-        else
-        {
-            newCurveView = {
-                type: 'circle', id: localId, size: newCurve.size, colour: newCurve.colour, point: curveSet[0], updateTime: updateTime, selected: false
-            };
-        }
-
-        let newElemList = this.viewState.boardElements.set(newCurveView.id, newCurveView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-
-        return localId;
-    }
-
-    moveCurve = (id: number, changeX: number, changeY: number, updateTime: Date) : void =>
-    {
-        let curve = this.getCurve(id);
-
-        curve.x += changeX;
-        curve.y += changeY;
-
-        for(var i = 0; i < curve.curveSet.length; i++)
-        {
-            curve.curveSet[i].x += changeX;
-            curve.curveSet[i].y += changeY;
-        }
-
-        let newCurveView : CurveElement;
-
-        if(curve.curveSet.length > 1)
-        {
-            let pathText = this.createCurveText(curve.curveSet);
-
-            newCurveView = Object.assign({}, this.getViewElement(id), { param: pathText, updateTime: updateTime });
-        }
-        else
-        {
-            newCurveView = Object.assign({}, this.getViewElement(id), { point: curve.curveSet, updateTime: updateTime });
-        }
-
-        let newElemList = this.viewState.boardElements.set(id, newCurveView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    addTextbox = (x: number, y: number, width: number, height: number, size: number, justified: boolean, userId: number, editLock: number, updateTime: Date, serverId?: number) : number =>
-    {
-        let localId: number;
-        let remLock: boolean;
-
-        if(serverId)
-        {
-            localId = this.textDict[serverId];
-        }
-
-        let newText : WhiteBoardText;
-
-        if(localId == null || localId == undefined)
-        {
-            newText =
-            {
-                text: '', user: userId, isDeleted: false, x: x, y: y, size: size, styles: [], editCount: 0, type: 'text', cursor: null, cursorElems: [],
-                width: width, height: height, editLock: editLock, justified: justified, textNodes: [], dist: [0], serverId: serverId, id: 0, waiting: false,
-                opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
-            };
-
-            localId = this.boardElems.length;
-            this.boardElems[localId] = newText;
-            newText.id = localId;
-        }
-        else
-        {
-            // TODO: This is a conflict?
-            newText = this.getText(localId);
-        }
-
-        if(editLock == this.userId)
-        {
-            remLock = false;
-            if(this.currTextEdit == -1)
-            {
-                this.currTextEdit = localId;
-                this.currTextSel = localId;
-
-                this.cursorStart = newText.text.length;
-                this.cursorEnd = newText.text.length;
-                this.gettingLock = -1;
-                this.isWriting = true;
-
-                this.changeTextSelect(localId, true);
-                this.setMode(1);
-            }
-            else if(this.currTextEdit != localId)
-            {
-                this.releaseText(localId);
-            }
-        }
-        else if(editLock != 0)
-        {
-            remLock = true;
-        }
-
-        let newView : TextElement = {
-            x: newText.x, y: newText.y, width: newText.width, height: newText.height, isEditing: false, remLock: remLock, getLock: false, textNodes: [],
-            cursor: null, cursorElems: [], id: localId, type: 'text', size: newText.size, waiting: false, updateTime: updateTime, selected: false
-        };
-
-        let newElemList = this.viewState.boardElements.set(localId, newView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-
-        return localId;
-    }
-
-    stopLockText = (id: number) : void =>
-    {
-        this.gettingLock = -1;
-        this.currTextEdit = -1;
-        this.currTextSel = -1;
-        this.isWriting = false;
-
-        let tbox = this.getText(id);
-        tbox.editLock = 0;
-        tbox.cursor = null;
-        tbox.cursorElems = [];
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {getLock: false, isEditing: false, cursor: null, cursorElems: []});
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    setTextGetLock = (id: number) : void =>
-    {
-        this.gettingLock = id;
-
-        let tbox = this.getText(id);
-
-        tbox.editLock = this.userId;
-        this.cursorStart = tbox.text.length;
-        this.cursorEnd = tbox.text.length;
-        this.isWriting = true;
-
-        this.changeTextSelect(id, true);
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {getLock: true});
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    changeTextSelect = (id: number, setIdeal: boolean) : void =>
-    {
-        let tbox = this.getText(id);
-
-        if(setIdeal)
-        {
-            if(this.startLeft)
-            {
-                this.textIdealX = this.findXPos(tbox, this.cursorEnd);
-            }
-            else
-            {
-                this.textIdealX = this.findXPos(tbox, this.cursorStart);
-            }
-        }
-
-        this.findCursorElems(tbox, this.cursorStart, this.cursorEnd);
-
-        if(tbox.styles.length > 0)
-        {
-            let i = 0;
-
-            while(i < tbox.styles.length && tbox.styles[i].start > this.cursorStart || tbox.styles[i].end < this.cursorStart)
-            {
-                i++;
-            }
-
-            let isBold = tbox.styles[i].weight == 'bold';
-            let isItalic = tbox.styles[i].style == 'italic';
-            let isOLine = tbox.styles[i].decoration == 'overline';
-            let isULine = tbox.styles[i].decoration == 'underline';
-            let isTLine = tbox.styles[i].decoration == 'line-through';
-
-            this.updateView(Object.assign({}, this.viewState, { colour: tbox.styles[i].colour, isBold: isBold, isItalic: isItalic, isOLine: isOLine, isULine: isULine, isTLine: isTLine }));
-        }
-
-        let newTextViewCurr : TextElement = Object.assign({}, this.getViewElement(id), {cursor: tbox.cursor, cursorElems: tbox.cursorElems});
-
-        let newElemList = this.viewState.boardElements.set(id, newTextViewCurr);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    setTextEdit = (id: number) : void =>
-    {
-        this.currTextEdit = id;
-        this.currTextSel  = id;
-
-        let tbox = this.getText(id);
-
-        tbox.editLock = this.userId;
-        this.cursorStart = tbox.text.length;
-        this.cursorEnd = tbox.text.length;
-        this.gettingLock = -1;
-        this.isWriting = true;
-
-        this.changeTextSelect(id, true);
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {getLock: false, isEditing: true});
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        this.updateView(Object.assign({}, this.viewState, {mode: 1, boardElements: newElemList}));
-    }
-
-    setTextLock = (id: number, userId: number) : void =>
-    {
-        let tbox = this.getText(id);
-        tbox.editLock = userId;
-
-        if(userId != this.userId)
-        {
-            let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {remLock: true});
-            let newElemList = this.viewState.boardElements.set(id, newTextView);
-            this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-        }
-    }
-
-    setTextUnLock = (id: number) : void =>
-    {
-        let tbox = this.getText(id);
-        tbox.editLock = 0;
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), { remLock: false });
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    setTextJustified = (id: number, state: boolean) : void =>
-    {
-        let textBox = this.getText(id);
-
-        textBox.justified = state;
-        textBox.textNodes = this.calculateTextLines(textBox);
-
-        if(this.currTextSel == id)
-        {
-            if(this.startLeft)
-            {
-                this.textIdealX = this.findXPos(textBox, this.cursorEnd);
-            }
-            else
-            {
-                this.textIdealX = this.findXPos(textBox, this.cursorStart);
-            }
-
-            this.findCursorElems(textBox, this.cursorStart, this.cursorEnd);
-        }
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {
-            textNodes: textBox.textNodes, cursor: textBox.cursor, cursorElems: textBox.cursorElems
-        });
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
+        let newElemList = this.viewState.boardElements.filter(element => element.id !== id);
         this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList }));
-
-        this.sendTextJustified(id);
     }
 
-    setTextArea = (id: number, width: number, height: number) : void =>
+    setMode = (newMode: string) : void =>
     {
-        let textBox = this.getText(id);
+        let palleteView: BoardPalleteViewState = {};
+        let cursor: ElementCursor = { cursor: 'auto', url: [], offset: { x: 0, y: 0 } };
 
-        textBox.height = height;
-
-        if(textBox.width != width)
+        if(newMode != BoardModes.SELECT && newMode != BoardModes.ERASE)
         {
-            textBox.width = width;
-            textBox.textNodes = this.calculateTextLines(textBox);
+            palleteView = components.get(newMode).pallete.getCurrentViewState();
+            cursor = components.get(newMode).pallete.getCursor();
         }
 
-        if(this.currTextSel == id)
+        this.cursor = cursor.cursor;
+        this.cursorURL = cursor.url;
+        this.cursorOffset = cursor.offset;
+
+        this.updateView(Object.assign({}, this.viewState,
         {
-            this.findCursorElems(textBox, this.cursorStart, this.cursorEnd);
+            mode: newMode, palleteState: palleteView, cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset
+        }));
+    }
+
+    sendMessage = (id: number, type: string, message: UserMessage) : void =>
+    {
+        let serverId = this.getBoardElement(id).serverId;
+        let msg: UserMessageContainer = { id: serverId, type: type, payload: message };
+        console.log('Sending message: ' + JSON.stringify(msg));
+        this.socket.emit('MSG-COMPONENT', msg);
+    }
+
+    selectGroup = (ids: Array<number>) : void =>
+    {
+        for(let i = 0; i < this.currSelect.length; i++)
+        {
+            let elem = this.getBoardElement(this.currSelect[i]);
+
+            if(elem.isDeleted)
+            {
+                console.log('Deselect is probably the issue.');
+            }
+
+            let newView = elem.handleDeselect();
+
+            this.setElementView(elem.id, newView);
         }
 
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {
-            textNodes: textBox.textNodes, width: textBox.width, height: textBox.height, cursor: textBox.cursor, cursorElems: textBox.cursorElems
-        });
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    moveTextbox = (id: number, isRelative: boolean, x: number, y: number, updateTime: Date) : void =>
-    {
-        let textBox = this.getText(id);
-        let changeX;
-        let changeY;
-
-        if(isRelative)
+        for(let i = 0; i < ids.length; i++)
         {
-            changeX = x;
-            changeY = y;
+            let elem = this.getBoardElement(ids[i]);
+            if(!elem.isDeleted)
+            {
+                let newView = elem.handleSelect();
+                this.currSelect.push(elem.id);
+                this.setElementView(elem.id, newView);
+            }
         }
-        else
+    }
+
+    handleElementOperation = (id: number, undoOp: () => ElementUndoRedoReturn, redoOp: () => ElementUndoRedoReturn) : void =>
+    {
+        if(undoOp && redoOp)
         {
-            changeX = x - textBox.x;
-            changeY = y - textBox.y;
+            this.newOperation(id, undoOp, redoOp);
         }
-
-        textBox.x += changeX;
-        textBox.y += changeY
-
-        for(let i = 0; i < textBox.textNodes.length; i++)
+        else if(undoOp || redoOp)
         {
-            var node = textBox.textNodes[i];
-            node.x += changeX;
-            node.y += changeY;
+            console.error('Element provided either undo or redo operation. It must specify neither or both.');
         }
+    }
 
-        if(this.currTextSel == id)
+    handleElementMessages = (id: number, type: string, messages: Array<UserMessage>) : void =>
+    {
+        for(let i = 0; i < messages.length; i++)
         {
-            this.findCursorElems(textBox, this.cursorStart, this.cursorEnd);
+            this.sendMessage(id, type, messages[i]);
         }
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {
-            textNodes: textBox.textNodes, x: textBox.x, y: textBox.y, cursor: textBox.cursor, cursorElems: textBox.cursorElems, updateTime: updateTime
-        });
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
     }
 
-    startTextWait = (id: number) : void =>
+    handleMouseElementSelect = (e: MouseEvent, elem: BoardElement, isSelected: boolean, cursor?: ElementCursor) : void =>
     {
-        let textItem: WhiteBoardText = this.getText(id);
-
-        textItem.waiting = true;
-
-        let newTextView : TextElement = Object.assign({}, this.getViewElement(id), {
-            waiting: true
-        });
-        let newElemList = this.viewState.boardElements.set(id, newTextView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    updateText = (newText: WhiteBoardText) : void =>
-    {
-        newText.textNodes = this.calculateTextLines(newText);
-
-        if(this.currTextSel == newText.id)
+        if(isSelected)
         {
-            this.findCursorElems(newText, this.cursorStart, this.cursorEnd);
-        }
+            let alreadySelected = false;
 
-        newText.waiting = false;
+            for(let i = 0; i < this.currSelect.length; i++)
+            {
+                if(this.currSelect[i] == elem.id)
+                {
+                    alreadySelected = true;
+                }
+            }
 
-        var newTextView : TextElement = Object.assign({}, this.getViewElement(newText.id), {
-            textNodes: newText.textNodes, width: newText.width, height: newText.height, cursor: newText.cursor, cursorElems: newText.cursorElems, waiting: false
-        });
-        var newElemList = this.viewState.boardElements.set(newText.id, newTextView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
+            if(!alreadySelected)
+            {
+                if(e.ctrlKey)
+                {
+                    this.currSelect.push(elem.id);
+                }
+                else
+                {
+                    for(let i = 0; i < this.currSelect.length; i++)
+                    {
+                        if(this.currSelect[i] != elem.id)
+                        {
+                            let selElem = this.getBoardElement(this.currSelect[i]);
+                            let selElemView = selElem.handleDeselect();
+                            this.setElementView(selElem.id, selElemView);
+                        }
+                    }
+                    this.currSelect = [];
+                    this.currSelect.push(elem.id);
+                }
+            }
 
-    setMode = (newMode: number) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { mode: newMode}));
-    }
+            if(this.currSelect.length == 1 && cursor)
+            {
+                if(this.cursor != cursor.cursor || this.cursorURL != cursor.url)
+                {
+                    this.cursor = cursor.cursor;
+                    this.cursorURL = cursor.url;
+                    this.cursorOffset = cursor.offset;
 
-    setSize = (newSize: number) : void =>
-    {
-        let baseSize = this.viewState.baseSize;
-
-        if(newSize == 0)
-        {
-            baseSize = 0.5;
-        }
-        else if(newSize == 1)
-        {
-            baseSize = 1.0;
-        }
-        else if(newSize == 2)
-        {
-            baseSize = 2.0;
-        }
-        else
-        {
-            throw 'ERROR: Not a valid base size.';
-        }
-
-        this.updateView(Object.assign({}, this.viewState, { sizeMode: newSize, baseSize: baseSize }));
-    }
-
-    setColour = (newColour: string) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { colour: newColour}));
-    }
-
-    setIsItalic = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isItalic: newState}));
-    }
-
-    setIsOline = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isOLine: newState}));
-    }
-
-    setIsUline = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isULine: newState}));
-    }
-
-    setIsTline = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isTLine: newState}));
-    }
-
-    setIsBold = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isBold: newState}));
-    }
-
-    setJustified = (newState: boolean) : void =>
-    {
-        this.updateView(Object.assign({}, this.viewState, { isJustified: newState}));
-    }
-
-    addHighlight = (x: number, y: number, width: number, height: number, userId: number, colour: number) : number =>
-    {
-        let d = new Date();
-        d.setDate(d.getDate() + 50);
-
-        let newHighlight: Highlight =
-        {
-            type: 'highlight', id: -1, user: userId, isDeleted: false, serverId: -1, x: x, y: y, width: width, height: height, colour: colour,
-            opBuffer: [], hoverTimer: null, infoElement: null, updateTime: d
-        };
-
-        let localId = this.boardElems.length;
-        this.boardElems[localId] = newHighlight;
-        newHighlight.id = localId;
-
-        let newHighlightView : HighlightElement =
-        {
-            id: localId, x: x, y: y, width: width, height: height, type: 'highlight', colour: colour, updateTime: d, selected: false
-        };
-
-        let newElemList = this.viewState.boardElements.set(localId, newHighlightView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-
-        return localId;
-    }
-
-    addFile = (x: number, y: number, width: number, height: number, userId: number, isImage: boolean, fDesc: string, fType: string, extension: string, rotation: number, url: string = '', updateTime: Date, serverId?: number) : number =>
-    {
-        let newUpload: Upload =
-        {
-            type: 'file', id: -1, user: userId, isDeleted: false, serverId: serverId, x: x, y: y, width: width, height: height, isImage: isImage, fType: fType,
-            rotation: rotation, opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime
-        };
-
-        let localId = this.boardElems.length;
-        this.boardElems[localId] = newUpload;
-        newUpload.id = localId;
-
-        let isLoading = url == '' ? true : false;
-        let isUploader = userId == this.userId || userId == 0 ? true : false;
-
-        let newUploadView : UploadElement =
-        {
-            id: localId, x: x, y: y, width: width, height: height, isImage: isImage, extension: extension, rotation: rotation,
-            URL: url, isLoading: isLoading, isUploader: isUploader, percentUp: 0, type: 'file', updateTime: updateTime, selected: false
-        };
-
-        let newElemList = this.viewState.boardElements.set(localId, newUploadView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-
-        return localId;
-    }
-
-    updateProgress = (id: number, percent: number) : void =>
-    {
-        var newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            percentUp: percent
-        });
-
-        var newElemList = this.viewState.boardElements.set(id, newFileView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    setUploadComplete = (id: number, fileURL: string) : void =>
-    {
-        let newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            percentUp: 100, isLoading: false, URL: fileURL
-        });
-
-        let newElemList = this.viewState.boardElements.set(id, newFileView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    moveUpload = (id: number, isRelative: boolean, x: number, y: number, updateTime: Date) : void =>
-    {
-        let file = this.getUpload(id);
-        let changeX;
-        let changeY;
-
-
-        if(isRelative)
-        {
-            changeX = x;
-            changeY = y;
+                    this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
+                }
+            }
         }
         else
         {
-            changeX = x - file.x;
-            changeY = y - file.y;
+            if(this.currSelect.length == 1 && this.currSelect[0] == elem.id)
+            {
+                this.cursor = 'auto';
+                this.cursorURL = [];
+                this.cursorOffset = { x: 0, y: 0 };
+
+                this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
+                this.currSelect = [];
+            }
+            else
+            {
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    if(this.currSelect[i] == elem.id)
+                    {
+                        this.currSelect.splice(i, 1);
+                    }
+                }
+            }
         }
-
-        file.x += changeX;
-        file.y += changeY
-
-        let newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            x: file.x, y: file.y, updateTime: updateTime
-        });
-
-        let newElemList = this.viewState.boardElements.set(id, newFileView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
     }
 
-    rotateUpload = (id: number) : void =>
+    handleTouchElementSelect = (e: TouchEvent, elem: BoardElement, isSelected: boolean, cursor?: ElementCursor) : void =>
     {
-        let file = this.getUpload(id);
-
-        file.rotation += 90;
-
-        if(file.rotation >= 360)
+        if(isSelected)
         {
-            file.rotation = 0;
+            if(e.ctrlKey)
+            {
+                let alreadySelected = false;
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    if(this.currSelect[i] == elem.id)
+                    {
+                        alreadySelected = true;
+                    }
+                }
+
+                if(!alreadySelected)
+                {
+                    this.currSelect.push(elem.id);
+                }
+            }
+            else
+            {
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    if(this.currSelect[i] != elem.id)
+                    {
+                        let selElem = this.getBoardElement(this.currSelect[i]);
+                        let selElemView = selElem.handleDeselect();
+                        this.setElementView(selElem.id, selElemView);
+                    }
+                }
+
+                this.currSelect = [];
+                this.currSelect.push(elem.id);
+            }
+
+            if(this.currSelect.length == 1 && cursor)
+            {
+                this.cursor = cursor.cursor;
+                this.cursorURL = cursor.url;
+                this.cursorOffset = cursor.offset;
+
+                this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
+            }
+        }
+        else
+        {
+            for(let i = 0; i < this.currSelect.length; i++)
+            {
+                if(this.currSelect[i] == elem.id)
+                {
+                    this.currSelect.splice(i, 1);
+                }
+            }
+        }
+    }
+
+    handleElementPalleteChanges = (elem: BoardElement, changes: Array<BoardPalleteChange>): void =>
+    {
+        for(let j = 0; j < changes.length; j++)
+        {
+            let change = changes[j];
+            components.get(elem.type).pallete.handleChange(change);
+
+            for(let i = 0; i < this.currSelect.length; i++)
+            {
+                let selElem = this.getBoardElement(this.currSelect[i]);
+                if(selElem.id != elem.id && selElem.type == elem.type)
+                {
+                    let retVal = selElem.handlePalleteChange(change);
+
+                    this.handleElementMessages(selElem.id, selElem.type, retVal.serverMessages);
+                    this.handleElementOperation(selElem.id, retVal.undoOp, retVal.redoOp);
+                    this.setElementView(selElem.id, retVal.newView);
+                }
+            }
+        }
+    }
+
+    handleElementNewViewCentre = (x: number, y: number): void =>
+    {
+        let whitElem  = document.getElementById('whiteBoard-input') as HTMLCanvasElement;
+        let whitCont  = document.getElementById('whiteboard-container');
+        let clientWidth = whitCont.clientWidth;
+        let clientHeight = whitCont.clientHeight;
+
+        let xChange = x - (this.panX + clientWidth * this.scaleF * 0.5);
+        let yChange = y - (this.panY + clientHeight * this.scaleF * 0.5);
+
+        let newPanX = this.panX + xChange;
+        let newPanY = this.panY + yChange;
+
+        if(newPanX < 0)
+        {
+            newPanX = 0;
+        }
+        if(newPanY < 0)
+        {
+            newPanY = 0;
         }
 
-        let newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            rotation: file.rotation
-        });
-
-        let newElemList = this.viewState.boardElements.set(id, newFileView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+        this.setViewBox(newPanX, newPanY, this.scaleF);
     }
 
-    setUploadArea = (id: number, width: number, height: number, updateTime: Date) : void =>
+    handleRemoteEdit = (id: number) : void =>
     {
-        let file = this.getUpload(id);
+        // Remove all operations related to this item from operation buffer
+        for(let i = 0; i < this.operationStack.length; i++)
+        {
+            if(this.operationStack[i].ids.indexOf(id) != -1)
+            {
+                // Replace operation with one that will just select the item (better user interation that removing or doing nothing)
+                let newOp: WhiteBoardOperation =
+                {
+                    ids: this.operationStack[i].ids,
+                    undos: [((elemIds) =>
+                    {
+                        return () => { this.selectGroup(elemIds); return null; };
+                    })(this.operationStack[i].ids)],
+                    redos: [((elemIds) =>
+                    {
+                        return () => { this.selectGroup(elemIds); return null; };
+                    })(this.operationStack[i].ids)]
+                };
 
-        file.height = height;
-        file.width = width;
-
-        let newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            width: file.width, height: file.height, updateTime: updateTime
-        });
-
-        let newElemList = this.viewState.boardElements.set(id, newFileView);
-        newElemList = newElemList.sort(this.compareUpdateTime) as Immutable.OrderedMap<number, DisplayElement>;
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+                this.operationStack.splice(i, 1, newOp);
+            }
+        }
     }
 
-    setUploadRotation = (id: number, rotation: number) : void =>
+    handleInfoMessage = (data: InfoMessageData) : void =>
     {
-        let file = this.getUpload(id);
-
-        file.rotation = rotation;
-
-        let newFileView : UploadElement = Object.assign({}, this.getViewElement(id), {
-            rotation: file.rotation
-        });
-
-        let newElemList = this.viewState.boardElements.set(id, newFileView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+        /* TODO: */
     }
 
-    moveGroup = (isRelative: boolean, x: number, y: number, editTime: Date) : void =>
+    handleAlertMessage = (msg: AlertMessageData) : void =>
+    {
+        if(msg)
+        {
+            this.newAlert(msg.header, msg.message);
+        }
+    }
+
+    startMove = (startX: number, startY: number) : void =>
+    {
+        this.groupStartX = startX;
+        this.groupStartY = startY;
+        this.groupMoving = true;
+        this.cursor = 'move';
+        this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor }));
+        for(let i = 0; i < this.currSelect.length; i++)
+        {
+            let elem = this.getBoardElement(this.currSelect[i]);
+            let retVal = elem.startMove();
+        }
+    }
+
+    moveGroup = (x: number, y: number, editTime: Date) : void =>
     {
         // Loop over currently selected items, determine type and use appropriate method
         for(let i = 0; i < this.currSelect.length; i++)
         {
             let elem = this.getBoardElement(this.currSelect[i]);
 
-            if(elem.type == 'curve')
-            {
-                this.moveCurve(elem.id, x, y, editTime);
-            }
-            else if(elem.type == 'text')
-            {
-                this.moveTextbox(elem.id, isRelative, x, y, editTime);
-            }
-            else if(elem.type == 'file')
-            {
-                this.moveUpload(elem.id, isRelative, x, y, editTime);
-            }
+            let elemView = elem.handleMove(x, y);
+            this.setElementView(elem.id, elemView);
         }
     }
 
-    startMove = () : void =>
+    endMove = (endX: number, endY: number) : void =>
     {
-        this.updateView(Object.assign({}, this.viewState, { itemMoving: true}));
-    }
-
-    endMove = () : void =>
-    {
-        this.currTextMove = -1;
-        this.currCurveMove = -1;
-        this.currFileMove = -1;
         this.groupMoving = false;
-        this.updateView(Object.assign({}, this.viewState, { itemMoving: false }));
+        this.cursor = 'auto';
+        this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor }));
+
+        let undoOpList = [];
+        let redoOpList = [];
+
+        for(let i = 0; i < this.currSelect.length; i++)
+        {
+            let elem = this.getBoardElement(this.currSelect[i]);
+            let retVal = elem.endMove();
+
+            let undoOp = ((element, changeX, changeY) =>
+            {
+                return () =>
+                {
+                    element.handleMove(-changeX, -changeY);
+                    let ret = element.endMove();
+                    this.handleElementMessages(element.id, element.type, ret.serverMessages);
+                    this.setElementView(element.id, ret.newView);
+                };
+            })(elem, endX - this.groupStartX, endY - this.groupStartY);
+            let redoOp = ((element, changeX, changeY) =>
+            {
+                return () =>
+                {
+                    element.handleMove(changeX, changeY);
+                    let ret = element.endMove();
+                    this.handleElementMessages(element.id, element.type, ret.serverMessages);
+                    this.setElementView(element.id, ret.newView);
+                };
+            })(elem, endX - this.groupStartX, endY - this.groupStartY);
+
+            this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+            this.setElementView(elem.id, retVal.newView);
+
+            undoOpList.push(undoOp);
+            redoOpList.push(redoOp);
+        }
+
+        // Remove redo operations ahead of current position
+        this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+
+        // Add new operation to the stack
+        let newOp: WhiteBoardOperation = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
+        this.operationStack[this.operationPos++] = newOp;
     }
 
-    startResize = (horz: boolean, vert: boolean) : void =>
+    selectElement = (id: number) : void =>
     {
-        this.updateView(Object.assign({}, this.viewState, { itemResizing: true, resizeHorz: horz, resizeVert: vert }));
+        let elem = this.getBoardElement(id);
+
+        if(!elem.isDeleted)
+        {
+            let newElemView = elem.handleSelect();
+            this.setElementView(id, newElemView);
+        }
     }
 
-    endResize = () : void =>
+    deselectElement = (id: number) : void =>
     {
-        this.currFileResize = -1;
-        this.currTextResize = -1;
-        this.updateView(Object.assign({}, this.viewState, { itemResizing: false }));
+        let elem = this.getBoardElement(id);
+        let newElemView = elem.handleDeselect();
+        this.setElementView(elem.id, newElemView);
     }
 
     addInfoMessage = (x: number, y: number, width: number, height: number, header: string, message: string) : number =>
@@ -1740,25 +1763,6 @@ class WhiteBoardController
         this.updateView(Object.assign({}, this.viewState, { infoElements: newInfoList}));
     }
 
-
-    selectElement = (id: number) : void =>
-    {
-        let newElemView = Object.assign({}, this.getViewElement(id), {
-            selected: true
-        });
-        let newElemList = this.viewState.boardElements.set(id, newElemView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
-    deselectElement = (id: number) : void =>
-    {
-        let newElemView = Object.assign({}, this.getViewElement(id), {
-            selected: false
-        });
-        let newElemList = this.viewState.boardElements.set(id, newElemView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-    }
-
     setViewBox = (panX: number, panY: number, scaleF: number) : void =>
     {
         let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
@@ -1772,7 +1776,10 @@ class WhiteBoardController
         let newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
 
         // console.log('Updating Viewbox to: ' + newView);
-        this.updateView(Object.assign({}, this.viewState, { viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF }));
+        this.updateView(Object.assign({}, this.viewState,
+            {
+                viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF
+            }));
     }
 
     /***********************************************************************************************************************************************************
@@ -1784,36 +1791,6 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    getStyle = () : string =>
-    {
-        return this.viewState.isItalic ? 'italic' : 'normal';
-    }
-
-    getWeight = () : string =>
-    {
-        return this.viewState.isBold ? 'bold' : 'normal';
-    }
-
-    getDecoration = () : string =>
-    {
-        if(this.viewState.isOLine)
-        {
-            return 'overline'
-        }
-        else if(this.viewState.isTLine)
-        {
-            return 'line-through'
-        }
-        else if(this.viewState.isULine)
-        {
-            return 'underline'
-        }
-        else
-        {
-            return 'none'
-        }
-    }
-
     getBoardElement = (id: number) : BoardElement =>
     {
         if(this.boardElems[id])
@@ -1826,63 +1803,6 @@ class WhiteBoardController
         }
     }
 
-    getCurve = (id: number) : Curve =>
-    {
-        if(this.getBoardElement(id).type == 'curve')
-        {
-            return this.getBoardElement(id) as Curve;
-        }
-        else
-        {
-            console.log('Type was: ' + this.getBoardElement(id).type);
-            throw 'Element is not of curve type';
-        }
-    }
-
-    getText = (id: number) : WhiteBoardText =>
-    {
-        if(this.getBoardElement(id).type == 'text')
-        {
-            return this.getBoardElement(id) as WhiteBoardText;
-        }
-        else
-        {
-            console.log('Type was: ' + this.getBoardElement(id).type);
-            throw 'Element is not of text type';
-        }
-    }
-
-    getHighlight = (id: number) : Highlight =>
-    {
-        if(this.getBoardElement(id).type == 'highlight')
-        {
-            return this.getBoardElement(id) as Highlight;
-        }
-        else
-        {
-            console.log('Type was: ' + this.getBoardElement(id).type);
-            throw 'Element is not of highlight type';
-        }
-    }
-
-    getUpload = (id: number) : Upload =>
-    {
-        if(this.getBoardElement(id).type == 'file')
-        {
-            return this.getBoardElement(id) as Upload;
-        }
-        else
-        {
-            console.log('Type was: ' + this.getBoardElement(id).type);
-            throw 'Element is not of upload type';
-        }
-    }
-
-    getViewElement = (id: number) : DisplayElement =>
-    {
-        return this.viewState.boardElements.get(id);
-    }
-
     getInfoMessage = (id: number) : InfoMessage =>
     {
         return this.infoElems[id];
@@ -1890,10 +1810,33 @@ class WhiteBoardController
 
     undo = () : void =>
     {
+        console.log('Undo, stack length. ' + this.operationStack.length);
         // Undo operation at current stack position
         if(this.operationPos > 0)
         {
-            this.operationStack[--this.operationPos].undo();
+            let operation = this.operationStack[--this.operationPos];
+
+            for(let i = 0; i < operation.undos.length; i++)
+            {
+                let retVal: ElementUndoRedoReturn = operation.undos[i]();
+                if(retVal)
+                {
+                    let elem = this.getBoardElement(retVal.id);
+
+
+                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    this.setElementView(retVal.id, retVal.newView);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.deleteElement(elem.id);
+                    }
+                }
+            }
         }
     }
 
@@ -1902,41 +1845,46 @@ class WhiteBoardController
         // Redo operation at current stack position
         if(this.operationPos < this.operationStack.length)
         {
-            this.operationStack[this.operationPos++].redo();
+            let operation =  this.operationStack[this.operationPos++];
+            for(let i = 0; i < operation.redos.length; i++)
+            {
+                let retVal: ElementUndoRedoReturn = operation.redos[i]();
+
+                if(retVal)
+                {
+                    let elem = this.getBoardElement(retVal.id);
+                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    this.setElementView(retVal.id, retVal.newView);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.deleteElement(elem.id);
+                    }
+                }
+            }
         }
     }
 
-    newOperation = (itemId:  number, undoOp: () => void, redoOp: () => void) : void =>
+    newOperation = (itemId:  number, undoOp: () => ElementUndoRedoReturn, redoOp: () => ElementUndoRedoReturn) : void =>
     {
         // Remove redo operations ahead of current position
         this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
 
         // Add new operation to the stack
-        let newOp: WhiteBoardOperation = { id: itemId, undo: undoOp, redo: redoOp };
+        let newOp: WhiteBoardOperation = { ids: [itemId], undos: [undoOp], redos: [redoOp] };
         this.operationStack[this.operationPos++] = newOp;
     }
 
-    remoteEdit = (id: number) : void =>
-    {
-        // Remove all operations related to this item from operation buffer
-        for(let i = 0; i < this.operationStack.length; i++)
-        {
-            if(this.operationStack[i].id == id)
-            {
-                // Replace operation with one that will just select the item (better user interation that removing or doing nothing)
-                let newOp: WhiteBoardOperation = { id: id, undo: () => { this.selectElement(id) }, redo: () => { this.selectElement(id) } };
-                this.operationStack.splice(i, 1, newOp);
-            }
-        }
-    }
-
-    // TODO: Look at item edit and dispatcher handling, a more generic interface may be better
     undoItemEdit = (id: number) : void =>
     {
         let elem = this.getBoardElement(id);
 
         // Undo item operation at current stack position
-        if(elem.operationPos > 0)
+        if(!elem.isDeleted && elem.operationPos > 0)
         {
             elem.operationStack[--elem.operationPos].undo();
         }
@@ -1947,26 +1895,22 @@ class WhiteBoardController
         let elem = this.getBoardElement(id);
 
         // Redo operation at current stack position
-        if(elem.operationPos < elem.operationStack.length)
+        if(!elem.isDeleted && elem.operationPos < elem.operationStack.length)
         {
             elem.operationStack[elem.operationPos++].redo();
         }
     }
 
-    remoteItemEdit = (id: number) : void =>
-    {
-        let elem = this.getBoardElement(id);
-
-        // Remove undo redo to preserve integrity
-        elem.operationPos = 0;
-        elem.operationStack = [];
-    }
-
     addHoverInfo = (id: number) : void =>
     {
-        // TODO: Only display over whiteboard, and adjust width and height
+        /* TODO: Only display over whiteboard, and adjust width and height */
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
         let elem = this.getBoardElement(id);
-        let infoId = this.addInfoMessage(this.mouseX, this.mouseY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
+        let infoId = this.addInfoMessage(this.prevX - offsetX + 20, this.prevY - offsetY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
 
         elem.infoElement = infoId;
     }
@@ -1974,1855 +1918,9 @@ class WhiteBoardController
     removeHoverInfo = (id: number) : void =>
     {
         let elem = this.getBoardElement(id);
-        elem.infoElement = null;
+        elem.infoElement = -1;
+        this.currentHover = -1;
         this.removeInfoMessage(elem.infoElement);
-    }
-
-    sendGroupMove = () : void =>
-    {
-        // Loop over currently selected items, determine type and send appropriate message
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
-
-            if(elem.type == 'curve')
-            {
-                this.sendCurveMove(elem.id);
-            }
-            else if(elem.type == 'text')
-            {
-                this.sendTextMove(elem.id);
-            }
-            else if(elem.type == 'file')
-            {
-                this.sendFileMove(elem.id);
-            }
-        }
-    }
-
-    newEdit = (textBox: WhiteBoardText) : WhiteBoardText =>
-    {
-        textBox.editCount++;
-
-        if(textBox.editCount > 5)
-        {
-            // Notify of changes and clear that pesky timeout
-            textBox.editCount = 0;
-            clearTimeout(this.editTimer);
-            this.textEdited(textBox);
-        }
-        else
-        {
-            // Set timeout
-            var self = this;
-            clearTimeout(this.editTimer);
-            this.editTimer = setTimeout(function(tBox)
-            {
-                tBox.editCount = 0;
-                self.textEdited(tBox);
-                clearTimeout(this.editTimer);
-
-            }, 6000, textBox);
-        }
-
-        return textBox;
-    }
-
-    drawCurve = (points: Array<Point>, size: number, colour: string, scaleF: number, panX: number, panY: number) : void =>
-    {
-        let reducedPoints : Array<Point>;
-        let curves : Array<Point>;
-
-        let minX = null;
-        let maxX = null;
-        let minY = null;
-        let maxY = null;
-
-        if(points.length > 1)
-        {
-            reducedPoints = SmoothCurve(points);
-            reducedPoints = DeCluster(reducedPoints, 10);
-
-            for(let i = 0; i < reducedPoints.length; i++)
-            {
-                reducedPoints[i].x = reducedPoints[i].x * scaleF + panX;
-                reducedPoints[i].y = reducedPoints[i].y * scaleF + panY;
-
-                if(minX == null || reducedPoints[i].x < minX)
-                {
-                    minX = reducedPoints[i].x;
-                }
-                if(maxX == null || reducedPoints[i].x > maxX)
-                {
-                    maxX = reducedPoints[i].x;
-                }
-
-                if(minY == null || reducedPoints[i].y < minY)
-                {
-                    minY = reducedPoints[i].y;
-                }
-                if(maxY == null || reducedPoints[i].y > maxY)
-                {
-                    maxY = reducedPoints[i].y;
-                }
-            }
-
-            curves = FitCurve(reducedPoints, reducedPoints.length, 5);
-        }
-        else
-        {
-            curves = [];
-            curves[0] = { x: points[0].x * scaleF + panX, y: points[0].y * scaleF + panY };
-        }
-
-        var localId = this.addCurve(minX, minY, maxX - minX, maxY - minY, curves, this.userId, colour, size, new Date());
-        this.sendCurve(localId, minX, minY, maxX - minX, maxY - minY, curves, colour, size);
-
-        // this.newOperation(localId, () => { this.deleteElementInput(localId); }, () => {})
-    }
-
-    sendCurve = (localId: number, x: number, y: number, width: number, height: number, curves: Array<Point>, colour: string, size: number) : void =>
-    {
-        var self = this;
-
-        this.curveOutBuffer[localId] = { serverId: 0, localId: localId, colour: colour, curveSet: curves, size: size };
-
-        this.curveOutTimeouts[localId] = setInterval(function()
-        {
-            let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
-            self.socket.emit('CURVE', msg);
-        }, 60000);
-
-        let msg: UserNewCurveMessage = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
-        this.socket.emit('CURVE', msg);
-    }
-
-    sendCurveMove = (id: number) : void =>
-    {
-        let curve : Curve = this.getCurve(id);
-
-        if(curve.serverId)
-        {
-            let msg: UserMoveElementMessage = {serverId: curve.serverId, x: curve.x, y: curve.y};
-            this.socket.emit('MOVE-CURVE', msg);
-        }
-        else
-        {
-            let msg: UserMoveElementMessage = { serverId: null, x: curve.x, y: curve.y };
-            let newOp : OperationBufferElement = { type: 'MOVE-CURVE', message: msg };
-            curve.opBuffer.push(newOp);
-        }
-    }
-
-    deleteCurve = (id: number) : void =>
-    {
-        let curve = this.getCurve(id);
-
-        if(curve.serverId)
-        {
-            this.socket.emit('DELETE-CURVE', curve.serverId);
-        }
-        else
-        {
-            let newOp : OperationBufferElement = { type: 'DELETE-CURVE', message: null };
-            curve.opBuffer.push(newOp);
-        }
-        this.deleteElement(id);
-    }
-
-    placeHighlight = (mouseX: number, mouseY: number, scaleF: number, panX: number, panY: number, rectWidth: number, rectHeight: number) : void =>
-    {
-        let x = scaleF * mouseX + panX;
-        let y = scaleF * mouseY + panY;
-        let width = rectWidth * scaleF;
-        let height = rectHeight * scaleF;
-
-        let localId = this.addHighlight(x, y, width, height, this.userId, 0xffff00);
-
-        this.userHighlight = localId;
-
-        this.sendHighlight(x, y, width, height);
-    }
-
-    sendHighlight = (posX: number, posY: number, width: number, height: number) : void =>
-    {
-        let hMsg: UserHighLightMessage = { x: posX, y: posY, width: width, height: height} ;
-        this.socket.emit('HIGHLIGHT', hMsg);
-    }
-
-    clearHighlight = () : void =>
-    {
-        if(this.userHighlight != -1)
-        {
-            this.deleteElement(this.userHighlight);
-            this.userHighlight = -1;
-
-            this.socket.emit('CLEAR-HIGHLIGHT', null);
-        }
-    }
-
-    placeLocalFile = (mouseX: number, mouseY: number, scaleF: number, panX: number, panY: number, file: File) : void =>
-    {
-        let x = scaleF * mouseX + panX;
-        let y = scaleF * mouseY + panY;
-        let width = 200 * scaleF;
-        let height = 200 * scaleF;
-        let isImage = false;
-        let fType = file.name.split('.').pop();
-
-        let mType = file.type;
-        let size = file.size;
-
-        console.log('File type is: ' + file.type);
-
-        if(mType.match(/octet-stream/))
-        {
-            this.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
-        }
-        else
-        {
-            isImage = mType.split('/')[0] == 'image' ? true : false;
-
-            if(!isImage)
-            {
-                width = 150 * scaleF;
-            }
-
-            if(size < 10485760)
-            {
-                let localId = this.addFile(x, y, width, height, this.userId, isImage, file.name, file.type, fType, 0, undefined, new Date());
-
-                this.sendLocalFile(x, y, width, height, file, localId);
-            }
-            else
-            {
-                this.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-            }
-        }
-    }
-
-    sendLocalFile = (posX: number, posY: number, width: number, height: number, file: File, localId: number) : void =>
-    {
-        let newReader = new FileReader();
-
-        let self = this;
-        newReader.onload = function(e)
-        {
-            let serverId: number = self.getBoardElement(localId).serverId;
-            let newDataMsg: UserUploadDataMessage = { serverId: serverId, piece: e.target.result };
-            self.socket.emit('FILE-DATA', newDataMsg);
-        };
-
-        this.fileUploads[localId] = file;
-        this.fileReaders[localId] = newReader;
-
-        let fExtension = file.name.split('.').pop();
-
-        let fileMsg: UserStartUploadMessage = { localId: localId, x: posX, y: posY, width: width, height: height, fileSize: file.size, fileName: file.name, fileType: file.type, extension: fExtension };
-        this.socket.emit('FILE-START', fileMsg);
-    }
-
-    sendFileData = (serverId: number, place: number, percent: number, attempt: number = 0) : void =>
-    {
-
-        let localId = this.uploadDict[serverId];
-        if(localId == null || localId == undefined)
-        {
-            if(attempt < 5)
-            {
-                setTimeout(this.sendFileData.bind(this), 1000, serverId, place, percent, ++attempt);
-            }
-            else
-            {
-                this.socket.emit('STOP-FILE', serverId);
-            }
-        }
-        else
-        {
-            this.updateProgress(localId, percent);
-            let file = this.fileUploads[localId];
-            let reader = this.fileReaders[localId];
-            let nplace = place * 65536;
-            let newFile = file.slice(nplace, nplace + Math.min(65536, (file.size - nplace)));
-
-            console.log('Sending File piece: ' + (place + 1) + ' out of ' + (Math.floor(file.size / 65536) + 1));
-            reader.readAsArrayBuffer(newFile);
-        }
-    }
-
-    placeRemoteFile = (mouseX: number, mouseY: number, scaleF: number, panX: number, panY: number, url: string) : void =>
-    {
-        console.log('Remote File Placed');
-        let x = scaleF * mouseX + panX;
-        let y = scaleF * mouseY + panY;
-        let width = 200 * scaleF;
-        let height = 200 * scaleF;
-
-        let loc = document.createElement("a");
-        loc.href = url;
-
-        let path = loc.pathname;
-        let fType = path.split('.').pop();
-        let fDesc = '';
-
-        let isImage = false;
-        let self = this;
-
-        var request = new XMLHttpRequest();
-        request.onreadystatechange = function ()
-        {
-            if (request.readyState === 4)
-            {
-                let type = request.getResponseHeader('Content-Type');
-                let size = parseInt(request.getResponseHeader('Content-Length'));
-
-                if(size > 10485760)
-                {
-                    self.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-                }
-                else
-                {
-                    if(type.match(/octete-stream/))
-                    {
-                        self.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
-                    }
-                    else
-                    {
-                        if(type.match(/image/))
-                        {
-                            isImage = true;
-                        }
-
-                        let localId = self.addFile(x, y, width, height, self.userId, isImage, fDesc, fType, fType, 0, undefined, new Date());
-                        self.sendRemoteFile(x, y, width, height, url, localId);
-                    }
-                }
-            }
-        };
-
-        request.open('HEAD', url, true);
-        request.send(null);
-    }
-
-    sendRemoteFile = (posX: number, posY: number, width: number, height: number, url: string, localId: number) : void =>
-    {
-        console.log('Sending Remote File.');
-        let msg: UserRemoteFileMessage = { localId: localId, fileURL: url, x: posX, y: posY, width: width, height: height, fileDesc: '' };
-        this.socket.emit('REMOTE-FILE', msg);
-    }
-
-    resizeFile = (id: number, width: number, height: number) : void =>
-    {
-        let file = this.getUpload(id);
-
-        this.setUploadArea(id, width, height, new Date());
-    }
-
-    sendFileMove = (id: number) : void =>
-    {
-        let file = this.getUpload(this.currFileMove);
-
-        if(file.serverId)
-        {
-            let msg: UserMoveElementMessage = { serverId: file.serverId, x: file.x, y: file.y };
-            this.socket.emit('MOVE-FILE', msg);
-        }
-        else
-        {
-            let msg: UserMoveElementMessage = { serverId: null, x: file.x, y: file.y };
-            let newOp : OperationBufferElement = { type: 'MOVE-FILE', message: msg };
-            file.opBuffer.push(newOp);
-        }
-    }
-
-    sendFileResize = (id: number) : void =>
-    {
-        let file = this.getUpload(this.currFileResize);
-
-        if(file.serverId)
-        {
-            let msg: UserResizeFileMessage = {serverId: file.serverId, width: file.width, height: file.height};
-            this.socket.emit('RESIZE-FILE', msg);
-        }
-        else
-        {
-            let msg: UserResizeFileMessage = { serverId: null, width: file.width, height: file.height };
-            let newOp : OperationBufferElement = { type: 'RESIZE-FILE', message: msg };
-            file.opBuffer.push(newOp);
-        }
-    }
-
-    sendFileRotate = (id: number) : void =>
-    {
-        let file : Upload = this.getUpload(id);
-
-        if(file.serverId)
-        {
-            let msg : UserRotateFileMessage = { serverId: file.serverId, rotation: file.rotation };
-            this.socket.emit('ROTATE-FILE', msg);
-        }
-        else
-        {
-            let msg: UserRotateFileMessage = { serverId: null, rotation: file.rotation };
-            let newOp : OperationBufferElement = { type: 'ROTATE-FILE', message: msg };
-            file.opBuffer.push(newOp);
-        }
-    }
-
-    deleteFile = (id: number) : void =>
-    {
-        let fileBox = this.getUpload(id);
-
-        if(fileBox.serverId)
-        {
-            this.socket.emit('DELETE-FILE', fileBox.serverId);
-        }
-        else
-        {
-            let newOp : OperationBufferElement = { type: 'DELETE-FILE', message: null };
-            fileBox.opBuffer.push(newOp);
-        }
-        this.deleteElement(id);
-    }
-
-    releaseText = (id: number) : void =>
-    {
-        let textBox = this.getText(id);
-
-        this.stopLockText(id);
-        if(textBox.serverId)
-        {
-            let msg : UserReleaseTextMessage = { serverId: textBox.serverId };
-            this.socket.emit('RELEASE-TEXT', msg);
-        }
-        else
-        {
-            let msg: UserReleaseTextMessage = { serverId: null };
-            let newOp : OperationBufferElement = { type: 'RELEASE-TEXT', message: msg };
-            textBox.opBuffer.push(newOp);
-        }
-    }
-
-    sendTextJustified = (id: number) : void =>
-    {
-        let textBox = this.getText(id);
-
-        if(textBox.serverId)
-        {
-            let msg: UserJustifyTextMessage = { serverId: textBox.serverId, newState: !this.viewState.isJustified };
-            this.socket.emit('JUSTIFY-TEXT', msg);
-        }
-        else
-        {
-            let msg: UserJustifyTextMessage = { serverId: null, newState: !this.viewState.isJustified };
-            let newOp : OperationBufferElement = { type: 'JUSTIFY-TEXT', message: msg };
-            textBox.opBuffer.push(newOp);
-        }
-    }
-
-    textEdited = (textbox: WhiteBoardText) : void =>
-    {
-        var buffer : TextOutBufferElement;
-        var editNum: number;
-
-        // This is a new textbox.
-        if(this.textOutBuffer[textbox.id])
-        {
-            buffer = this.textOutBuffer[textbox.id];
-            editNum = buffer.editCount;
-            buffer.editCount++;
-        }
-        else
-        {
-            buffer = {
-                id: textbox.id, x: textbox.x, y: textbox.y, size: textbox.size, width: textbox.width, lastSent: 0,
-                height: textbox.height, editCount: 1, editBuffer: [], justified: textbox.justified, styles: []
-            };
-            buffer.styles = textbox.styles.slice();
-            editNum = 0;
-        }
-
-
-        buffer.editBuffer[editNum] = {num_nodes: textbox.styles.length, nodes: []};
-
-        for(var i = 0; i < textbox.styles.length; i++)
-        {
-            buffer.editBuffer[editNum].nodes.push(
-            {   num: i, text: textbox.styles[i].text, colour: textbox.styles[i].colour,
-                weight: textbox.styles[i].weight, decoration:  textbox.styles[i].decoration, style: textbox.styles[i].style,
-                start: textbox.styles[i].start, end: textbox.styles[i].end, editId: editNum
-            });
-        }
-
-        this.textOutBuffer[textbox.id] = buffer;
-        if(textbox.serverId)
-        {
-            let msg: UserEditTextMessage = {serverId: textbox.serverId, localId: editNum, bufferId: textbox.id, num_nodes: textbox.styles.length};
-            this.socket.emit('EDIT-TEXT', msg);
-        }
-        else
-        {
-            // TODO: Not Sure about this!!!!
-            let msg: UserNewTextMessage = {
-                localId: textbox.id, x: this.textOutBuffer[textbox.id].x, y: this.textOutBuffer[textbox.id].y, size: this.textOutBuffer[textbox.id].size,
-                width: this.textOutBuffer[textbox.id].width, height: this.textOutBuffer[textbox.id].height, justified: this.textOutBuffer[textbox.id].justified
-            };
-            this.socket.emit('TEXTBOX', msg);
-        }
-    }
-
-    resizeText = (id: number, width: number, height: number) : void =>
-    {
-        let textBox = this.getText(id);
-
-        this.setTextArea(id, width, height);
-    }
-
-    sendTextMove = (id: number) : void =>
-    {
-        let tbox = this.getText(this.currTextMove);
-
-        if(tbox.serverId)
-        {
-            let msg: UserMoveElementMessage = { serverId: tbox.serverId, x: tbox.x, y: tbox.y };
-            this.socket.emit('MOVE-TEXT', msg);
-        }
-        else
-        {
-            let msg: UserMoveElementMessage = { serverId: null, x: tbox.x, y: tbox.y };
-            let newOp : OperationBufferElement = { type: 'MOVE-TEXT', message: msg };
-            tbox.opBuffer.push(newOp);
-        }
-    }
-
-    sendTextResize = (id: number) : void =>
-    {
-        let textBox = this.getText(id);
-
-        if(textBox.serverId)
-        {
-            let msg: UserResizeTextMessage = { serverId: textBox.serverId, width: textBox.width, height: textBox.height };
-            this.socket.emit('RESIZE-TEXT', msg);
-        }
-        else
-        {
-            let msg: UserResizeTextMessage = { serverId: null, width: textBox.width, height: textBox.height };
-            let newOp : OperationBufferElement = { type: 'RESIZE-TEXT', message: msg };
-            textBox.opBuffer.push(newOp);
-        }
-    }
-
-    deleteText = (id: number) : void =>
-    {
-        let textBox : WhiteBoardText = this.getText(id);
-
-        if(textBox.serverId)
-        {
-            this.socket.emit('DELETE-TEXT', textBox.serverId);
-        }
-        else
-        {
-            let newOp : OperationBufferElement = { type: 'DELETE-TEXT', message: null };
-            textBox.opBuffer.push(newOp);
-        }
-        this.deleteElement(id);
-    }
-
-    lockText = (id: number) : void =>
-    {
-        let textBox : WhiteBoardText = this.getText(id);
-
-        this.setTextGetLock(id);
-
-        if(textBox.serverId)
-        {
-            let msg: UserLockTextMessage = { serverId:  textBox.serverId };
-            this.socket.emit('LOCK-TEXT', msg);
-        }
-        else
-        {
-            let msg: UserLockTextMessage = { serverId: null };
-            let newOp : OperationBufferElement = { type: 'LOCK-TEXT', message: msg };
-            textBox.opBuffer.push(newOp);
-        }
-    }
-
-    isCurrentStyle = (style : Style) : boolean =>
-    {
-        if(style.colour == this.viewState.colour && style.decoration == this.getDecoration() && style.weight == this.getWeight() && style.style == this.getStyle())
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    findXPos = (textbox: WhiteBoardText, loc: number) : number =>
-    {
-        if(textbox.textNodes.length == 0)
-        {
-            return 0;
-        }
-
-        var i = 1;
-        while(i < textbox.textNodes.length && textbox.textNodes[i].start <= loc)
-        {
-            i++
-        }
-
-        var line = textbox.textNodes[i - 1];
-
-        if(line.styles.length == 0)
-        {
-            return 0;
-        }
-
-        i = 1;
-        while(i < line.styles.length && line.styles[i].locStart + line.start <= loc)
-        {
-            i++
-        }
-
-        var style = line.styles[i - 1];
-
-        if(line.start + style.locStart == loc)
-        {
-            return style.startPos;
-        }
-        else
-        {
-            var currMes = textbox.dist[loc] - textbox.dist[line.start + style.locStart];
-
-            return currMes + style.startPos;
-        }
-    }
-
-    findTextPos = (textbox: WhiteBoardText, x: number, y: number) : number =>
-    {
-        var whitElem  = document.getElementById("whiteBoard-output");
-        var elemRect = whitElem.getBoundingClientRect();
-        var xFind = 0;
-
-        if(y < textbox.y)
-        {
-            return 0;
-        }
-        else
-        {
-            var lineNum = Math.floor(((y - textbox.y) / (1.5 * textbox.size)) + 0.15);
-
-            if(lineNum >= textbox.textNodes.length)
-            {
-                return textbox.text.length;
-            }
-
-            if(!textbox.textNodes[lineNum])
-            {
-                console.log('Line is: ' + lineNum);
-            }
-
-            if(x > textbox.x)
-            {
-                if(x > textbox.x + textbox.width)
-                {
-                    return textbox.textNodes[lineNum].end;
-                }
-                else
-                {
-                    xFind = x - textbox.x;
-                }
-            }
-            else
-            {
-                return textbox.textNodes[lineNum].start;
-            }
-
-            var line = textbox.textNodes[lineNum];
-
-            if(line.styles.length == 0)
-            {
-                return line.start;
-            }
-
-
-            var i = 0;
-            while(i < line.styles.length && xFind > line.styles[i].startPos)
-            {
-                i++;
-            }
-
-            var curr = i - 1;
-            var style = line.styles[i - 1];
-
-
-            i = style.text.length - 1;
-
-            var currMes = textbox.dist[line.start + style.locStart + style.text.length - 1] - textbox.dist[line.start + style.locStart];
-
-            while(i > 0 && style.startPos + currMes > xFind)
-            {
-                i--;
-                currMes = textbox.dist[line.start + style.locStart + i] - textbox.dist[line.start + style.locStart];
-            }
-
-            // i and currMes is now the position to the right of the search point.
-            // We just need to check if left or right is closer then reurn said point.
-            var selPoint;
-
-            if(i < style.text.length - 1)
-            {
-                if(xFind - (style.startPos + currMes) > (style.startPos + textbox.dist[line.start + style.locStart + i + 1] - textbox.dist[line.start + style.locStart]) - xFind)
-                {
-                    selPoint = line.start + style.locStart + i + 1;
-                }
-                else
-                {
-                    selPoint = line.start + style.locStart + i;
-                }
-            }
-            else if(curr + 1 < line.styles.length)
-            {
-
-                if(xFind - (style.startPos + currMes) > line.styles[curr + 1].startPos - xFind)
-                {
-                    selPoint = line.start + line.styles[curr + 1].locStart;
-                }
-                else
-                {
-                    selPoint = line.start + style.locStart + i;
-                }
-            }
-            else
-            {
-                if(xFind - (style.startPos + currMes) > (style.startPos + textbox.dist[line.start + style.locStart + i + 1] - textbox.dist[line.start + style.locStart]) - xFind)
-                {
-                    selPoint = line.start + style.locStart + i + 1;
-                }
-                else
-                {
-                    selPoint = line.start + style.locStart + i;
-                }
-            }
-
-            return selPoint;
-        }
-    }
-
-    findCursorElems = (textbox: WhiteBoardText, cursorStart: number, cursorEnd: number) : void =>
-    {
-        textbox.cursorElems = [];
-
-        if(textbox.textNodes.length == 0)
-        {
-            textbox.cursor = { x: textbox.x, y: textbox.y, height: 1.5 * textbox.size };
-        }
-
-        for(var i = 0; i < textbox.textNodes.length; i++)
-        {
-            var line: TextNode = textbox.textNodes[i];
-            var selStart: number = null;
-            var selEnd: number = null;
-            var startFound: boolean = false;
-            var endFound: boolean = false;
-
-            if(cursorStart >= line.start && cursorStart <= line.end)
-            {
-                if(cursorStart == line.end && !line.endCursor)
-                {
-                    selStart = textbox.width;
-                }
-                else
-                {
-                    for(var j = 0; j < line.styles.length && !startFound; j++)
-                    {
-                        var style: StyleNode = line.styles[j];
-
-                        selStart = 0;
-                        selStart += style.dx;
-
-                        if(cursorStart <= line.start + style.locStart + style.text.length)
-                        {
-                            startFound = true;
-                            selStart += style.startPos + textbox.dist[cursorStart] - textbox.dist[line.start + style.locStart];
-                        }
-                    }
-                }
-            }
-            else if(cursorStart < line.start && cursorEnd > line.start)
-            {
-                selStart = 0;
-            }
-
-            if(cursorEnd > line.start && cursorEnd <= line.end)
-            {
-                if(cursorEnd == line.end && !line.endCursor)
-                {
-                    selEnd = textbox.width;
-                }
-                else
-                {
-                    for(var j = 0; j < line.styles.length && !endFound; j++)
-                    {
-                        var style: StyleNode = line.styles[j];
-
-                        selEnd = 0;
-                        selEnd += style.dx;
-
-                        if(cursorEnd <= line.start + style.locStart + style.text.length)
-                        {
-                            endFound = true;
-                            selEnd += style.startPos + textbox.dist[cursorEnd] - textbox.dist[line.start + style.locStart];
-                        }
-                    }
-                }
-            }
-            else if(cursorEnd >= line.end  && cursorStart <= line.end)
-            {
-                selEnd = textbox.width;
-            }
-
-            if(cursorEnd >= line.start && cursorEnd <= line.end && (this.startLeft || cursorStart == cursorEnd) && line.start != line.end)
-            {
-                if(cursorEnd != line.end || line.endCursor)
-                {
-                    textbox.cursor = { x: textbox.x + selEnd, y: textbox.y + 1.5 * textbox.size * line.lineNum, height: 1.5 * textbox.size };
-                }
-            }
-            else if(cursorStart >= line.start && cursorStart <= line.end && (!this.startLeft || cursorStart == cursorEnd))
-            {
-                if(cursorStart != line.end || line.endCursor)
-                {
-                    textbox.cursor = { x: textbox.x + selStart, y: textbox.y + 1.5 * textbox.size * line.lineNum, height: 1.5 * textbox.size };
-                }
-            }
-
-            if(selStart != null && selEnd != null && cursorStart != cursorEnd)
-            {
-                textbox.cursorElems.push({ x: textbox.x + selStart, y: textbox.y + 1.5 * textbox.size * line.lineNum, width: selEnd - selStart, height: 1.5 * textbox.size });
-            }
-        }
-    }
-
-    calculateLengths = (textbox: WhiteBoardText, start: number, end: number, prevEnd: number) : void =>
-    {
-        var whitElem  = document.getElementById("whiteBoard-output");
-        var tMount: SVGTextElement;
-        var startPoint: number;
-        var styleNode: SVGTSpanElement;
-        var change: number = 0;
-        var style: number = 0;
-        var oldDist: Array<number> = textbox.dist.slice();
-
-        while(style - 1 < textbox.styles.length && textbox.styles[style].end <= start - 2)
-        {
-            style++;
-        }
-
-        if(start > 1)
-        {
-            // Calculate the start point taking into account the kerning.
-            tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            tMount.setAttributeNS(null, "opacity", '0');
-            tMount.setAttributeNS(null, "x", '' + textbox.x);
-            tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-            tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-            whitElem.appendChild(tMount);
-
-            var charLength1;
-            var charLength2;
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 2)));
-            tMount.appendChild(styleNode);
-
-            charLength1 = styleNode.getComputedTextLength();
-
-            if(textbox.styles[style].end <= start - 1)
-            {
-                style++;
-            }
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-            tMount.appendChild(styleNode);
-
-            charLength2 = styleNode.getComputedTextLength();
-
-            startPoint = textbox.dist[start - 1] + tMount.getComputedTextLength() - charLength1 - charLength2;
-
-            whitElem.removeChild(tMount);
-
-            // Calculate the start dist from start point with it's combined length of the previous character
-            tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            tMount.setAttributeNS(null, "opacity", '0');
-            tMount.setAttributeNS(null, "x", '' + textbox.x);
-            tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-            tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-            whitElem.appendChild(tMount);
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-            tMount.appendChild(styleNode);
-
-            if(textbox.styles[style].end <= start)
-            {
-                style++;
-            }
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-            tMount.appendChild(styleNode);
-
-            textbox.dist[start + 1] = startPoint + tMount.getComputedTextLength();
-        }
-        else if(start > 0)
-        {
-            startPoint = 0;
-            if(textbox.styles[style].end <= start - 1)
-            {
-                style++;
-            }
-
-            // Calculate the start dist from start point with it's combined length of the previous character
-            tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            tMount.setAttributeNS(null, "opacity", '0');
-            tMount.setAttributeNS(null, "x", '' + textbox.x);
-            tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-            tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-            whitElem.appendChild(tMount);
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-            tMount.appendChild(styleNode);
-
-            if(textbox.styles[style].end <= start)
-            {
-                style++;
-            }
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-            tMount.appendChild(styleNode);
-
-            textbox.dist[start + 1] = startPoint + tMount.getComputedTextLength();
-        }
-        else
-        {
-            startPoint = 0;
-            style = 0;
-
-            // Just use the very first character, no extra calculation required.
-            tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            tMount.setAttributeNS(null, "opacity", '0');
-            tMount.setAttributeNS(null, "x", '' + textbox.x);
-            tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-            tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-            whitElem.appendChild(tMount);
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-            tMount.appendChild(styleNode);
-
-            textbox.dist[1] = startPoint + tMount.getComputedTextLength();
-        }
-
-
-        for(var i = start + 1; i < end; i++)
-        {
-            if(textbox.styles[style].end <= i)
-            {
-                style++;
-            }
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(i)));
-            tMount.appendChild(styleNode);
-
-            textbox.dist[i + 1] = startPoint + tMount.getComputedTextLength();
-        }
-
-
-        if(end < textbox.text.length)
-        {
-            if(textbox.styles[style].end <= end)
-            {
-                style++;
-            }
-
-            styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-            styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-            styleNode.appendChild(document.createTextNode(textbox.text.charAt(end)));
-            tMount.appendChild(styleNode);
-
-            change = startPoint + tMount.getComputedTextLength() - oldDist[prevEnd + 1];
-
-            for(var i = end; i < textbox.text.length; i++)
-            {
-                textbox.dist[i + 1] = oldDist[i + 1 + prevEnd - end] + change;
-            }
-        }
-        whitElem.removeChild(tMount);
-    }
-
-    calculateTextLines = (textbox: WhiteBoardText) : Array<TextNode> =>
-    {
-        var i: number;
-        var childText = [];
-        var currPos: number = 0;
-        var prevPos: number = 0;
-        var txtStart: number = 0;
-        var isWhiteSpace = true;
-        var dy: number = textbox.size;
-        var ddy: number = 1.5 * textbox.size;
-        var nodeCounter: number;
-        var computedTextLength: number;
-        var wordC: number;
-        var spaceC: number;
-        var line: string;
-        var wordsT: Array<string> = [];
-        var spacesT: Array<string> = [];
-        var startSpace: boolean = true;
-        var currY: number = textbox.y;
-        var lineCount: number = 0;
-
-        if(!textbox.text.length)
-        {
-            return [];
-        }
-
-        for(i = 0; i < textbox.text.length; i++)
-        {
-            if(isWhiteSpace)
-            {
-                if(!textbox.text.charAt(i).match(/\s/))
-                {
-                    if(i > 0)
-                    {
-                        spacesT.push(textbox.text.substring(txtStart, i));
-                        txtStart = i;
-                        isWhiteSpace = false;
-                    }
-                    else
-                    {
-                        startSpace = false;
-                        isWhiteSpace = false;
-                    }
-                }
-            }
-            else
-            {
-                if(textbox.text.charAt(i).match(/\s/))
-                {
-                    wordsT.push(textbox.text.substring(txtStart, i));
-                    txtStart = i;
-                    isWhiteSpace = true;
-                }
-            }
-        }
-
-        if(isWhiteSpace)
-        {
-            spacesT.push(textbox.text.substring(txtStart, i));
-        }
-        else
-        {
-            wordsT.push(textbox.text.substring(txtStart, i));
-        }
-
-        wordC = 0;
-        spaceC = 0;
-        nodeCounter = 0;
-
-        var nLineTrig: boolean;
-
-        while(wordC < wordsT.length || spaceC < spacesT.length)
-        {
-            var lineComplete: boolean = false;
-            var word: string;
-
-            currY += dy;
-            var currLength = 0;
-            var tspanEl : TextNode = {
-                styles: [], x: textbox.x, y: currY, dx: 0, dy: dy, start: prevPos, end: prevPos, endCursor: true,
-                justified: textbox.justified, lineNum: lineCount, text: ''
-            };
-            var progPos = true;
-
-            nLineTrig = false;
-
-            if(startSpace)
-            {
-                var fLine = spacesT[spaceC].indexOf('\n');
-                if(fLine != -1)
-                {
-                    if(spacesT[spaceC].length > 1)
-                    {
-                        if(fLine == 0)
-                        {
-                            nLineTrig = true;
-                            spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(1, spacesT[spaceC].length));
-                            spacesT[spaceC] = spacesT[spaceC].substring(0, 1);
-                        }
-                        else
-                        {
-                            progPos = false;
-                            spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(fLine, spacesT[spaceC].length));
-                            spacesT[spaceC] = spacesT[spaceC].substring(0, fLine);
-                        }
-                    }
-                    else
-                    {
-                        nLineTrig = true;
-                        startSpace = !startSpace;
-                    }
-                }
-
-                if(spaceC >= spacesT.length)
-                {
-                    console.error('ERROR: Space array out of bounds');
-                    return [];
-                }
-
-                word = spacesT[spaceC];
-                spaceC++;
-            }
-            else
-            {
-                if(wordC >= wordsT.length)
-                {
-                    console.error('ERROR: Word array out of bounds');
-                    return [];
-                }
-                word = wordsT[wordC];
-                wordC++;
-            }
-
-            if(nLineTrig)
-            {
-                word = '';
-                lineComplete = true;
-                tspanEl.justified = false;
-                tspanEl.end = currPos;
-                currPos++;
-                prevPos = currPos;
-            }
-
-            computedTextLength = textbox.dist[currPos + word.length] - textbox.dist[currPos];
-
-            if(computedTextLength > textbox.width)
-            {
-                // Find a place that splits it to fit, check for dashes
-                lineComplete = true;
-
-                fDash = word.indexOf('-');
-
-                if(fDash != -1 && computedTextLength > textbox.width)
-                {
-                    // Split the string at dash, use the bit before the dash
-                    var newStr = word.substring(fDash + 1, word.length);
-                    // Insert the new string into the words array after current position
-                    wordsT.splice(wordC, 0, newStr);
-                    word = word.substring(0, fDash + 1);
-                }
-
-                // Work backwards to find the overflow split
-                i = word.length;
-                while(computedTextLength > textbox.width && i > 0)
-                {
-                    computedTextLength = textbox.dist[currPos + word.substring(0, i).length] - textbox.dist[currPos];
-                    i--;
-                }
-
-                // Add to buffer
-                if(computedTextLength <= textbox.width)
-                {
-                    // Insert the new string into the words array after current position
-                    if(startSpace)
-                    {
-                        if(i + 2 < word.length)
-                        {
-                            spacesT.splice(spaceC, 0, word.substring(i + 2, word.length));
-                        }
-                        else
-                        {
-                            startSpace = !startSpace;
-                        }
-                        word = word.substring(0, i + 1);
-                        currPos += word.length;
-                        tspanEl.end = currPos;
-                        prevPos = currPos + 1;
-                    }
-                    else
-                    {
-                        wordsT.splice(wordC, 0, word.substring(i + 1, word.length));
-                        word = word.substring(0, i + 1);
-                        currPos += word.length;
-                        tspanEl.end = currPos;
-                        tspanEl.endCursor = false;
-                        prevPos = currPos;
-                    }
-                }
-                else
-                {
-                    console.error('TEXTBOX TOO SMALL FOR FIRST LETTERS.');
-                }
-            }
-            else
-            {
-                currPos += word.length;
-
-                if(!nLineTrig && progPos)
-                {
-                    startSpace = !startSpace;
-                }
-            }
-
-            line = word;
-            currLength = computedTextLength;
-
-            while(!lineComplete && (wordC < wordsT.length || spaceC < spacesT.length))
-            {
-                // Loop to finish line
-                if(startSpace)
-                {
-                    var fLine = spacesT[spaceC].indexOf('\n');
-                    if(fLine != -1)
-                    {
-                        if(spacesT[spaceC].length > 1)
-                        {
-                            if(fLine == 0)
-                            {
-                                nLineTrig = true;
-                                spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(1, spacesT[spaceC].length));
-                                spacesT[spaceC] = spacesT[spaceC].substring(0, 1);
-                            }
-                            else
-                            {
-                                progPos = false;
-                                spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(fLine, spacesT[spaceC].length));
-                                spacesT[spaceC] = spacesT[spaceC].substring(0, fLine);
-                            }
-                        }
-                        else
-                        {
-                            nLineTrig = true;
-                            startSpace = !startSpace;
-                        }
-                    }
-
-                    word = spacesT[spaceC];
-                }
-                else
-                {
-                    word = wordsT[wordC];
-                }
-
-                if(nLineTrig)
-                {
-                    word = '';
-                    lineComplete = true;
-                    tspanEl.justified = false;
-                    tspanEl.end = currPos;
-                    currPos++;
-                    prevPos = currPos;
-                }
-
-                computedTextLength = currLength + textbox.dist[currPos + word.length] - textbox.dist[currPos];
-
-                if(computedTextLength > textbox.width)
-                {
-                    lineComplete = true;
-
-                    if(startSpace)
-                    {
-                        if(word.length > 1)
-                        {
-                            // Split the space add other to stack
-                            i = word.length - 1;
-                            while(computedTextLength > textbox.width && i > 0)
-                            {
-                                computedTextLength = currLength + textbox.dist[currPos + i] - textbox.dist[currPos];
-                                i--;
-                            }
-
-                            if(computedTextLength <= textbox.width)
-                            {
-                                if(i + 2 < word.length)
-                                {
-                                    var newStr = word.substring(i + 2, word.length);
-                                    // Insert the new string into the words array after current position
-                                    spacesT.splice(spaceC, 0, newStr);
-
-                                    line += word.substring(0, i + 1);
-                                    currPos += word.substring(0, i + 1).length;
-                                    tspanEl.end = currPos;
-                                    currPos++;
-                                    prevPos = currPos;
-                                    spaceC++;
-                                }
-                                else
-                                {
-                                    line += word.substring(0, i + 1);
-
-                                    currPos += word.substring(0, i + 1).length;
-                                    tspanEl.end = currPos;
-                                    currPos++;
-                                    prevPos = currPos;
-                                    startSpace = !startSpace;
-                                    spaceC++;
-                                }
-
-                                currLength = computedTextLength;
-                            }
-                            else
-                            {
-                                computedTextLength = currLength + textbox.dist[currPos + word.length - 1] - textbox.dist[currPos];
-                                tspanEl.end = currPos;
-                                prevPos = currPos + 1;
-                                spacesT[spaceC] = spacesT[spaceC].substring(1, spacesT[spaceC].length);
-                            }
-                        }
-                        else
-                        {
-                            computedTextLength = currLength;
-                            tspanEl.end = currPos;
-                            currPos++;
-                            prevPos = currPos;
-                            startSpace = !startSpace;
-                            spaceC++;
-                        }
-                    }
-                    else
-                    {
-                        // Check for dashes, if there is split check, if good add word and put other in stack
-                        var fDash = word.indexOf('-');
-
-                        if(fDash != -1)
-                        {
-                            computedTextLength = currLength + textbox.dist[currPos + fDash + 1] - textbox.dist[currPos];
-                            //computedTextLength = currLength + this.calculateWordWidth(word.substring(0, fDash + 1), currPos, sizeCheck, textbox.styles);
-
-                            // Check and if fits, split away
-                            if(computedTextLength <= textbox.width)
-                            {
-                                var newStr = word.substring(fDash + 1, word.length);
-                                // Insert the new string into the words array after current position
-                                wordsT.splice(wordC, 0, newStr);
-                                wordC++;
-
-                                line += word.substring(0, fDash + 1);
-
-                                currPos += word.substring(0, fDash + 1).length;
-                                tspanEl.end = currPos;
-                                tspanEl.endCursor = false;
-                                prevPos = currPos;
-
-                                currLength = computedTextLength;
-                            }
-                            else
-                            {
-                                computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
-
-                                line = line.substring(0, line.length - 1);
-
-                                tspanEl.end = currPos;
-                                currPos++;
-                                prevPos = currPos;
-                            }
-                        }
-                        else
-                        {
-                            computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
-
-                            line = line.substring(0, line.length - 1);
-                            tspanEl.end = currPos - 1;
-                            prevPos = currPos;
-                        }
-                    }
-                }
-                else
-                {
-                    line += word;
-                    currPos += word.length;
-
-                    if(nLineTrig)
-                    {
-                        spaceC++;
-                    }
-                    else
-                    {
-                        if(startSpace)
-                        {
-                            spaceC++;
-                        }
-                        else
-                        {
-                            wordC++;
-                        }
-
-                        if(progPos)
-                        {
-                            startSpace = !startSpace;
-                        }
-                    }
-                    currLength = computedTextLength;
-                }
-            }
-
-            tspanEl.end = tspanEl.start + line.length;
-
-            // Once the line is complete / out of stuff split into styles
-            tspanEl.text = line;
-            dy = ddy;
-            nodeCounter = 0;
-
-            if(wordC == wordsT.length && spaceC == spacesT.length)
-            {
-                tspanEl.justified = false;
-            }
-
-            var reqAdjustment = textbox.width - computedTextLength;
-            var numSpaces = tspanEl.text.length - tspanEl.text.replace(/\s/g, "").length;
-            var extraSpace = reqAdjustment / numSpaces;
-            var currStart = 0;
-            var currLoc = 0;
-
-            for(var j = 0; j < textbox.styles.length; j++)
-            {
-                if(textbox.styles[j].start < tspanEl.end && textbox.styles[j].end > tspanEl.start)
-                {
-                    var startPoint = (textbox.styles[j].start < tspanEl.start) ? 0 : (textbox.styles[j].start - tspanEl.start);
-                    var endPoint = (textbox.styles[j].end > tspanEl.end) ? (tspanEl.end - tspanEl.start) : (textbox.styles[j].end - tspanEl.start);
-                    var styleText = tspanEl.text.slice(startPoint, endPoint);
-                    var newStyle: StyleNode;
-                    word = '';
-
-                    for(i = 0; i < styleText.length; i++)
-                    {
-                        if(styleText.charAt(i).match(/\s/))
-                        {
-                            if(word.length > 0)
-                            {
-                                newStyle =
-                                {
-                                    key: nodeCounter, text: word, colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                    decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                };
-
-                                currStart += textbox.dist[tspanEl.start + currLoc + word.length] - textbox.dist[tspanEl.start + currLoc];
-                                currLoc += word.length;
-
-                                word = '';
-                                tspanEl.styles.push(newStyle);
-                                nodeCounter++;
-                            }
-
-
-                            if(tspanEl.justified)
-                            {
-                                newStyle =
-                                {
-                                    key: nodeCounter, text: styleText.charAt(i), colour: textbox.styles[j].colour, dx: extraSpace, locStart: currLoc,
-                                    decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                };
-
-
-                                currStart += extraSpace + textbox.dist[tspanEl.start + currLoc + 1] - textbox.dist[tspanEl.start + currLoc];
-                            }
-                            else
-                            {
-                                newStyle =
-                                {
-                                    key: nodeCounter, text: styleText.charAt(i), colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                    decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                };
-
-
-                                currStart += textbox.dist[tspanEl.start + currLoc + 1] - textbox.dist[tspanEl.start + currLoc];
-                            }
-                            currLoc += 1;
-
-                            tspanEl.styles.push(newStyle);
-                            nodeCounter++;
-                        }
-                        else
-                        {
-                            word += styleText.charAt(i);
-
-                            if(i == styleText.length - 1)
-                            {
-                                newStyle =
-                                {
-                                    key: nodeCounter, text: word, colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                    decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                };
-
-                                currStart += textbox.dist[tspanEl.start + currLoc + word.length] - textbox.dist[tspanEl.start + currLoc];
-                                currLoc += word.length;
-
-                                tspanEl.styles.push(newStyle);
-                                nodeCounter++;
-                            }
-                        }
-                    }
-
-                }
-            }
-
-            childText.push(tspanEl);
-            lineCount++;
-        }
-
-        if(nLineTrig)
-        {
-            tspanEl = {
-                styles: [], x: textbox.x, y: currY, dx: 0, dy: dy, start: prevPos, end: prevPos, endCursor: true,
-                justified: false, lineNum: lineCount, text: ''
-            };
-
-            lineCount++;
-            childText.push(tspanEl);
-        }
-
-        if(lineCount * 1.5 * textbox.size > textbox.height)
-        {
-            this.resizeText(textbox.id, textbox.width, lineCount * 1.5 * textbox.size);
-            this.sendTextResize(textbox.id);
-        }
-
-        return childText;
-    }
-
-    findXHelper = (textItem: WhiteBoardText, isUp: boolean, relative: number) : number =>
-    {
-        let i: number;
-        let line: TextNode;
-
-        if(isUp)
-        {
-            i = 1;
-            while(i < textItem.textNodes.length && relative > textItem.textNodes[i].end)
-            {
-                i++;
-            }
-            line = textItem.textNodes[i - 1];
-        }
-        else
-        {
-            i = 0;
-            while(i < textItem.textNodes.length - 1 && relative > textItem.textNodes[i].end)
-            {
-                i++;
-            }
-            line = textItem.textNodes[i + 1];
-        }
-
-        i = 0;
-        while(i < line.styles.length && this.textIdealX >= line.styles[i].startPos)
-        {
-            i++;
-        }
-        let curr = i - 1;
-        let style: StyleNode = line.styles[i - 1];
-
-
-        let currMes = textItem.dist[line.start + style.locStart + style.text.length - 1] - textItem.dist[line.start + style.locStart];
-        i = style.text.length - 1;
-        while(i > 0 && style.startPos + currMes > this.textIdealX)
-        {
-            i--;
-            currMes = textItem.dist[line.start + style.locStart + i] - textItem.dist[line.start + style.locStart];
-        }
-
-        // i and currMes is now the position to the right of the search point.
-        // We just need to check if left or right is closer then reurn said point.
-        if(i < style.text.length - 1)
-        {
-            if(this.textIdealX - (style.startPos + currMes) > (style.startPos + textItem.dist[line.start + style.locStart + i + 1] - textItem.dist[line.start + style.locStart]) - this.textIdealX)
-            {
-                return line.start + style.locStart + i + 1;
-            }
-            else
-            {
-                return line.start + style.locStart + i;
-            }
-        }
-        else if(curr + 1 < line.styles.length)
-        {
-
-            if(this.textIdealX - (style.startPos + currMes) > line.styles[curr + 1].startPos - this.textIdealX)
-            {
-                return line.start + line.styles[curr + 1].locStart;
-            }
-            else
-            {
-                return line.start + style.locStart + i;
-            }
-        }
-        else
-        {
-            if(this.textIdealX - (style.startPos + currMes) > (style.startPos + textItem.dist[line.start + style.locStart + i + 1] - textItem.dist[line.start + style.locStart]) - this.textIdealX)
-            {
-                return line.start + style.locStart + i + 1;
-            }
-            else
-            {
-                return line.start + style.locStart + i;
-            }
-        }
-    }
-
-    insertText = (textItem: WhiteBoardText, start: number, end: number, text: string) : void =>
-    {
-        let isNew = true;
-        let textStart = textItem.text.slice(0, start);
-        let textEnd = textItem.text.slice(end, textItem.text.length);
-        let styles = [];
-
-        let fullText = textStart + textEnd;
-
-        this.startTextWait(this.currTextEdit);
-
-        for(i = 0; i < textItem.styles.length; i++)
-        {
-            let sty = textItem.styles[i];
-
-            if(sty.start >= start)
-            {
-                if(sty.start >= end)
-                {
-                    // Completely after selection
-                    if(styles.length > 0 && styles[styles.length - 1].colour == sty.colour
-                        && styles[styles.length - 1].decoration == sty.decoration
-                        && styles[styles.length - 1].weight == sty.weight
-                        && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - sty.start <= 200)
-                    {
-                        // If this is the same as the previous style and are length compatible then combine
-                        styles[styles.length - 1].end += sty.end - sty.start;
-                        styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
-                    }
-                    else
-                    {
-                        sty.start -= end - start;
-                        sty.end -= end - start;
-                        sty.text = fullText.slice(sty.start, sty.end);
-                        styles.push({start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text});
-                    }
-                }
-                else
-                {
-                    if(sty.end > end)
-                    {
-                        // End stradle
-                        if(styles.length > 0 && styles[styles.length - 1].colour == sty.colour
-                            && styles[styles.length - 1].decoration == sty.decoration
-                            && styles[styles.length - 1].weight == sty.weight
-                            && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - end <= 200)
-                        {
-                            // If this is the same as the previous style and are length compatible then combine
-                            styles[styles.length - 1].end += sty.end - end;
-                            styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
-                        }
-                        else
-                        {
-                            sty.end +=  start - end;
-                            sty.start = start;
-                            sty.text = fullText.slice(sty.start, sty.end);
-                            styles.push({start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text});
-                        }
-
-                    }
-
-                    // Otherwise we don't push it as it is removed by the selection.
-                }
-            }
-            else
-            {
-                if(sty.end > start)
-                {
-                    if(sty.end > end)
-                    {
-                        // Selection within style
-                        sty.end -= end - start;
-                        sty.text = fullText.slice(sty.start, sty.end);
-                        styles.push({start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text});
-                    }
-                    else
-                    {
-                        // Start stradle
-                        sty.end = start;
-                        sty.text = fullText.slice(sty.start, sty.end);
-                        styles.push({start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text});
-                    }
-                }
-                else
-                {
-                    // Completely before selection
-                    sty.text = fullText.slice(sty.start, sty.end);
-                    styles.push({start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text});
-                }
-            }
-        }
-
-        textItem.text = textStart + text + textEnd;
-
-        for(var i = 0; text.length > 0 && i < styles.length; i++)
-        {
-            if(styles[i].end > start)
-            {
-                if(styles[i].start >= start)
-                {
-                    // This style is all after the selected text.
-                    if(styles[i].start == start && this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200)
-                    {
-                        isNew = false;
-                        styles[i].start = start;
-                    }
-                    else
-                    {
-                        styles[i].start += text.length;
-                    }
-
-                    styles[i].end += text.length;
-                }
-                else if(styles[i].end >= start)
-                {
-                    // The cursor selection is completely within the style.
-                    if(this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200)
-                    {
-                        isNew = false;
-                        styles[i].end += text.length;
-                    }
-                    else
-                    {
-                        // Split this style ready for the new style.
-                        var newSplit =
-                        {
-                            start: start + text.length, end: styles[i].end + text.length, decoration: styles[i].decoration,
-                            weight: styles[i].weight, style: styles[i].style, colour: styles[i].colour
-                        };
-
-                        styles[i].end = start;
-                        styles.splice(i + 1, 0, newSplit);
-                        i++;
-                    }
-                }
-            }
-            else if(styles[i].end == start)
-            {
-                if(this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200)
-                {
-                    isNew = false;
-                    styles[i].end = start + text.length;
-                }
-            }
-
-            styles[i].text = textItem.text.slice(styles[i].start, styles[i].end);
-        }
-
-        if(isNew && text.length > 0)
-        {
-            i = 0;
-
-            while(i < styles.length && styles[i].end <= start)
-            {
-                i++
-            }
-
-            var newStyle =
-            {
-                start: start, end: start + text.length, decoration: this.getDecoration(),
-                weight: this.getWeight(), style: this.getStyle(), colour: this.viewState.colour,
-                text: textItem.text.slice(start, start + text.length)
-            };
-
-            styles.splice(i, 0, newStyle);
-        }
-
-        textItem.styles = styles;
-
-        textItem = this.newEdit(textItem);
-
-        if(text.length == 0)
-        {
-            if(start > 0)
-            {
-                this.calculateLengths(textItem, start - 1, start, end);
-            }
-            else if(textItem.text.length > 0)
-            {
-                this.calculateLengths(textItem, start, end, end + 1);
-            }
-        }
-        else
-        {
-            this.calculateLengths(textItem, start, start + text.length, end);
-        }
-
-        this.updateText(textItem);
-    }
-
-    completeEdit = (textId: number, userId: number, editId: number) : void =>
-    {
-        var textItem: WhiteBoardText;
-        var fullText = '';
-        var localId = this.textDict[textId];
-        var editData = this.textInBuffer[textId].editBuffer[userId][editId];
-
-        textItem = this.getText(localId);
-        textItem.styles = [];
-
-        for(var i = 0; i < editData.nodes.length; i++)
-        {
-            textItem.styles[editData.nodes[i].num] = editData.nodes[i];
-        }
-
-        for(var i = 0; i < textItem.styles.length; i++)
-        {
-            fullText += textItem.styles[i].text;
-        }
-
-        textItem.text = fullText;
-
-        this.startTextWait(localId);
-        this.calculateLengths(textItem, 0, fullText.length, 0);
-        this.updateText(textItem);
-    }
-
-    createCurveText = (curve: Array<Point>) : string =>
-    {
-        var param =     "M" + curve[0].x + "," + curve[0].y;
-        param = param +" C" + curve[1].x + "," + curve[1].y;
-        param = param + " " + curve[2].x + "," + curve[2].y;
-        param = param + " " + curve[3].x + "," + curve[3].y;
-
-        for(var i = 4; i + 2 < curve.length; i += 3)
-        {
-            param = param +" C" + curve[i + 0].x + "," + curve[i + 0].y;
-            param = param + " " + curve[i + 1].x + "," + curve[i + 1].y;
-            param = param + " " + curve[i + 2].x + "," + curve[i + 2].y;
-        }
-
-        return param;
     }
 
     infoMessageTimeout = (id: number, self) : void =>
@@ -3841,7 +1939,7 @@ class WhiteBoardController
         }
     }
 
-    compareUpdateTime = (elem1: DisplayElement, elem2: DisplayElement) : number =>
+    compareUpdateTime = (elem1: ComponentViewState, elem2: ComponentViewState) : number =>
     {
         if(elem1.updateTime.getTime() > elem2.updateTime.getTime())
         {
@@ -3855,6 +1953,11 @@ class WhiteBoardController
         {
             return 0;
         }
+    }
+
+    sendNewElement = (msg: UserNewElementMessage) : void =>
+    {
+        this.socket.emit('NEW-ELEMENT', msg);
     }
 
     /***********************************************************************************************************************************************************
@@ -3876,546 +1979,127 @@ class WhiteBoardController
 
         });
 
-        this.socket.on('CURVE', function(data: ServerNewCurveMessage)
+        this.socket.on('NEW-ELEMENT', function(data: ServerMessageContainer)
         {
-            console.log('Recieved curve ID:' + data.serverId);
-            if(!self.curveDict[data.serverId] && !self.curveInBuffer[data.serverId])
+            if(self.elementDict[data.serverId] == undefined || self.elementDict[data.serverId] == null)
             {
-                // Set up the buffers to recieve data.
-                self.curveInBuffer[data.serverId] = {
-                    serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0, curveSet: new Array,
-                    colour: data.colour, updateTime: data.editTime, x: data.x, y: data.y, width: data.width, height: data.height
-                };
-
-                clearInterval(self.curveInTimeouts[data.serverId]);
-                self.curveInTimeouts[data.serverId] = setInterval((id) =>
+                let localId = self.boardElems.length;
+                let callbacks: ElementCallbacks =
                 {
-                    for(var j = 0; j < self.curveInBuffer[id].num_points; j++)
+                    sendServerMsg: ((id: number, type: string) =>
+                    { return (msg: UserMessage) => { self.sendMessage(id, type, msg) }; })(localId, data.type),
+                    createAlert: (header: string, message: string) => {},
+                    createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
+                    { return self.addInfoMessage(x, y, width, height, header, message); },
+                    removeInfo: (id: number) => { self.removeInfoMessage(id); },
+                    updateBoardView: ((id: number) =>
+                    { return (newView: ComponentViewState) => { self.setElementView(id, newView); }; })(localId),
+                    getAudioStream: () => { return self.getAudioStream(); },
+                    getVideoStream: () => { return self.getVideoStream(); }
+                }
+                let creationArg: CreationData = { id: localId, userId: data.userId, callbacks: callbacks, serverMsg: data.payload, serverId: data.serverId };
+                self.boardElems[localId] = components.get(data.type).Element.createElement(creationArg);
+                self.elementDict[data.serverId] = localId;
+
+                self.setElementView(self.boardElems[localId].id, self.boardElems[localId].getCurrentViewState());
+            }
+        });
+
+        this.socket.on('ELEMENT-ID', function(data: ServerIdMessage)
+        {
+            self.elementDict[data.serverId] = data.localId;
+            let elem = self.boardElems[data.localId];
+            let retVal = elem.setServerId(data.serverId);
+
+            self.handleElementMessages(elem.id, elem.type, retVal);
+        });
+
+        this.socket.on('MSG-COMPONENT', function(data: ServerMessageContainer)
+        {
+            if(self.elementDict[data.serverId] != undefined && self.elementDict[data.serverId] != null)
+            {
+                let elem = self.getBoardElement(self.elementDict[data.serverId])
+                if(elem.type == data.type)
+                {
+                    let retVal = elem.handleServerMessage(data.payload);
+
+                    if(retVal.wasEdit)
                     {
-                        if(!self.curveInBuffer[id].curveSet[j])
+                        self.handleRemoteEdit(elem.id);
+                    }
+
+                    self.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    self.setElementView(elem.id, retVal.newView);
+                    self.handleInfoMessage(retVal.infoMessage);
+                    self.handleAlertMessage(retVal.alertMessage);
+
+                    if(retVal.wasDelete)
+                    {
+                        self.deleteElement(elem.id);
+
+                        // Remove from current selection
+                        if(self.currSelect.indexOf(elem.id))
                         {
-                            console.log('Sending Missing message.');
-                            var msg : UserMissingCurveMessage = {serverId: id, seq_num: j};
-                            self.socket.emit('MISSING-CURVE', msg);
+                            self.currSelect.splice(self.currSelect.indexOf(elem.id), 1);
+                        }
+
+                        if(self.currentHover == elem.id)
+                        {
+                            clearTimeout(elem.hoverTimer);
+                            self.removeHoverInfo(self.currentHover);
+                        }
+
+                        for(let i = 0; i < self.operationStack.length; i++)
+                        {
+                            if(self.operationStack[i].ids.indexOf(elem.id) != -1)
+                            {
+                                console.log('Element in this set.');
+                                if(self.operationStack[i].ids.length == 1)
+                                {
+                                    if(i <= self.operationPos)
+                                    {
+                                        self.operationPos--;
+                                    }
+                                    // Decrement i to account fot the removal of this item.
+                                    self.operationStack.splice(i--, 1);
+                                }
+                                else
+                                {
+                                    console.log('This should work.');
+                                    // Remove the deleted item from the selection.
+                                    self.operationStack[i].ids.splice(self.operationStack[i].ids.indexOf(elem.id), 1);
+
+                                    // Replace operation with one that will just select the remaining items.
+                                    let newOp: WhiteBoardOperation =
+                                    {
+                                        ids: self.operationStack[i].ids,
+                                        undos: [((elemIds) =>
+                                        {
+                                            return () => { self.selectGroup(elemIds); return null; };
+                                        })(self.operationStack[i].ids.slice())],
+                                        redos: [((elemIds) =>
+                                        {
+                                            return () => { self.selectGroup(elemIds); return null; };
+                                        })(self.operationStack[i].ids.slice())]
+                                    };
+
+                                    self.operationStack.splice(i, 1, newOp);
+                                }
+                            }
                         }
                     }
-                }, 30000, data.serverId);
-            }
-        });
-        this.socket.on('POINT', function(data: ServerNewPointMessage)
-        {
-            var buffer = self.curveInBuffer[data.serverId];
-            // Make sure we know about this curve.
-            if(buffer && buffer.num_recieved != buffer.num_points)
-            {
-                if(!buffer.curveSet[data.num])
-                {
-                    buffer.curveSet[data.num] = {x: data.x, y: data.y};
-                    buffer.num_recieved++;
-                }
-
-                if(buffer.num_recieved == buffer.num_points)
-                {
-                    clearInterval(self.curveInTimeouts[data.serverId]);
-
-                    self.addCurve(buffer.x, buffer.y, buffer.width, buffer.height, buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
-
-                    self.curveInBuffer[data.serverId] = null;
-                }
-            }
-            else
-            {
-                clearInterval(self.curveInTimeouts[data.serverId]);
-
-                // Request curve data.
-                self.socket.emit('UNKNOWN-CURVE', data.serverId);
-            }
-        });
-        this.socket.on('IGNORE-CURVE', function(curveId: number)
-        {
-            clearInterval(self.curveInTimeouts[curveId]);
-        });
-        this.socket.on('CURVEID', function(data: ServerCurveIdMessage)
-        {
-            self.curveOutBuffer[data.localId].serverId = data.serverId;
-
-            clearInterval(self.curveOutTimeouts[data.localId]);
-
-            let curveItem = self.getCurve(data.localId);
-
-            curveItem.serverId = data.serverId;
-            self.curveDict[data.serverId] = data.localId
-
-            // Send the points for this curve.
-            for(let i = 0; i < self.curveOutBuffer[data.localId].curveSet.length; i++)
-            {
-                let curve = self.curveOutBuffer[data.localId].curveSet[i];
-                let msg : UserNewPointMessage = {serverId: data.serverId, num: i, x: curve.x, y: curve.y};
-                self.socket.emit('POINT', msg);
-            }
-        });
-        this.socket.on('CURVE-COMPLETE', function(serverId: number)
-        {
-            let curve: Curve = self.getCurve(self.curveDict[serverId]);
-
-            while(curve.opBuffer.length > 0)
-            {
-                let op = curve.opBuffer.shift();
-
-                if(op.message == null)
-                {
-                    self.socket.emit(op.type, serverId);
                 }
                 else
                 {
-                    let msg = {};
-
-                    Object.assign(msg, op.message, { serverId: serverId });
-                    self.socket.emit(op.type, msg);
+                    console.error('Received bad element message.');
                 }
             }
-        });
-        this.socket.on('MISSED-CURVE', function(data: ServerMissedPointMessage)
-        {
-            // The server has not recieced this point, find it and send it.
-            let curve;
-
-            for(let i = 0; i < self.curveOutBuffer.length; i++)
+            else if(data.type && data.serverId)
             {
-                if(self.curveOutBuffer[i].serverId == data.serverId)
-                {
-                    curve  = self.curveOutBuffer[i].curveSet[data.num];
-                }
+                let msg: UserUnknownElement = { type: data.type, id: data.serverId };
+                console.log('Unknown element. ID: ' + data.serverId);
+                self.socket.emit('UNKNOWN-ELEMENT', msg);
             }
-            let msg : UserNewPointMessage = {serverId: data.serverId, num: data.num, x: curve.x, y: curve.y};
-            self.socket.emit('POINT', msg);
-        });
-        this.socket.on('DROPPED-CURVE', function(serverId: number)
-        {
-            clearInterval(self.curveInTimeouts[serverId]);
-            self.curveInBuffer[serverId] = null;
-        });
-        this.socket.on('MOVE-CURVE', function(data: ServerMoveElementMessage)
-        {
-            let localId = self.curveDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-CURVE', data.serverId);
-            }
-            else
-            {
-                let curve: Curve =  self.getCurve(localId);
-                self.moveCurve(localId, data.x - curve.x, data.y - curve.y, data.editTime);
-            }
-        });
-        this.socket.on('DELETE-CURVE', function(serverId: number)
-        {
-            let localId = self.curveDict[serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-CURVE', serverId);
-            }
-            else
-            {
-                self.deleteElement(localId);
-            }
-        });
-        this.socket.on('TEXTBOX', function(data: ServerNewTextboxMessage)
-        {
-            // Set up the buffers to recieve data.
-            if(!self.textInBuffer[data.serverId])
-            {
-                self.textInBuffer[data.serverId] = {
-                    x: data.x, y: data.y, width: data.width, height: data.height, user: data.userId,
-                    editLock: data.editLock, styles: [], size: data.size, justified: data.justified, editBuffer: []
-                };
-
-                let localId = self.addTextbox(data.x, data.y, data.width, data.height, data.size, data.justified, data.userId, data.editLock, data.editTime, data.serverId);
-                self.textDict[data.serverId] = localId;
-            }
-        });
-        this.socket.on('STYLENODE', function(data: ServerStyleNodeMessage)
-        {
-            if(!self.textInBuffer[data.serverId])
-            {
-                console.log('STYLENODE: Unkown text, ID: ' + data.serverId);
-                console.log(data);
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                if(self.textInBuffer[data.serverId].editBuffer[data.userId])
-                {
-                    if(self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId])
-                    {
-                        let buffer = self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId];
-                        buffer.nodes.push(data);
-                        if(buffer.nodes.length == buffer.num_nodes)
-                        {
-                            self.completeEdit(data.serverId, data.userId, data.editId);
-                        }
-                    }
-                    else
-                    {
-                        console.log('STYLENODE: Unkown edit, ID: ' + data.editId + ' text ID: ' + data.serverId);
-                        self.socket.emit('UNKNOWN-EDIT', data.editId);
-                    }
-                }
-                else
-                {
-                    // TODO:
-                    console.log('WOAH BUDDY! User ID: ' + data.userId);
-                }
-            }
-        });
-        this.socket.on('TEXTID', function(data: ServerTextIdMessage)
-        {
-            // TODO: Send latest edit. Just use completeEdit
-
-            let textBox: WhiteBoardText = self.getText(data.localId);
-
-            textBox.serverId = data.serverId;
-            self.textDict[data.serverId] = data.localId;
-
-            while(textBox.opBuffer.length > 0)
-            {
-                let op = textBox.opBuffer.shift();
-
-                if(op.message == null)
-                {
-                    self.socket.emit(op.type, data.serverId);
-                }
-                else
-                {
-                    let msg = {};
-
-                    Object.assign(msg, op.message, { serverId: data.serverId });
-                    self.socket.emit(op.type, msg);
-                }
-            }
-        });
-        this.socket.on('LOCK-TEXT', function(data: ServerLockTextMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                self.setTextLock(localId, data.userId);
-            }
-        });
-        this.socket.on('LOCKID-TEXT', function(data: ServerLockIdMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                if(self.gettingLock != -1 && self.getText(self.gettingLock).serverId == data.serverId)
-                {
-                    self.setTextEdit(localId);
-                }
-                else
-                {
-                    let msg: UserReleaseTextMessage = {serverId: data.serverId};
-                    self.socket.emit('RELEASE-TEXT', msg);
-                }
-            }
-        });
-        this.socket.on('EDITID-TEXT', function(data: ServerEditIdMessage)
-        {
-            let buffer = self.textOutBuffer;
-
-            if(data.localId > buffer[data.bufferId].lastSent || !buffer[data.bufferId].lastSent)
-            {
-                buffer[data.bufferId].lastSent = data.localId;
-                for(let i = 0; i < buffer[data.bufferId].editBuffer[data.localId].nodes.length; i++)
-                {
-                    buffer[data.bufferId].editBuffer[data.localId].nodes[i].editId = data.editId;
-                    let node = buffer[data.bufferId].editBuffer[data.localId].nodes[i];
-
-                    let msg: UserStyleNodeMessage = {
-                        editId: node.editId, num: node.num, start: node.start, end: node.end, text: node.text, weight: node.weight, style: node.style,
-                        decoration: node.decoration, colour: node.colour
-                    };
-                    self.socket.emit('STYLENODE', msg);
-                }
-            }
-
-        });
-        this.socket.on('FAILED-TEXT', function(data)
-        {
-            // TODO:
-        });
-        this.socket.on('REFUSED-TEXT', function(data)
-        {
-            // TODO:
-        });
-        this.socket.on('RELEASE-TEXT', function(data: ServerReleaseTextMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                self.setTextUnLock(localId);
-            }
-        });
-        this.socket.on('EDIT-TEXT', function(data: ServerEditTextMessage)
-        {
-            if(!self.textInBuffer[data.serverId])
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                if(!self.textInBuffer[data.serverId].editBuffer[data.userId])
-                {
-                    self.textInBuffer[data.serverId].editBuffer[data.userId] = [];
-                }
-
-                self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId] = {num_nodes: data.num_nodes, nodes: []};
-            }
-
-        });
-        this.socket.on('MOVE-TEXT', function(data: ServerMoveElementMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                self.moveTextbox(localId, false, data.x, data.y, data.editTime);
-            }
-        });
-        this.socket.on('JUSTIFY-TEXT', function(data: ServerJustifyTextMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                self.setTextJustified(data.serverId, data.newState);
-            }
-        });
-        this.socket.on('RESIZE-TEXT', function(data: ServerResizeTextMessage)
-        {
-            let localId = self.textDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', data.serverId);
-            }
-            else
-            {
-                self.setTextArea(localId, data.width, data.height);
-            }
-        });
-        this.socket.on('DELETE-TEXT', function(serverId: number)
-        {
-            let localId = self.textDict[serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-TEXT', serverId);
-            }
-            else
-            {
-                self.deleteElement(localId);
-            }
-        });
-        this.socket.on('IGNORE-TEXT', function(serverId: number)
-        {
-            //clearInterval(self.textInTimeouts[serverId]);
-        });
-        this.socket.on('DROPPED-TEXT', function(data)
-        {
-            // TODO: We need to stop trying to get it.
-        });
-        this.socket.on('MISSED-TEXT', function(data: ServerMissedTextMessage)
-        {
-            // TODO:
-        });
-        this.socket.on('HIGHLIGHT', function(data: ServerHighLightMessage)
-        {
-            if(self.hilightDict[data.userId])
-            {
-                self.deleteElement(self.hilightDict[data.userId]);
-                self.hilightDict[data.userId] = null;
-            }
-
-            let localId = self.addHighlight(data.x, data.y, data.width, data.height, data.userId, data.colour);
-            self.hilightDict[data.userId] = localId;
-        });
-        this.socket.on('CLEAR-HIGHLIGHT', function(userId: number)
-        {
-            if(self.hilightDict[userId])
-            {
-                self.deleteElement(self.hilightDict[userId]);
-                self.hilightDict[userId] = null;
-            }
-        });
-        this.socket.on('FILE-START', function(data: ServerNewUploadMessage)
-        {
-            console.log('Recieved File Start.');
-            console.log('File type is: ' + data.fileType);
-
-            let isImage = data.fileType.split('/')[0] == 'image' ? true : false;
-
-            let localId;
-
-            if(data.url)
-            {
-                console.log('Adding completed file.');
-                localId = self.addFile(data.x, data.y, data.width, data.height, data.userId, isImage, data.fileDesc, data.fileType, data.extension, data.rotation, data.url, data.editTime, data.serverId);
-            }
-            else
-            {
-                localId = self.addFile(data.x, data.y, data.width, data.height, data.userId, isImage, data.fileDesc, data.fileType, data.extension, data.rotation, undefined, data.editTime, data.serverId);
-            }
-
-            console.log('Logging file in dictionary, ServerID: ' + data.serverId + ' LocalID: ' + localId);
-            self.uploadDict[data.serverId] = localId;
-        });
-        this.socket.on('FILEID', function(data: ServerUploadIdMessage)
-        {
-            console.log('FILEID Received.');
-            let file: Upload = self.getUpload(data.localId);
-
-            self.uploadDict[data.serverId] = data.localId;
-            file.serverId = data.serverId;
-
-            while(file.opBuffer.length > 0)
-            {
-                let op = file.opBuffer.shift();
-
-                if(op.message == null)
-                {
-                    self.socket.emit(op.type, data.serverId);
-                }
-                else
-                {
-                    let msg = {};
-
-                    Object.assign(msg, op.message, { serverId: data.serverId });
-                    self.socket.emit(op.type, msg);
-                }
-            }
-        });
-        this.socket.on('FILE-DATA', function(data: ServerUploadDataMessage)
-        {
-            console.log('Received Request for more file data.');
-            self.sendFileData(data.serverId, data.place, data.percent);
-        });
-        this.socket.on('FILE-DONE', function(data: ServerUploadEndMessage)
-        {
-            console.log('Received File Done.');
-            let localId = self.uploadDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', data.serverId);
-            }
-            else
-            {
-                self.setUploadComplete(localId, data.fileURL);
-            }
-        });
-        this.socket.on('MOVE-FILE', function(data: ServerMoveElementMessage)
-        {
-            console.log('Recieved move file. ServerID: ' + data.serverId);
-            let localId = self.uploadDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', data.serverId);
-            }
-            else
-            {
-                self.moveUpload(localId, false, data.x, data.y, data.editTime);
-            }
-
-        });
-        this.socket.on('RESIZE-FILE', function(data: ServerResizeFileMessage)
-        {
-            console.log('Recieved resize file.');
-            let localId = self.uploadDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', data.serverId);
-            }
-            else
-            {
-                self.setUploadArea(localId, data.width, data.height, data.editTime);
-            }
-        });
-        this.socket.on('ROTATE-FILE', function(data: ServerRotateFileMessage)
-        {
-            console.log('Recieved rotate file.');
-            let localId = self.uploadDict[data.serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', data.serverId);
-            }
-            else
-            {
-                self.setUploadRotation(localId, data.rotation);
-            }
-        });
-        this.socket.on('DELETE-FILE', function(serverId: number)
-        {
-            var localId = self.uploadDict[serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', serverId);
-            }
-            else
-            {
-                self.deleteElement(localId);
-            }
-        });
-        this.socket.on('ABANDON-FILE', function(serverId: number)
-        {
-            var localId = self.uploadDict[serverId];
-
-            if(localId == null || localId == undefined)
-            {
-                self.socket.emit('UNKNOWN-FILE', serverId);
-            }
-            else
-            {
-                self.deleteElement(localId);
-            }
-        });
-        this.socket.on('FILE-OVERSIZE', function(localId: number)
-        {
-            self.deleteElement(localId);
-            self.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-        });
-        this.socket.on('FILE-BADTYPE', function(localId: number)
-        {
-            self.deleteElement(localId);
-            self.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
         });
         this.socket.on('ERROR', function(message: string)
         {
@@ -4433,120 +2117,28 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    modeChange = (newMode: number) : void =>
+    modeChange = (newMode: string) : void =>
     {
         var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         var context  = whitElem.getContext('2d');
         context.clearRect(0, 0, whitElem.width, whitElem.height);
-        this.isWriting = false;
 
-        this.clearHighlight();
-
-        if(this.currTextEdit > -1)
+        for(let i = 0; i < this.currSelect.length; i++)
         {
-            var textBox = this.getText(this.currTextEdit);
-            var lineCount = textBox.textNodes.length;
+            let elem = this.getBoardElement(this.currSelect[i]);
 
-            if(lineCount == 0)
-            {
-                lineCount = 1;
-            }
-
-            if(lineCount * 1.5 * textBox.size < textBox.height)
-            {
-                this.resizeText(this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                this.sendTextResize(this.currTextEdit);
-            }
-
-            this.releaseText(this.currTextEdit);
-        }
-        else if(this.gettingLock > -1)
-        {
-            this.releaseText(this.gettingLock);
+            let retVal = elem.handleDeselect();
+            this.setElementView(elem.id, retVal);
         }
 
+        this.currSelect = [];
         this.setMode(newMode);
     }
 
-    sizeChange = (newSize: number) : void =>
+    changeEraseSize = (newSize: number) : void =>
     {
-        this.setSize(newSize);
-    }
-
-    styleChange = () : void =>
-    {
-        if(this.currTextEdit != -1 && this.cursorStart != this.cursorEnd)
-        {
-            let textItem: WhiteBoardText = this.getText(this.currTextEdit);
-
-            let text = textItem.text.substring(this.cursorStart, this.cursorEnd);
-
-            this.insertText(textItem, this.cursorStart, this.cursorEnd, text);
-        }
-    }
-
-    colourChange = (newColour: string) : void =>
-    {
-        this.setColour(newColour);
-        this.styleChange();
-    }
-
-    boldChange = (newState: boolean) : void =>
-    {
-        this.setIsBold(newState);
-        this.styleChange();
-    }
-
-    italicChange = (newState: boolean) : void =>
-    {
-        this.setIsItalic(newState);
-        this.styleChange();
-    }
-
-    underlineChange = (newState: boolean) : void =>
-    {
-        if(newState)
-        {
-            this.setIsOline(false);
-            this.setIsTline(false);
-        }
-
-        this.setIsUline(newState);
-        this.styleChange();
-    }
-
-    overlineChange = (newState: boolean) : void =>
-    {
-        if(newState)
-        {
-            this.setIsUline(false);
-            this.setIsTline(false);
-        }
-
-        this.setIsOline(newState);
-        this.styleChange();
-    }
-
-    throughlineChange = (newState: boolean) : void =>
-    {
-        if(newState)
-        {
-            this.setIsOline(false);
-            this.setIsUline(false);
-        }
-
-        this.setIsTline(newState);
-        this.styleChange();
-    }
-
-    justifiedChange = (newState: boolean) : void =>
-    {
-        this.setJustified(newState);
-
-        if(this.currTextEdit != -1)
-        {
-            this.setTextJustified(this.currTextEdit, !this.viewState.isJustified);
-        }
+        let newView = Object.assign({}, this.viewState, { eraseSize: newSize });
+        this.updateView(newView);
     }
 
     elementMouseOver = (id: number, e: MouseEvent) : void =>
@@ -4560,7 +2152,7 @@ class WhiteBoardController
         else
         {
             let prevElem = this.getBoardElement(this.currentHover);
-            clearTimeout(elem.hoverTimer);
+            clearTimeout(prevElem.hoverTimer);
         }
     }
 
@@ -4571,359 +2163,406 @@ class WhiteBoardController
         if(this.currentHover == id)
         {
             clearTimeout(elem.hoverTimer);
-            this.currentHover = -1;
+            this.removeHoverInfo(this.currentHover);
         }
     }
 
-    curveMouseClick = (id: number) : void =>
+    elementMouseDown = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
     {
-        if(this.viewState.mode == 2)
-        {
-            var curve = this.getCurve(id);
+        e.preventDefault();
+        let elem = this.getBoardElement(id);
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
 
-            if(this.isHost || this.userId == curve.user)
-            {
-                this.deleteCurve(id);
-            }
+        let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+        let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+        if(this.currentHover == id)
+        {
+            clearTimeout(elem.hoverTimer);
+            this.removeHoverInfo(this.currentHover);
         }
-    }
 
-    curveMouseMove = (id: number) : void =>
-    {
-        if(this.viewState.mode == 2 && this.lMousePress)
+        if(this.viewState.mode == BoardModes.SELECT)
         {
-            var curve = this.getCurve(id);
-
-            if(this.isHost || this.userId == curve.user)
+            if(this.currSelect.length > 1 && elem.isSelected)
             {
-                this.deleteCurve(id);
-            }
-        }
-    }
-
-    curveMouseDown = (id: number, e: MouseEvent) : void =>
-    {
-        if(this.viewState.mode == 3)
-        {
-            if(this.currSelect.length > 0)
-            {
-                this.groupMoving = true;
-                this.startMove();
+                this.startMove(xPos, yPos);
             }
             else
             {
-                this.currCurveMove = id;
-                this.startMove();
+                let retVal = elem.handleMouseDown(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
 
-                this.prevX = e.clientX;
-                this.prevY = e.clientY;
-            }
-        }
-    }
-
-    textMouseClick = (id: number) : void =>
-    {
-        if(this.viewState.mode == 2)
-        {
-            var textBox = this.getText(id);
-
-            if(this.isHost || this.userId == textBox.user)
-            {
-                this.deleteText(id);
-            }
-        }
-    }
-
-    textMouseDblClick = (id: number) : void =>
-    {
-        let textBox = this.getText(id);
-
-        if(this.gettingLock != -1 && this.gettingLock != id)
-        {
-            this.releaseText(this.gettingLock);
-        }
-
-        if(this.currTextEdit != -1)
-        {
-            if(this.currTextEdit != id)
-            {
-                this.releaseText(this.currTextEdit);
-                var tbox = this.getText(this.currTextEdit);
-                var lineCount = tbox.textNodes.length;
-
-                if(lineCount == 0)
+                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
                 {
-                    lineCount = 1;
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
                 }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(id, retVal.newView);
+            }
+            this.mouseDownHandled = true;
+        }
 
-                if(lineCount * 1.5 * tbox.size < tbox.height)
+        this.prevX = e.clientX;
+        this.prevY = e.clientY;
+
+    }
+
+    elementMouseMove = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+        if(this.viewState.mode == BoardModes.ERASE)
+        {
+            if(this.lMousePress)
+            {
+                if(this.isHost || this.userId == elem.user)
                 {
-                    this.resizeText(this.currTextEdit, tbox.width, lineCount * 1.5 * tbox.size);
-                    this.sendTextResize(this.currTextEdit);
+                    let retVal = elem.handleErase();
+                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                    this.deleteElement(id);
+
+                    if(this.currentHover == id)
+                    {
+                        clearTimeout(elem.hoverTimer);
+                        this.removeHoverInfo(this.currentHover);
+                    }
                 }
             }
         }
-        else
+        else if(this.viewState.mode == BoardModes.SELECT && !this.groupMoving)
         {
-            if(this.isHost || this.userId == textBox.user)
-            {
-                this.lockText(id);
-            }
-        }
-    }
+            let changeX = (e.clientX - this.prevX) * this.scaleF;
+            let changeY = (e.clientY - this.prevY) * this.scaleF;
+            let retVal = elem.handleMouseMove(e, changeX, changeY, components.get(elem.type).pallete, componenet, subId);
 
-    textMouseMoveDown = (id: number, e: MouseEvent) : void =>
-    {
-        if(this.currSelect.length > 0)
-        {
-            this.groupMoving = true;
-            this.startMove();
-        }
-        else
-        {
-            this.currTextMove = id;
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleMouseElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+
             this.prevX = e.clientX;
             this.prevY = e.clientY;
-            this.startMove();
         }
     }
 
-    textMouseResizeDown = (id: number, vert: boolean, horz: boolean, e: MouseEvent) : void =>
+    elementMouseUp = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
     {
-        if(this.currSelect.length > 0)
+        if(this.viewState.mode == BoardModes.SELECT)
         {
-            this.groupMoving = true;
-            this.startMove();
+            let elem = this.getBoardElement(id);
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
+
+            let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+            let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+            let retVal = elem.handleMouseUp(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleMouseElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+        }
+    }
+
+    elementMouseClick = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+        let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+        if(this.viewState.mode == BoardModes.ERASE)
+        {
+            if(this.isHost || this.userId == elem.user)
+            {
+                let retVal = elem.handleErase();
+
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                this.deleteElement(id);
+
+                if(this.currentHover == id)
+                {
+                    clearTimeout(elem.hoverTimer);
+                    this.removeHoverInfo(this.currentHover);
+                }
+            }
+        }
+        else if(this.viewState.mode == BoardModes.SELECT && this.currSelect.length < 2)
+        {
+            let retVal = elem.handleMouseClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleMouseElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+        }
+    }
+
+    elementMouseDoubleClick = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    {
+        if(this.viewState.mode == BoardModes.SELECT)
+        {
+            let elem = this.getBoardElement(id);
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
+
+            let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+            let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+            let retVal = elem.handleDoubleClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleMouseElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+            e.stopPropagation();
+        }
+    }
+
+    elementTouchStart = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    {
+        let elem = this.getBoardElement(id);
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let localTouches: Array<BoardTouch>;
+
+        for(let i = 0; i < e.touches.length; i++)
+        {
+            let touch = e.touches.item(i);
+
+            let xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+            let yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+
+            localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+        }
+
+        if(this.currSelect.length > 1 && elem.isSelected)
+        {
+            /* TODO: */
+            //this.startMove();
+            //this.touchStartHandled = true;
         }
         else
         {
-            this.currTextResize = id;
-            this.prevX = e.clientX;
-            this.prevY = e.clientY;
-            this.vertResize = vert;
-            this.horzResize = horz;
-            this.startResize(horz, vert);
+            let retVal = elem.handleTouchStart(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleTouchElementSelect(e, elem, retVal.isSelected, retVal.cursor);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+            this.touchStartHandled = true;
         }
+
+        this.prevTouch = e.touches;
     }
 
-    textMouseMove = (id: number) : void =>
+    elementTouchMove = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
     {
-        if(this.viewState.mode == 2 && this.lMousePress)
-        {
-            var textBox = this.getText(id);
+        let touchMoves: Array<BoardTouch>;
 
-            if(this.isHost || this.userId == textBox.user)
+        if(this.viewState.mode == BoardModes.ERASE)
+        {
+            var elem = this.getBoardElement(id);
+
+            if(this.isHost || this.userId == elem.user)
             {
-                this.deleteText(id);
+                let retVal = elem.handleErase();
+
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                this.deleteElement(id);
             }
         }
-    }
-
-    fileMouseClick = (id: number) : void =>
-    {
-        if(this.viewState.mode == 2)
+        else if(this.viewState.mode == BoardModes.SELECT && !this.groupMoving)
         {
-            let fileBox = this.getUpload(id);
-
-            if(this.isHost || this.userId == fileBox.user)
+            for(let i = 0; i < e.touches.length; i++)
             {
-                this.deleteFile(id);
+                let touch = e.touches.item(i);
+
+                for(let j = 0; j < this.prevTouch.length; j++)
+                {
+                    if(this.prevTouch[j].identifier == touch.identifier)
+                    {
+                        let xChange = (touch.clientX - this.prevTouch[j].clientX) * this.scaleF;
+                        let yChange = (touch.clientY - this.prevTouch[j].clientY) * this.scaleF;
+
+                        let touchChange: BoardTouch = { x: xChange, y: yChange, identifer: touch.identifier };
+
+                        touchMoves.push(touchChange);
+                    }
+                }
             }
-        }
-    }
 
-    clearAlert = () : void =>
-    {
-        this.removeAlert();
-    }
+            let retVal = elem.handleTouchMove(e, touchMoves, components.get(elem.type).pallete, componenet, subId);
 
-    highlightTagClick = (id: number) : void =>
-    {
-        console.log('Highligh tag click processed.');
-        let whitElem  = document.getElementById('whiteBoard-input') as HTMLCanvasElement;
-        let whitCont  = document.getElementById('whiteboard-container');
-        let clientWidth = whitCont.clientWidth;
-        let clientHeight = whitCont.clientHeight;
-
-        let highlight = this.getHighlight(id);
-
-        let xCentre = highlight.x + highlight.width / 2;
-        let yCentre = highlight.y + highlight.height / 2;
-
-        let xChange = xCentre - (this.panX + clientWidth * this.scaleF * 0.5);
-        let yChange = yCentre - (this.panY + clientHeight * this.scaleF * 0.5);
-
-        let newPanX = this.panX + xChange;
-        let newPanY = this.panY + yChange;
-
-        if(newPanX < 0)
-        {
-            newPanX = 0;
-        }
-        if(newPanY < 0)
-        {
-            newPanY = 0;
-        }
-
-        this.setViewBox(newPanX, newPanY, this.scaleF);
-    }
-
-    fileMouseMoveDown = (id: number, e: MouseEvent) : void =>
-    {
-        if(this.currSelect.length > 0)
-        {
-            this.groupMoving = true;
-            this.startMove();
-        }
-        else
-        {
-            this.currFileMove = id;
-            this.prevX = e.clientX;
-            this.prevY = e.clientY;
-            this.startMove();
-        }
-    }
-
-    fileMouseResizeDown = (id: number, vert: boolean, horz: boolean, e: MouseEvent) : void =>
-    {
-        if(this.currSelect.length > 0)
-        {
-            this.groupMoving = true;
-            this.startMove();
-        }
-        else
-        {
-            this.currFileResize = id;
-            this.prevX = e.clientX;
-            this.prevY = e.clientY;
-            this.vertResize = vert;
-            this.horzResize = horz;
-            this.startResize(horz, vert);
-        }
-    }
-
-    fileRotateClick = (id: number) : void =>
-    {
-        let file : Upload = this.getUpload(id);
-
-        if(this.isHost || this.userId == file.user)
-        {
-            this.rotateUpload(id);
-            this.sendFileRotate(id);
-        }
-    }
-
-    fileMouseMove = (id: number) : void =>
-    {
-        if(this.viewState.mode == 2 && this.lMousePress)
-        {
-            let fileBox = this.getUpload(id);
-
-            if(this.isHost || this.userId == fileBox.user)
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleTouchElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
             {
-                this.deleteFile(id);
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
             }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+
+            this.prevTouch = e.touches;
         }
     }
 
-    contextCopy = (e: MouseEvent) : void =>
+    elementTouchEnd = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
     {
-        document.execCommand("copy");
-    }
-
-    contextCut = (e: MouseEvent) : void =>
-    {
-        document.execCommand("cut");
-    }
-
-    contextPaste = (e: MouseEvent) : void =>
-    {
-        document.execCommand("paste");
-    }
-
-    onCopy = (e: ClipboardEvent) : void =>
-    {
-        console.log('COPY EVENT');
-
-        if(this.isWriting && this.cursorStart != this.cursorEnd)
+        if(this.viewState.mode == BoardModes.SELECT)
         {
-            let textItem = this.getText(this.currTextEdit);
+            let elem = this.getBoardElement(id);
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
 
-            e.clipboardData.setData('text/plain', textItem.text.substring(this.cursorStart, this.cursorEnd));
-        }
-    }
+            let localTouches: Array<BoardTouch>;
 
-    onPaste = (e: ClipboardEvent) : void =>
-    {
-        console.log('PASTE EVENT');
-
-        if(this.isWriting)
-        {
-            let textItem = this.getText(this.currTextEdit);
-            let data = e.clipboardData.getData('text/plain');
-
-            this.insertText(textItem, this.cursorStart, this.cursorEnd, data);
-
-            this.cursorStart = this.cursorStart + data.length;
-            this.cursorEnd = this.cursorStart;
-
-            this.changeTextSelect(this.currTextEdit, true);
-        }
-    }
-
-    onCut = (e: ClipboardEvent) : void =>
-    {
-        console.log('CUT EVENT');
-    }
-
-    dragOver = (e: DragEvent) : void =>
-    {
-        e.preventDefault();
-    }
-
-    drop = (e: DragEvent) : void =>
-    {
-        var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-        var elemRect = whitElem.getBoundingClientRect();
-        var offsetY  = elemRect.top - document.body.scrollTop;
-        var offsetX  = elemRect.left - document.body.scrollLeft;
-
-        var x = Math.round(e.clientX - offsetX);
-        var y = Math.round(e.clientY - offsetY);
-
-        e.preventDefault();
-
-        if(e.dataTransfer.files.length  > 0)
-        {
-            if(e.dataTransfer.files.length == 1)
+            for(let i = 0; i < e.touches.length; i++)
             {
-                var file: File = e.dataTransfer.files[0];
-                this.placeLocalFile(x, y, this.scaleF, this.panX, this.panY, file);
-            }
-        }
-        else
-        {
-            var url: string = e.dataTransfer.getData('text/plain');
-            this.placeRemoteFile(x, y, this.scaleF, this.panX, this.panY, url);
-        }
+                let touch = e.touches.item(i);
 
+                let xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+                let yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+
+                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+            }
+
+            let retVal = elem.handleTouchEnd(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleTouchElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+        }
     }
 
-    /***********************************************************************************************************************************************************
-     *
-     *
-     *
-     * DOCUMENT LISTENER METHODS
-     *
-     *
-     *
-     **********************************************************************************************************************************************************/
+    elementTouchCancel = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    {
+        if(this.viewState.mode == BoardModes.SELECT)
+        {
+            let elem = this.getBoardElement(id);
+            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
+
+            let localTouches: Array<BoardTouch>;
+
+            for(let i = 0; i < e.touches.length; i++)
+            {
+                let touch = e.touches.item(i);
+
+                let xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+                let yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+
+                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+            }
+
+            let retVal = elem.handleTouchCancel(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+
+            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+            this.handleElementMessages(id, elem.type, retVal.serverMessages);
+            this.handleTouchElementSelect(e, elem, retVal.isSelected);
+            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+            if(retVal.newViewCentre)
+            {
+                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+            }
+            this.handleInfoMessage(retVal.infoMessage);
+            this.handleAlertMessage(retVal.alertMessage);
+            this.setElementView(id, retVal.newView);
+        }
+    }
+
+    elementDragOver = (id: number, e: DragEvent, componenet?: number, subId?: number) : void =>
+    {
+        /* TODO: */
+
+        e.stopPropagation();
+    }
+
+    elementDrop = (id: number, e: DragEvent, componenet?: number, subId?: number) : void =>
+    {
+        /* TODO: */
+
+        e.stopPropagation();
+    }
+
     mouseDown = (e: MouseEvent) : void =>
     {
+        e.preventDefault();
         if(!this.lMousePress && !this.wMousePress && !this.rMousePress)
         {
-            this.clearHighlight();
-
             this.lMousePress = e.buttons & 1 ? true : false;
             this.rMousePress = e.buttons & 2 ? true : false;
             this.wMousePress = e.buttons & 4 ? true : false;
@@ -4945,48 +2584,45 @@ class WhiteBoardController
 
             this.downPoint = {x: Math.round(e.clientX - offsetX), y: Math.round(e.clientY - offsetY)};
 
-            if(e.buttons == 1 && !this.viewState.itemMoving && !this.viewState.itemResizing)
+            if(this.viewState.alertElements.size == 0)
             {
-                if(this.currTextEdit > -1)
+                this.blockAlert = true;
+                this.updateView(Object.assign({}, this.viewState, { blockAlert: true }));
+            }
+        }
+
+        if(this.mouseDownHandled)
+        {
+            this.mouseDownHandled = false;
+        }
+        else
+        {
+            if(this.currSelect.length > 0)
+            {
+                // Deselect currently selected items
+                for(let i = 0; i < this.currSelect.length; i++)
                 {
-                    let textBox = this.getText(this.currTextEdit);
-
-                    this.cursorStart = this.findTextPos(textBox, (e.clientX - offsetX) * this.scaleF + this.panX, (e.clientY - offsetY) * this.scaleF + this.panY);
-                    this.cursorEnd = this.cursorStart;
-                    this.textDown = this.cursorStart;
-                    this.changeTextSelect(this.currTextEdit, true);
+                    this.deselectElement(this.currSelect[i]);
                 }
-
-                this.selectDrag = true;
-
+                this.currSelect = [];
             }
-        }
-
-        if(this.currSelect.length > 0)
-        {
-            // Deselect currently selected items
-            for(let i = 0; i < this.currSelect.length; i++)
+            else
             {
-                this.deselectElement(this.currSelect[i]);
+                if(this.lMousePress && this.viewState.mode == BoardModes.SELECT)
+                {
+                    this.selectDrag = true;
+                }
             }
-            this.currSelect = [];
-        }
-
-
-        if(this.currentHover != -1)
-        {
-            let elem = this.getBoardElement(this.currentHover);
-
-            if(elem.infoElement)
+            if(this.currentHover != -1)
             {
-                this.removeHoverInfo(this.currentHover);
+                let elem = this.getBoardElement(this.currentHover);
+                if(elem.infoElement != -1)
+                {
+                    this.removeHoverInfo(this.currentHover);
+                }
+                clearTimeout(elem.hoverTimer);
             }
         }
-    }
-
-    touchDown = () : void =>
-    {
-        this.touchPress = true;
     }
 
     mouseMove = (e: MouseEvent) : void =>
@@ -4994,8 +2630,7 @@ class WhiteBoardController
         if(this.currentHover != -1)
         {
             let elem = this.getBoardElement(this.currentHover);
-
-            if(elem.infoElement)
+            if(elem.infoElement != -1)
             {
                 this.removeHoverInfo(this.currentHover);
             }
@@ -5039,179 +2674,16 @@ class WhiteBoardController
             newPoint.x = Math.round(e.clientX - offsetX);
             newPoint.y = Math.round(e.clientY - offsetY);
 
-            // Mode 0 is draw mode, mode 1 is text mode., mode 2 is delete, mode 3 is select and mode 4 is highlight
-            if(this.viewState.mode == 0)
+            this.pointList.push(newPoint);
+
+            if(this.viewState.mode == BoardModes.SELECT)
             {
-                if(this.pointList.length)
-                {
-                    if(Math.round(this.pointList[this.pointList.length - 1].x - newPoint.x) < this.scaleF || Math.round(this.pointList[this.pointList.length - 1].y - newPoint.y))
-                    {
-                        this.isPoint = false;
-
-                        context.beginPath();
-                        context.strokeStyle = this.viewState.colour;
-                        context.lineWidth = this.viewState.baseSize;
-                        context.moveTo(this.pointList[this.pointList.length - 1].x, this.pointList[this.pointList.length - 1].y);
-                        context.lineTo(newPoint.x, newPoint.y);
-                        context.stroke();
-
-                        this.pointList[this.pointList.length] = newPoint;
-                    }
-                }
-                else
-                {
-                    this.pointList[this.pointList.length] = newPoint;
-                }
-            }
-            else if(this.viewState.mode == 1 && !this.rMousePress)
-            {
-                if(this.currTextResize != -1)
-                {
-                    var changeX = (e.clientX - this.prevX) * this.scaleF;
-                    var changeY = (e.clientY - this.prevY) * this.scaleF;
-                    var tbox = this.getText(this.currTextResize);
-
-                    var newWidth  = this.horzResize ? tbox.width  + changeX : tbox.width;
-                    var newHeight = this.vertResize ? tbox.height + changeY : tbox.height;
-
-                    this.resizeText(this.currTextResize, newWidth, newHeight);
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.textResized = true;
-                }
-                else if(this.currTextMove != -1)
+                if(this.groupMoving)
                 {
                     var changeX = (e.clientX - this.prevX) * this.scaleF;
                     var changeY = (e.clientY - this.prevY) * this.scaleF;
 
-                    this.moveTextbox(this.currTextMove, true, changeX, changeY, new Date());
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.textMoved = true;
-                }
-                else if(this.currTextSel != -1)
-                {
-                    var textBox = this.getText(this.currTextEdit);
-                    var newLoc = this.findTextPos(textBox, (e.clientX - offsetX) * this.scaleF + this.panX, (e.clientY - offsetY) * this.scaleF + this.panY);
-
-                    if(this.textDown < newLoc)
-                    {
-                        this.cursorStart = this.textDown;
-                        this.cursorEnd = newLoc;
-                        this.startLeft = true;
-                    }
-                    else
-                    {
-                        this.cursorStart = newLoc;
-                        this.cursorEnd = this.textDown;
-                        this.startLeft = false;
-                    }
-
-                    this.changeTextSelect(this.currTextSel, true);
-                }
-                else
-                {
-                    let rectLeft;
-                    let rectTop;
-                    let rectWidth;
-                    let rectHeight;
-
-                    if(newPoint.x > this.downPoint.x)
-                    {
-                        rectLeft = this.downPoint.x;
-                        rectWidth = newPoint.x - this.downPoint.x;
-                    }
-                    else
-                    {
-                        rectLeft = newPoint.x;
-                        rectWidth = this.downPoint.x - newPoint.x;
-                    }
-
-                    if(newPoint.y > this.downPoint.y)
-                    {
-                        rectTop = this.downPoint.y;
-                        rectHeight = newPoint.y - this.downPoint.y;
-                    }
-                    else
-                    {
-                        rectTop = newPoint.y;
-                        rectHeight = this.downPoint.y - newPoint.y;
-                    }
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                    if(rectWidth > 0 && rectHeight > 0)
-                    {
-                        context.beginPath();
-                        context.strokeStyle = 'black';
-                        context.setLineDash([5]);
-                        context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
-                        context.stroke();
-                    }
-                }
-            }
-            else if(this.viewState.mode == 2 && !this.rMousePress)
-            {
-                // Delete Functions Not Handled Here
-            }
-            else if(this.viewState.mode == 3)
-            {
-                if(this.currCurveMove != -1)
-                {
-                    this.moveCurve(this.currCurveMove, (e.clientX - this.prevX) * this.scaleF, (e.clientY - this.prevY) * this.scaleF, new Date());
-
-                    this.curveChangeX += (e.clientX - this.prevX) * this.scaleF;
-                    this.curveChangeY += (e.clientY - this.prevY) * this.scaleF;
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-
-                    this.curveMoved = true;
-                }
-                else if(this.currTextMove != -1)
-                {
-                    var changeX = (e.clientX - this.prevX) * this.scaleF;
-                    var changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    this.moveTextbox(this.currTextMove, true, changeX, changeY, new Date());
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.textMoved = true;
-                }
-                else if(this.currFileMove != -1)
-                {
-                    var changeX = (e.clientX - this.prevX) * this.scaleF;
-                    var changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    this.moveUpload(this.currFileMove, true, changeX, changeY, new Date());
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.fileMoved = true;
-                }
-                else if(this.currFileResize != -1)
-                {
-                    let changeX = (e.clientX - this.prevX) * this.scaleF;
-                    let changeY = (e.clientY - this.prevY) * this.scaleF;
-                    let file = this.getUpload(this.currFileResize);
-
-                    let newWidth  = this.horzResize ? file.width  + changeX : file.width;
-                    let newHeight = this.vertResize ? file.height + changeY : file.height;
-
-                    this.resizeFile(this.currFileResize, newWidth, newHeight);
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.fileResized = true;
-                }
-                else if(this.groupMoving)
-                {
-                    var changeX = (e.clientX - this.prevX) * this.scaleF;
-                    var changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    this.moveGroup(true, changeX, changeY, new Date());
+                    this.moveGroup(changeX, changeY, new Date());
 
                     this.prevX = e.clientX;
                     this.prevY = e.clientY;
@@ -5262,60 +2734,65 @@ class WhiteBoardController
                     this.selectWidth = rectWidth * this.scaleF;
                     this.selectHeight = rectHeight * this.scaleF;
                 }
+                else if(this.currSelect.length == 1)
+                {
+                    let elem = this.getBoardElement(this.currSelect[0]);
+
+                    let changeX = (e.clientX - this.prevX) * this.scaleF;
+                    let changeY = (e.clientY - this.prevY) * this.scaleF;
+
+                    let retVal = elem.handleBoardMouseMove(e, changeX, changeY, components.get(elem.type).pallete);
+
+                    this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    this.handleInfoMessage(retVal.infoMessage);
+                    this.handleAlertMessage(retVal.alertMessage);
+                    this.setElementView(elem.id, retVal.newView);
+                }
             }
-            else if(this.viewState.mode == 4 && !this.rMousePress)
+            else if(!this.rMousePress && this.viewState.mode != BoardModes.ERASE)
             {
-                var rectLeft;
-                var rectTop;
-                var rectWidth;
-                var rectHeight;
-
-                if(newPoint.x > this.downPoint.x)
+                if(this.currSelect.length == 0)
                 {
-                    rectLeft = this.downPoint.x;
-                    rectWidth = newPoint.x - this.downPoint.x;
+                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+                    let data: DrawData =
+                    {
+                        palleteState: components.get(this.viewState.mode).pallete, pointList: this.pointList
+                    };
+                    components.get(this.viewState.mode).DrawHandle(data, context);
                 }
-                else
+                else if(this.currSelect.length == 1)
                 {
-                    rectLeft = newPoint.x;
-                    rectWidth = this.downPoint.x - newPoint.x;
-                }
+                    let elem = this.getBoardElement(this.currSelect[0]);
 
-                if(newPoint.y > this.downPoint.y)
-                {
-                    rectTop = this.downPoint.y;
-                    rectHeight = newPoint.y - this.downPoint.y;
-                }
-                else
-                {
-                    rectTop = newPoint.y;
-                    rectHeight = this.downPoint.y - newPoint.y;
-                }
+                    let changeX = (e.clientX - this.prevX) * this.scaleF;
+                    let changeY = (e.clientY - this.prevY) * this.scaleF;
 
-                context.clearRect(0, 0, whitElem.width, whitElem.height);
+                    let retVal = elem.handleBoardMouseMove(e, changeX, changeY, components.get(elem.type).pallete);
 
-                if(rectWidth > 0 && rectHeight > 0)
-                {
-                    context.beginPath();
-                    context.globalAlpha = 0.4;
-                    context.fillStyle = 'yellow';
-                    context.fillRect(rectLeft, rectTop, rectWidth, rectHeight);
-                    context.stroke();
-                    context.globalAlpha = 1.0;
+                    this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    this.handleInfoMessage(retVal.infoMessage);
+                    this.handleAlertMessage(retVal.alertMessage);
+                    this.setElementView(elem.id, retVal.newView);
                 }
             }
         }
 
-        this.mouseX = e.clientX;
-        this.mouseY = e.clientY;
-    }
-
-    touchMove = (e: TouchEvent) : void =>
-    {
-        if(this.touchPress)
-        {
-
-        }
+        this.prevX = e.clientX;
+        this.prevY = e.clientY;
     }
 
     mouseUp = (e: MouseEvent) : void =>
@@ -5324,142 +2801,19 @@ class WhiteBoardController
         {
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let context = whitElem.getContext('2d');
+            let rectLeft;
+            let rectTop;
+            let rectWidth;
+            let rectHeight;
+            let elemRect = whitElem.getBoundingClientRect();
+            let offsetY  = elemRect.top - document.body.scrollTop;
+            let offsetX  = elemRect.left - document.body.scrollLeft;
+            let newPoint: Point = {x: 0, y: 0};
 
-            if(this.viewState.mode == 0)
+            context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+            if(this.currSelect.length == 0)
             {
-                context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                if(this.isPoint)
-                {
-                    let elemRect = whitElem.getBoundingClientRect();
-                    let offsetY  = elemRect.top - document.body.scrollTop;
-                    let offsetX  = elemRect.left - document.body.scrollLeft;
-                }
-
-                this.drawCurve(this.pointList, this.scaleF * this.viewState.baseSize, this.viewState.colour, this.scaleF, this.panX, this.panY);
-            }
-            else if(this.viewState.mode == 1)
-            {
-                if(!this.isWriting)
-                {
-                    let rectLeft;
-                    let rectTop;
-                    let rectWidth;
-                    let rectHeight;
-                    let elemRect = whitElem.getBoundingClientRect();
-                    let offsetY  = elemRect.top - document.body.scrollTop;
-                    let offsetX  = elemRect.left - document.body.scrollLeft;
-                    let newPoint: Point = {x: 0, y: 0};
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                    newPoint.x = Math.round(e.clientX - offsetX);
-                    newPoint.y = Math.round(e.clientY - offsetY);
-
-
-                    if(newPoint.x > this.downPoint.x)
-                    {
-                        rectLeft = this.downPoint.x;
-                        rectWidth = newPoint.x - this.downPoint.x;
-                    }
-                    else
-                    {
-                        rectLeft = newPoint.x;
-                        rectWidth = this.downPoint.x - newPoint.x;
-                    }
-
-                    if(newPoint.y > this.downPoint.y)
-                    {
-                        rectTop = this.downPoint.y;
-                        rectHeight = newPoint.y - this.downPoint.y;
-                    }
-                    else
-                    {
-                        rectTop = newPoint.y;
-                        rectHeight = this.downPoint.y - newPoint.y;
-                    }
-
-                    if(rectWidth > 10 && rectHeight > 10)
-                    {
-                        let x = rectLeft * this.scaleF + this.panX;
-                        let y = rectTop * this.scaleF + this.panY;
-                        let width = rectWidth * this.scaleF;
-                        let height = rectHeight * this.scaleF;
-
-                        this.isWriting = true;
-                        this.cursorStart = 0;
-                        this.cursorEnd = 0;
-
-                        let localId = this.addTextbox(x, y, width, height, this.scaleF * this.viewState.baseSize * 20, this.viewState.isJustified, this.userId, this.userId, new Date());
-                        this.setTextEdit(localId);
-                    }
-                }
-                else if(this.rMousePress)
-                {
-                    this.isWriting = false;
-
-                    if(this.currTextEdit > -1)
-                    {
-                        let textBox = this.getText(this.currTextEdit);
-                        let lineCount = textBox.textNodes.length;
-
-                        if(lineCount == 0)
-                        {
-                            lineCount = 1;
-                        }
-
-                        if(lineCount * 1.5 * textBox.size < textBox.height)
-                        {
-                            this.resizeText(this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                            this.sendTextResize(this.currTextEdit);
-                        }
-
-                        this.releaseText(this.currTextEdit);
-                    }
-                    else if(this.gettingLock > -1)
-                    {
-                        this.releaseText(this.gettingLock);
-                    }
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                }
-            }
-            else if(this.viewState.mode == 3)
-            {
-                if(this.selectDrag)
-                {
-                    this.selectDrag = false;
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                    // Cycle through board elements and select those within the rectangle
-                    for(let i = 0; i < this.boardElems.length; i++)
-                    {
-                        let elem = this.boardElems[i];
-                        if(elem.x + elem.width > this.selectLeft && elem.y + elem.height > this.selectTop)
-                        {
-                            if(this.selectLeft + this.selectWidth > elem.x && this.selectTop + this.selectHeight > elem.y)
-                            {
-                                this.currSelect.push(i);
-                                this.selectElement(i);
-                            }
-                        }
-
-                    }
-                }
-            }
-            else if(this.viewState.mode == 4)
-            {
-                let rectLeft;
-                let rectTop;
-                let rectWidth;
-                let rectHeight;
-                let elemRect = whitElem.getBoundingClientRect();
-                let offsetY  = elemRect.top - document.body.scrollTop;
-                let offsetX  = elemRect.left - document.body.scrollLeft;
-                let newPoint: Point = {x: 0, y: 0};
-
-                context.clearRect(0, 0, whitElem.width, whitElem.height);
-
                 newPoint.x = Math.round(e.clientX - offsetX);
                 newPoint.y = Math.round(e.clientY - offsetY);
 
@@ -5486,64 +2840,330 @@ class WhiteBoardController
                     rectHeight = this.downPoint.y - newPoint.y;
                 }
 
-                if(rectWidth > 10 && rectHeight > 10)
+                let x = rectLeft * this.scaleF + this.panX;
+                let y = rectTop * this.scaleF + this.panY;
+                let width = rectWidth * this.scaleF;
+                let height = rectHeight * this.scaleF;
+
+                if(this.viewState.mode == BoardModes.SELECT)
                 {
-                    this.placeHighlight(rectLeft, rectTop, this.scaleF, this.panX, this.panY, rectWidth, rectHeight);
+                    if(this.selectDrag)
+                    {
+                        context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+                        // Cycle through board elements and select those within the rectangle
+                        this.boardElems.forEach((elem: BoardElement) =>
+                        {
+                            if(!elem.isDeleted && elem.isComplete && elem.x >= this.selectLeft && elem.y >= this.selectTop)
+                            {
+                                if(this.selectLeft + this.selectWidth >= elem.x + elem.width && this.selectTop + this.selectHeight >= elem.y + elem.height)
+                                {
+                                    this.currSelect.push(elem.id);
+                                    this.selectElement(elem.id);
+                                }
+                            }
+                        });
+                    }
                 }
+                else if(this.viewState.mode != BoardModes.ERASE)
+                {
+                    let self = this;
+                    let localId = this.boardElems.push(null) - 1;
+                    let callbacks: ElementCallbacks =
+                    {
+                        sendServerMsg: ((id: number, type: string) =>
+                        { return (msg: UserMessage) => { self.sendMessage(id, type, msg) }; })(localId, self.viewState.mode),
+                        createAlert: (header: string, message: string) => {},
+                        createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
+                        { return self.addInfoMessage(x, y, width, height, header, message); },
+                        removeInfo: (id: number) => { self.removeInfoMessage(id); },
+                        updateBoardView: ((id: number) =>
+                        { return (newView: ComponentViewState) => { self.setElementView(id, newView); }; })(localId),
+                        getAudioStream: () => { return self.getAudioStream(); },
+                        getVideoStream: () => { return self.getVideoStream(); }
+                    }
+
+                    let data: CreationData =
+                    {
+                        id: localId, userId: this.userId, callbacks: callbacks, x: x, y: y, width: width, height: height,
+                        pointList: this.pointList, scaleF: this.scaleF, panX: this.panX, panY: this.panY,
+                        palleteState: components.get(this.viewState.mode).pallete
+                    };
+                    let newElem: BoardElement = components.get(this.viewState.mode).Element.createElement(data);
+
+                    if(newElem)
+                    {
+                        let undoOp = ((elem) => { return elem.erase.bind(elem); })(newElem);
+                        let redoOp = ((elem) => { return elem.restore.bind(elem); })(newElem);
+                        this.boardElems[localId] = newElem;
+
+                        let viewState = newElem.getCurrentViewState();
+                        this.setElementView(localId, viewState);
+
+                        let payload: UserNewElementPayload = newElem.getNewMsg();
+                        let msg: UserNewElementMessage = { type: newElem.type, payload: payload };
+
+                        this.handleElementOperation(localId, undoOp, redoOp);
+                        this.sendNewElement(msg);
+                    }
+                    else
+                    {
+                        // Failed to create element, remove place holder.
+                        this.boardElems.splice(localId, 1);
+                    }
+                }
+            }
+            else if(this.currSelect.length == 1)
+            {
+                let elem = this.getBoardElement(this.currSelect[0]);
+
+                let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+                let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+                let retVal = elem.handleBoardMouseUp(e, xPos, yPos, components.get(elem.type).pallete);
+
+                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
+                {
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(elem.id, retVal.newView);
+            }
+
+            if(this.groupMoved)
+            {
+                let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+                let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+
+                this.groupMoved = false;
+                this.endMove(xPos, yPos);
             }
         }
 
-        if(this.curveMoved)
+        if(this.blockAlert)
         {
-            this.curveMoved = false;
-            this.sendCurveMove(this.currCurveMove);
-        }
-        else if(this.textMoved)
-        {
-            this.textMoved = false;
-            this.sendTextMove(this.currTextMove);
-        }
-        else if(this.textResized)
-        {
-            this.textResized = false;
-            this.sendTextResize(this.currTextEdit);
-        }
-        else if(this.fileMoved)
-        {
-            this.fileMoved = false;
-            this.sendFileMove(this.currFileMove);
-        }
-        else if(this.fileResized)
-        {
-            this.fileResized = false;
-            this.sendFileResize(this.currFileResize);
-        }
-        else if(this.groupMoved)
-        {
-            this.groupMoved = false;
-            this.sendGroupMove();
+            this.blockAlert = false;
+            this.updateView(Object.assign({}, this.viewState, { blockAlert: false }));
         }
 
-        this.curveChangeX = 0;
-        this.curveChangeY = 0;
+        this.selectDrag = false;
         this.lMousePress = false;
         this.wMousePress = false;
         this.rMousePress = false;
         this.pointList = [];
-        this.moving = false;
-        this.endMove();
-        this.endResize();
     }
 
-    touchUp = () : void =>
+    touchStart = () : void =>
     {
+        this.touchPress = true;
+        /* TODO: */
+    }
+
+    touchMove = (e: TouchEvent) : void =>
+    {
+        /* TODO: */
+        if(this.touchPress)
+        {
+
+        }
+    }
+
+    touchEnd = () : void =>
+    {
+        /* TODO: */
         this.touchPress = false;
+    }
+
+    touchCancel = () : void =>
+    {
+        /* TODO: */
+    }
+
+    keyDown = (e: KeyboardEvent) : void =>
+    {
+        if (e.keyCode === 8)
+        {
+            if(this.currSelect.length == 1)
+            {
+                e.preventDefault();
+
+                let elem = this.getBoardElement(this.currSelect[0]);
+
+                let retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
+
+                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
+                {
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(elem.id, retVal.newView);
+            }
+        }
+    }
+
+    keyPress = (e: KeyboardEvent) : void =>
+    {
+        let inputChar = e.key;
+        if(e.ctrlKey)
+        {
+            if(inputChar == 'z')
+            {
+                // If there is exactly one item selected treat it as being edited.
+                if(this.currSelect.length == 1 && this.getBoardElement(this.currSelect[0]).isEditing)
+                {
+                    this.undoItemEdit(this.currSelect[0]);
+                }
+                else
+                {
+                    this.undo();
+                }
+            }
+            else if(inputChar == 'y')
+            {
+                // If there is exactly one item selected treat it as being edited.
+                if(this.currSelect.length == 1 && this.getBoardElement(this.currSelect[0]).isEditing)
+                {
+                    this.redoItemEdit(this.currSelect[0]);
+                }
+                else
+                {
+                    this.redo();
+                }
+            }
+        }
+        else
+        {
+            if(this.currSelect.length == 1)
+            {
+                e.preventDefault();
+
+                let elem = this.getBoardElement(this.currSelect[0]);
+
+                let retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
+
+                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
+                {
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(elem.id, retVal.newView);
+            }
+        }
+    }
+
+    contextCopy = (e: MouseEvent) : void =>
+    {
+        document.execCommand("copy");
+    }
+
+    contextCut = (e: MouseEvent) : void =>
+    {
+        document.execCommand("cut");
+    }
+
+    contextPaste = (e: MouseEvent) : void =>
+    {
+        document.execCommand("paste");
+    }
+
+    onCopy = (e: ClipboardEvent) : void =>
+    {
+        console.log('COPY EVENT');
+        /* TODO: */
+    }
+
+    onPaste = (e: ClipboardEvent) : void =>
+    {
+        console.log('PASTE EVENT');
+        /* TODO: */
+    }
+
+    onCut = (e: ClipboardEvent) : void =>
+    {
+        console.log('CUT EVENT');
+        /* TODO: */
+    }
+
+    dragOver = (e: DragEvent) : void =>
+    {
+        /* TODO: Pass to elements as necessary. */
+        e.preventDefault();
+    }
+
+    drop = (e: DragEvent) : void =>
+    {
+
+        var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY  = elemRect.top - document.body.scrollTop;
+        var offsetX  = elemRect.left - document.body.scrollLeft;
+
+        var x = Math.round(e.clientX - offsetX);
+        var y = Math.round(e.clientY - offsetY);
+
+        e.preventDefault();
+
+        /* TODO: Reimplement
+        if(e.dataTransfer.files.length  > 0)
+        {
+            if(e.dataTransfer.files.length == 1)
+            {
+                var file: File = e.dataTransfer.files[0];
+                this.placeLocalFile(x, y, this.scaleF, this.panX, this.panY, file);
+            }
+        }
+        else
+        {
+            var url: string = e.dataTransfer.getData('text/plain');
+            this.placeRemoteFile(x, y, this.scaleF, this.panX, this.panY, url);
+        }
+        */
+    }
+
+    palleteChange = (change: BoardPalleteChange) : void =>
+    {
+        let retVal: BoardPalleteViewState = components.get(this.viewState.mode).pallete.handleChange(change);
+        let cursor: ElementCursor = components.get(this.viewState.mode).pallete.getCursor();
+
+        this.cursor = cursor.cursor;
+        this.cursorURL = cursor.url;
+        this.cursorOffset = cursor.offset;
+
+        let newView = Object.assign({}, this.viewState,
+        {
+            palleteState: retVal, cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset
+        });
+
+        this.updateView(newView);
+
+        if(this.currSelect.length == 1)
+        {
+            let elem = this.getBoardElement(this.currSelect[0]);
+
+            if(elem.type == this.viewState.mode)
+            {
+                elem.handlePalleteChange(change);
+            }
+        }
     }
 
     windowResize = (e: DocumentEvent) : void =>
     {
-        var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-        var whitCont = document.getElementById("whiteboard-container");
+        let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let whitCont = document.getElementById("whiteboard-container");
 
         whitElem.style.width = whitCont.clientWidth + "px";
         whitElem.style.height = whitCont.clientHeight + "px";
@@ -5553,12 +3173,17 @@ class WhiteBoardController
         this.setViewBox(this.panX, this.panY, this.scaleF);
     }
 
+    windowUnload = (e: DocumentEvent) : void =>
+    {
+        this.socket.emit('LEAVE', null);
+    }
+
     mouseWheel = (e: WheelEvent) : void =>
     {
         let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-        var elemRect = whitElem.getBoundingClientRect();
-        var offsetY  = elemRect.top - document.body.scrollTop;
-        var offsetX  = elemRect.left - document.body.scrollLeft;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
         let newPanX = this.panX;
         let newPanY = this.panY;
         let newScale;
@@ -5604,6 +3229,7 @@ class WhiteBoardController
             else
             {
                 // Zoom out behaviour.
+                /* TODO: Fix. */
                 newPanX = this.panX - (this.scaleF - newScale) * (e.clientX - offsetX);
                 newPanY = this.panY - (this.scaleF - newScale) * (e.clientY - offsetY);
             }
@@ -5621,514 +3247,10 @@ class WhiteBoardController
         this.setViewBox(newPanX, newPanY, newScale);
     }
 
-    keyDown = (e: KeyboardEvent) : void =>
+
+
+    clearAlert = () : void =>
     {
-        if (e.keyCode === 8)
-        {
-            if(this.isWriting)
-            {
-                e.preventDefault();
-                let textItem = this.getText(this.currTextEdit);
-
-                if(this.cursorEnd > 0)
-                {
-                    if(e.ctrlKey)
-                    {
-                        if(this.cursorStart > 0)
-                        {
-                            // TODO: Move to start of previous word
-                        }
-                    }
-                    else
-                    {
-                        if(this.cursorStart == this.cursorEnd)
-                        {
-                            this.cursorStart--;
-                        }
-
-                        let start = this.cursorStart;
-                        let end = this.cursorEnd;
-                        this.cursorEnd = this.cursorStart;
-
-                        this.insertText(textItem, start, end, '');
-                    }
-                }
-            }
-        }
-    }
-
-    keyUp = (e: KeyboardEvent) : void =>
-    {
-
-    }
-
-    keyPress = (e: KeyboardEvent) : void =>
-    {
-        let inputChar = e.key;
-        if(this.isWriting)
-        {
-            e.preventDefault();
-            e.stopPropagation();
-            var textItem: WhiteBoardText;
-            var i: number;
-            var line: TextNode;
-            var style: StyleNode;
-
-
-            switch(inputChar)
-            {
-
-            case 'ArrowLeft':
-                textItem = this.getText(this.currTextEdit);
-
-                var newStart = this.cursorStart;
-                var newEnd = this.cursorEnd;
-
-                if(this.cursorStart == this.cursorEnd || !this.startLeft)
-                {
-                    if(this.cursorStart > 0)
-                    {
-                        if(e.ctrlKey)
-                        {
-                            i = this.cursorStart > 0 ? this.cursorStart - 1 : 0;
-                            while(i > 0 && !textItem.text.charAt(i - 1).match(/\s/))
-                            {
-                                i--;
-                            }
-
-                            newStart = i;
-                        }
-                        else
-                        {
-                            if(newStart > 0)
-                            {
-                                newStart--;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(e.ctrlKey)
-                    {
-                        i = this.cursorEnd > 0 ? this.cursorEnd - 1 : 0;
-                        while(i > 0 && !textItem.text.charAt(i - 1).match(/\s/))
-                        {
-                            i--;
-                        }
-
-                        newEnd = i;
-                    }
-                    else
-                    {
-                        if(newEnd > 0)
-                        {
-                            newEnd--;
-                        }
-                    }
-                }
-
-                if(e.shiftKey)
-                {
-                    if(this.cursorStart == this.cursorEnd)
-                    {
-                        this.startLeft = false;
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                    else if(newStart > newEnd)
-                    {
-                        this.startLeft = false;
-                        this.cursorStart = newEnd;
-                        this.cursorEnd = newStart;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                }
-                else
-                {
-                    this.cursorStart = this.cursorStart == this.cursorEnd || !this.startLeft ? newStart : newEnd;
-                    this.cursorEnd = this.cursorStart;
-                }
-
-                this.changeTextSelect(this.currTextEdit, true);
-                break;
-            case 'ArrowRight':
-                textItem = this.getText(this.currTextEdit);
-
-                var newStart = this.cursorStart;
-                var newEnd = this.cursorEnd;
-
-                if(this.cursorStart == this.cursorEnd || this.startLeft)
-                {
-                    if(this.cursorEnd < textItem.text.length)
-                    {
-                        if(e.ctrlKey)
-                        {
-                            i = this.cursorEnd + 1;
-                            while(i < textItem.text.length && !(textItem.text.charAt(i - 1).match(/\s/) && textItem.text.charAt(i).match(/[^\s]/)))
-                            {
-                                i++;
-                            }
-
-                            newEnd = i;
-                        }
-                        else
-                        {
-                            if(newEnd < textItem.text.length)
-                            {
-                                newEnd++;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(e.ctrlKey)
-                    {
-                        i = this.cursorStart < textItem.text.length ? this.cursorStart + 1 : textItem.text.length;
-                        while(i < textItem.text.length && !(textItem.text.charAt(i - 1).match(/\s/) && textItem.text.charAt(i).match(/[^\s]/)))
-                        {
-                            i++;
-                        }
-
-                        newStart = i;
-                    }
-                    else
-                    {
-                        if(newStart < textItem.text.length)
-                        {
-                            newStart++;
-                        }
-                    }
-                }
-
-                if(e.shiftKey)
-                {
-                    if(this.cursorStart == this.cursorEnd)
-                    {
-                        this.startLeft = true;
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                    else if(newStart > newEnd)
-                    {
-                        this.startLeft = true;
-                        this.cursorStart = newEnd;
-                        this.cursorEnd = newStart;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                }
-                else
-                {
-                    this.cursorStart = this.cursorStart == this.cursorEnd || this.startLeft ? newEnd : newStart;
-                    this.cursorEnd = this.cursorStart;
-                }
-
-                this.changeTextSelect(this.currTextEdit, true);
-                break;
-            case 'ArrowUp':
-                textItem = this.getText(this.currTextEdit);
-
-                var newStart: number;
-                var newEnd: number;
-
-                if(e.ctrlKey)
-                {
-                    if(this.startLeft && this.cursorStart != this.cursorEnd)
-                    {
-                        i = this.cursorEnd - 1;
-                        while(i > 0 && !textItem.text.charAt(i - 1).match('\n'))
-                        {
-                            i--;
-                        }
-
-                        if(i < 0)
-                        {
-                            i = 0;
-                        }
-
-                        newStart = this.cursorStart;
-                        newEnd = i;
-                    }
-                    else
-                    {
-                        i = this.cursorStart - 1;
-                        while(i > 0 && !textItem.text.charAt(i - 1).match('\n'))
-                        {
-                            i--;
-                        }
-
-                        if(i < 0)
-                        {
-                            i = 0;
-                        }
-
-                        newStart = i;
-                        newEnd = this.cursorEnd;
-                    }
-                }
-                else
-                {
-                    if(this.startLeft && this.cursorStart != this.cursorEnd)
-                    {
-                        newStart = this.cursorStart;
-                        // If the cursor is on the first line do nothng
-                        if(this.cursorEnd <= textItem.textNodes[0].end)
-                        {
-                            newEnd = this.cursorEnd;
-                        }
-                        else
-                        {
-                            newEnd = this.findXHelper(textItem, true, this.cursorEnd);
-                        }
-                    }
-                    else
-                    {
-                        newEnd = this.cursorEnd;
-
-                        if(this.cursorStart <= textItem.textNodes[0].end)
-                        {
-                            newStart = this.cursorStart;
-                        }
-                        else
-                        {
-                            newStart = this.findXHelper(textItem, true, this.cursorStart);
-                        }
-                    }
-                }
-
-                if(e.shiftKey)
-                {
-                    if(this.cursorStart == this.cursorEnd)
-                    {
-                        this.startLeft = false;
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                    else if(newEnd < newStart)
-                    {
-                        this.startLeft = false;
-                        this.cursorStart = newEnd;
-                        this.cursorEnd = newStart;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                }
-                else
-                {
-                    if(this.startLeft && this.cursorStart != this.cursorEnd)
-                    {
-                        this.cursorStart = newEnd;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                    }
-                    this.cursorEnd = this.cursorStart;
-                }
-
-                this.changeTextSelect(this.currTextEdit, false);
-                break;
-            case 'ArrowDown':
-                textItem = this.getText(this.currTextEdit);
-
-                var newStart: number;
-                var newEnd: number;
-
-                if(e.ctrlKey)
-                {
-                    if(this.startLeft || this.cursorStart == this.cursorEnd)
-                    {
-                        i = this.cursorEnd + 1;
-                        while(i < textItem.text.length && !textItem.text.charAt(i).match('\n'))
-                        {
-                            i++;
-                        }
-
-                        newStart = this.cursorStart;
-                        newEnd = i;
-                    }
-                    else
-                    {
-                        i = this.cursorStart + 1;
-                        while(i < textItem.text.length && !textItem.text.charAt(i).match('\n'))
-                        {
-                            i++;
-                        }
-
-                        newStart = i;
-                        newEnd = this.cursorEnd;
-                    }
-                }
-                else
-                {
-                    if(this.startLeft || this.cursorStart == this.cursorEnd)
-                    {
-                        newStart = this.cursorStart;
-                        // If the cursor is on the last line do nothng
-                        if(this.cursorEnd >= textItem.textNodes[textItem.textNodes.length - 1].start)
-                        {
-                            newEnd = this.cursorEnd;
-                        }
-                        else
-                        {
-                            newEnd = this.findXHelper(textItem, false, this.cursorEnd);
-                        }
-                    }
-                    else
-                    {
-                        newEnd = this.cursorEnd;
-
-                        if(this.cursorStart >= textItem.textNodes[textItem.textNodes.length - 1].start)
-                        {
-                            newStart = this.cursorStart;
-                        }
-                        else
-                        {
-                            newStart = this.findXHelper(textItem, false, this.cursorStart);
-                        }
-                    }
-                }
-
-                if(e.shiftKey)
-                {
-                    if(this.cursorStart == this.cursorEnd)
-                    {
-                        this.startLeft = true;
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                    else if(newEnd < newStart)
-                    {
-                        this.startLeft = true;
-                        this.cursorStart = newEnd;
-                        this.cursorEnd = newStart;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                        this.cursorEnd = newEnd;
-                    }
-                }
-                else
-                {
-                    if(this.startLeft || this.cursorStart == this.cursorEnd)
-                    {
-                        this.cursorStart = newEnd;
-                    }
-                    else
-                    {
-                        this.cursorStart = newStart;
-                    }
-                    this.cursorEnd = this.cursorStart;
-                }
-
-                this.changeTextSelect(this.currTextEdit, false);
-                break;
-            case 'Backspace':
-                textItem = this.getText(this.currTextEdit);
-
-                if(this.cursorEnd > 0)
-                {
-                    if(e.ctrlKey)
-                    {
-                        if(this.cursorStart > 0)
-                        {
-                            // TODO: Move to start of previous word
-                        }
-                    }
-                    else
-                    {
-                        if(this.cursorStart == this.cursorEnd)
-                        {
-                            this.cursorStart--;
-                        }
-
-                        let start = this.cursorStart;
-                        let end = this.cursorEnd;
-                        this.cursorEnd = this.cursorStart;
-
-                        this.insertText(textItem, start, end, '');
-                    }
-                }
-                break;
-            case 'Enter':
-                inputChar = '\n';
-            default:
-                textItem = this.getText(this.currTextEdit);
-
-                if(e.ctrlKey)
-                {
-                    // TODO: Ctrl combos
-                    if(inputChar == 'a' || inputChar == 'A')
-                    {
-
-                    }
-                    else if(inputChar == 'j')
-                    {
-
-                    }
-                    else if(inputChar == 'b')
-                    {
-
-                    }
-                    else if(inputChar == 'i')
-                    {
-
-                    }
-                }
-                else
-                {
-                    let start = this.cursorStart;
-                    let end = this.cursorEnd;
-                    this.cursorStart++;
-                    this.cursorEnd = this.cursorStart;
-
-                    this.insertText(textItem, start, end, inputChar);
-                }
-                break;
-            }
-        }
-        else
-        {
-            if(e.ctrlKey)
-            {
-                if(inputChar == 'z')
-                {
-                    // If there is exactly one item selected treat it as being edited.
-                    if(this.currSelect.length == 1)
-                    {
-                        this.undoItemEdit(this.currSelect[0]);
-                    }
-                    else
-                    {
-                        this.undo();
-                    }
-                }
-                else if(inputChar == 'y')
-                {
-                    // If there is exactly one item selected treat it as being edited.
-                    if(this.currSelect.length == 1)
-                    {
-                        this.redoItemEdit(this.currSelect[0]);
-                    }
-                    else
-                    {
-                        this.redo();
-                    }
-                }
-            }
-        }
+        this.removeAlert();
     }
 }

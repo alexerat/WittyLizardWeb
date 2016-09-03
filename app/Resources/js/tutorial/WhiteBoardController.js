@@ -571,6 +571,120 @@ if (typeof Object.assign != 'function') {
         event.locale = '';
     };
 }(self));
+var BoardModes = {
+    SELECT: 'SELECT',
+    ERASE: 'ERASE'
+};
+var WorkerMessageTypes;
+(function (WorkerMessageTypes) {
+    WorkerMessageTypes[WorkerMessageTypes["START"] = 0] = "START";
+    WorkerMessageTypes[WorkerMessageTypes["SETSOCKET"] = 1] = "SETSOCKET";
+    WorkerMessageTypes[WorkerMessageTypes["UPDATEVIEW"] = 2] = "UPDATEVIEW";
+    WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 3] = "SETVBOX";
+    WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 4] = "AUDIOSTREAM";
+    WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 5] = "VIDEOSTREAM";
+    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 6] = "NEWVIEWCENTRE";
+    WorkerMessageTypes[WorkerMessageTypes["NEWELEMENT"] = 7] = "NEWELEMENT";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 8] = "ELEMENTVIEW";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 9] = "ELEMENTDELETE";
+    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 10] = "NEWALERT";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 11] = "REMOVEALERT";
+    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 12] = "NEWINFO";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 13] = "REMOVEINFO";
+})(WorkerMessageTypes || (WorkerMessageTypes = {}));
+var BoardElement = (function () {
+    function BoardElement(type, id, x, y, width, height, callbacks, serverId, updateTime) {
+        this.id = id;
+        this.type = type;
+        this.sendServerMsg = callbacks.sendServerMsg;
+        this.createAlert = callbacks.createAlert;
+        this.createInfo = callbacks.createInfo;
+        this.updateBoardView = callbacks.updateBoardView;
+        this.getAudioStream = callbacks.getAudioStream;
+        this.getVideoStream = callbacks.getVideoStream;
+        this.serverId = serverId;
+        this.opBuffer = [];
+        this.infoElement = -1;
+        this.isEditing = false;
+        this.isSelected = false;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        if (updateTime) {
+            this.updateTime = updateTime;
+        }
+        else {
+            this.updateTime = new Date();
+        }
+    }
+    BoardElement.prototype.updateView = function (updatedParams) {
+        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
+        return this.currentViewState;
+    };
+    BoardElement.prototype.getCurrentViewState = function () {
+        return this.currentViewState;
+    };
+    BoardElement.prototype.remoteEdit = function () {
+        this.operationPos = 0;
+        this.operationStack = [];
+    };
+    BoardElement.prototype.getDefaultInputReturn = function () {
+        var retVal = {
+            newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: this.isSelected,
+            newViewCentre: null, infoMessage: null, alertMessage: null
+        };
+        return retVal;
+    };
+    BoardElement.prototype.checkForServerId = function (messages) {
+        if (!this.serverId) {
+            for (var i_1 = 0; i_1 < messages.length; i_1++) {
+                console.log('No serverId, adding message to buffer.');
+                this.opBuffer.push(messages[i_1]);
+            }
+            return [];
+        }
+        else {
+            return messages;
+        }
+    };
+    BoardElement.prototype.handleUndo = function () {
+        var retVal = null;
+        if (this.operationPos > 0) {
+            retVal = this.operationStack[--this.operationPos].undo();
+        }
+        return retVal;
+    };
+    BoardElement.prototype.handleRedo = function () {
+        var retVal = null;
+        if (this.operationPos < this.operationStack.length) {
+            retVal = this.operationStack[this.operationPos++].redo();
+        }
+        return retVal;
+    };
+    return BoardElement;
+}());
+var BoardPallete = (function () {
+    function BoardPallete() {
+    }
+    BoardPallete.prototype.updateView = function (updatedParams) {
+        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
+        return this.currentViewState;
+    };
+    return BoardPallete;
+}());
+var components = Immutable.Map();
+var registerComponent = function (componentName, Element, ElementView, Pallete, PalleteView, ModeView, DrawHandle) {
+    var pallete = null;
+    if (Pallete) {
+        pallete = new Pallete();
+    }
+    var newComp = {
+        componentName: componentName, Element: Element, ElementView: ElementView, pallete: pallete, PalleteView: PalleteView,
+        ModeView: ModeView, DrawHandle: DrawHandle
+    };
+    components = components.set(componentName, newComp);
+};
 var WhiteBoardController = (function () {
     function WhiteBoardController(isHost, userId) {
         var _this = this;
@@ -590,31 +704,12 @@ var WhiteBoardController = (function () {
         this.isPoint = true;
         this.prevX = 0;
         this.prevY = 0;
-        this.curveChangeX = 0;
-        this.curveChangeY = 0;
-        this.currTextEdit = -1;
-        this.currTextSel = -1;
-        this.currTextMove = -1;
-        this.currTextResize = -1;
-        this.currCurveMove = -1;
-        this.currFileMove = -1;
-        this.currFileResize = -1;
-        this.vertResize = false;
-        this.horzResize = false;
-        this.cursorStart = 0;
-        this.cursorEnd = 0;
-        this.startLeft = false;
-        this.textDown = 0;
-        this.textIdealX = 0;
-        this.gettingLock = -1;
-        this.curveMoved = false;
-        this.textMoved = false;
-        this.fileMoved = false;
-        this.textResized = false;
-        this.fileResized = false;
-        this.isWriting = false;
-        this.userHighlight = -1;
+        this.groupStartX = 0;
+        this.groupStartY = 0;
+        this.mouseDownHandled = false;
+        this.touchStartHandled = false;
         this.currentHover = -1;
+        this.blockAlert = false;
         this.selectDrag = false;
         this.currSelect = [];
         this.groupMoving = false;
@@ -623,16 +718,9 @@ var WhiteBoardController = (function () {
         this.operationPos = 0;
         this.fileUploads = [];
         this.fileReaders = [];
-        this.textDict = [];
-        this.curveDict = [];
-        this.uploadDict = [];
-        this.hilightDict = [];
+        this.elementDict = [];
         this.boardElems = [];
         this.infoElems = [];
-        this.curveOutBuffer = [];
-        this.curveInBuffer = [];
-        this.curveInTimeouts = [];
-        this.curveOutTimeouts = [];
         this.textOutBuffer = [];
         this.textInBuffer = [];
         this.setView = function (view) {
@@ -643,6 +731,7 @@ var WhiteBoardController = (function () {
             whitElem.width = whitElem.clientWidth;
             whitElem.height = whitElem.clientHeight;
             window.addEventListener('resize', _this.windowResize);
+            window.addEventListener('beforeunload', _this.windowUnload);
             document.addEventListener('keypress', _this.keyPress);
             document.addEventListener('keydown', _this.keyDown);
             var newVBox = '0 0 ' + whitElem.width + ' ' + whitElem.height;
@@ -657,6 +746,19 @@ var WhiteBoardController = (function () {
             _this.viewState = viewState;
             _this.view.storeUpdate(_this.viewState);
         };
+        this.setElementView = function (id, newView) {
+            if (newView == null) {
+                console.log("Issue tracked here.");
+            }
+            var newElemList = _this.viewState.boardElements.set(id, newView);
+            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
+        };
+        this.getAudioStream = function () {
+            return null;
+        };
+        this.getVideoStream = function () {
+            return null;
+        };
         this.newAlert = function (type, message) {
             var newMsg = { type: type, message: message };
             var newElemList = _this.viewState.alertElements.push(newMsg);
@@ -667,461 +769,267 @@ var WhiteBoardController = (function () {
             _this.updateView(Object.assign({}, _this.viewState, { alertElements: newElemList }));
         };
         this.deleteElement = function (id) {
-            var element = _this.getBoardElement(id);
-            element.isDeleted = true;
-            var newElemList = _this.viewState.boardElements.filter(function (elem) { return elem.id !== id; });
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.restoreElement = function (id) {
-            var element = _this.getBoardElement(id);
-            element.isDeleted = false;
-            if (element.type === 'text') {
-            }
-            else if (element.type === 'curve') {
-            }
-        };
-        this.addCurve = function (x, y, width, height, curveSet, userId, colour, size, updateTime, serverId) {
-            var newCurve = {
-                type: 'curve', id: -1, user: userId, isDeleted: false, colour: colour, size: size, curveSet: curveSet, serverId: serverId, opBuffer: [],
-                x: x, y: y, width: width, height: height, hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
-            };
-            var localId = _this.boardElems.length;
-            _this.boardElems[localId] = newCurve;
-            newCurve.id = localId;
-            if (serverId) {
-                _this.curveDict[serverId] = localId;
-            }
-            var newCurveView;
-            if (curveSet.length > 1) {
-                var pathText = _this.createCurveText(curveSet);
-                newCurveView = {
-                    type: 'path', id: localId, size: newCurve.size, colour: newCurve.colour, param: pathText, updateTime: updateTime, selected: false
-                };
-            }
-            else {
-                newCurveView = {
-                    type: 'circle', id: localId, size: newCurve.size, colour: newCurve.colour, point: curveSet[0], updateTime: updateTime, selected: false
-                };
-            }
-            var newElemList = _this.viewState.boardElements.set(newCurveView.id, newCurveView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            return localId;
-        };
-        this.moveCurve = function (id, changeX, changeY, updateTime) {
-            var curve = _this.getCurve(id);
-            curve.x += changeX;
-            curve.y += changeY;
-            for (var i = 0; i < curve.curveSet.length; i++) {
-                curve.curveSet[i].x += changeX;
-                curve.curveSet[i].y += changeY;
-            }
-            var newCurveView;
-            if (curve.curveSet.length > 1) {
-                var pathText = _this.createCurveText(curve.curveSet);
-                newCurveView = Object.assign({}, _this.getViewElement(id), { param: pathText, updateTime: updateTime });
-            }
-            else {
-                newCurveView = Object.assign({}, _this.getViewElement(id), { point: curve.curveSet, updateTime: updateTime });
-            }
-            var newElemList = _this.viewState.boardElements.set(id, newCurveView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.addTextbox = function (x, y, width, height, size, justified, userId, editLock, updateTime, serverId) {
-            var localId;
-            var remLock;
-            if (serverId) {
-                localId = _this.textDict[serverId];
-            }
-            var newText;
-            if (localId == null || localId == undefined) {
-                newText =
-                    {
-                        text: '', user: userId, isDeleted: false, x: x, y: y, size: size, styles: [], editCount: 0, type: 'text', cursor: null, cursorElems: [],
-                        width: width, height: height, editLock: editLock, justified: justified, textNodes: [], dist: [0], serverId: serverId, id: 0, waiting: false,
-                        opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime, operationStack: [], operationPos: 0
-                    };
-                localId = _this.boardElems.length;
-                _this.boardElems[localId] = newText;
-                newText.id = localId;
-            }
-            else {
-                newText = _this.getText(localId);
-            }
-            if (editLock == _this.userId) {
-                remLock = false;
-                if (_this.currTextEdit == -1) {
-                    _this.currTextEdit = localId;
-                    _this.currTextSel = localId;
-                    _this.cursorStart = newText.text.length;
-                    _this.cursorEnd = newText.text.length;
-                    _this.gettingLock = -1;
-                    _this.isWriting = true;
-                    _this.changeTextSelect(localId, true);
-                    _this.setMode(1);
-                }
-                else if (_this.currTextEdit != localId) {
-                    _this.releaseText(localId);
-                }
-            }
-            else if (editLock != 0) {
-                remLock = true;
-            }
-            var newView = {
-                x: newText.x, y: newText.y, width: newText.width, height: newText.height, isEditing: false, remLock: remLock, getLock: false, textNodes: [],
-                cursor: null, cursorElems: [], id: localId, type: 'text', size: newText.size, waiting: false, updateTime: updateTime, selected: false
-            };
-            var newElemList = _this.viewState.boardElements.set(localId, newView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            return localId;
-        };
-        this.stopLockText = function (id) {
-            _this.gettingLock = -1;
-            _this.currTextEdit = -1;
-            _this.currTextSel = -1;
-            _this.isWriting = false;
-            var tbox = _this.getText(id);
-            tbox.editLock = 0;
-            tbox.cursor = null;
-            tbox.cursorElems = [];
-            var newTextView = Object.assign({}, _this.getViewElement(id), { getLock: false, isEditing: false, cursor: null, cursorElems: [] });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setTextGetLock = function (id) {
-            _this.gettingLock = id;
-            var tbox = _this.getText(id);
-            tbox.editLock = _this.userId;
-            _this.cursorStart = tbox.text.length;
-            _this.cursorEnd = tbox.text.length;
-            _this.isWriting = true;
-            _this.changeTextSelect(id, true);
-            var newTextView = Object.assign({}, _this.getViewElement(id), { getLock: true });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.changeTextSelect = function (id, setIdeal) {
-            var tbox = _this.getText(id);
-            if (setIdeal) {
-                if (_this.startLeft) {
-                    _this.textIdealX = _this.findXPos(tbox, _this.cursorEnd);
-                }
-                else {
-                    _this.textIdealX = _this.findXPos(tbox, _this.cursorStart);
-                }
-            }
-            _this.findCursorElems(tbox, _this.cursorStart, _this.cursorEnd);
-            if (tbox.styles.length > 0) {
-                var i = 0;
-                while (i < tbox.styles.length && tbox.styles[i].start > _this.cursorStart || tbox.styles[i].end < _this.cursorStart) {
-                    i++;
-                }
-                var isBold = tbox.styles[i].weight == 'bold';
-                var isItalic = tbox.styles[i].style == 'italic';
-                var isOLine = tbox.styles[i].decoration == 'overline';
-                var isULine = tbox.styles[i].decoration == 'underline';
-                var isTLine = tbox.styles[i].decoration == 'line-through';
-                _this.updateView(Object.assign({}, _this.viewState, { colour: tbox.styles[i].colour, isBold: isBold, isItalic: isItalic, isOLine: isOLine, isULine: isULine, isTLine: isTLine }));
-            }
-            var newTextViewCurr = Object.assign({}, _this.getViewElement(id), { cursor: tbox.cursor, cursorElems: tbox.cursorElems });
-            var newElemList = _this.viewState.boardElements.set(id, newTextViewCurr);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setTextEdit = function (id) {
-            _this.currTextEdit = id;
-            _this.currTextSel = id;
-            var tbox = _this.getText(id);
-            tbox.editLock = _this.userId;
-            _this.cursorStart = tbox.text.length;
-            _this.cursorEnd = tbox.text.length;
-            _this.gettingLock = -1;
-            _this.isWriting = true;
-            _this.changeTextSelect(id, true);
-            var newTextView = Object.assign({}, _this.getViewElement(id), { getLock: false, isEditing: true });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { mode: 1, boardElements: newElemList }));
-        };
-        this.setTextLock = function (id, userId) {
-            var tbox = _this.getText(id);
-            tbox.editLock = userId;
-            if (userId != _this.userId) {
-                var newTextView = Object.assign({}, _this.getViewElement(id), { remLock: true });
-                var newElemList = _this.viewState.boardElements.set(id, newTextView);
-                _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            }
-        };
-        this.setTextUnLock = function (id) {
-            var tbox = _this.getText(id);
-            tbox.editLock = 0;
-            var newTextView = Object.assign({}, _this.getViewElement(id), { remLock: false });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setTextJustified = function (id, state) {
-            var textBox = _this.getText(id);
-            textBox.justified = state;
-            textBox.textNodes = _this.calculateTextLines(textBox);
-            if (_this.currTextSel == id) {
-                if (_this.startLeft) {
-                    _this.textIdealX = _this.findXPos(textBox, _this.cursorEnd);
-                }
-                else {
-                    _this.textIdealX = _this.findXPos(textBox, _this.cursorStart);
-                }
-                _this.findCursorElems(textBox, _this.cursorStart, _this.cursorEnd);
-            }
-            var newTextView = Object.assign({}, _this.getViewElement(id), {
-                textNodes: textBox.textNodes, cursor: textBox.cursor, cursorElems: textBox.cursorElems
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            _this.sendTextJustified(id);
-        };
-        this.setTextArea = function (id, width, height) {
-            var textBox = _this.getText(id);
-            textBox.height = height;
-            if (textBox.width != width) {
-                textBox.width = width;
-                textBox.textNodes = _this.calculateTextLines(textBox);
-            }
-            if (_this.currTextSel == id) {
-                _this.findCursorElems(textBox, _this.cursorStart, _this.cursorEnd);
-            }
-            var newTextView = Object.assign({}, _this.getViewElement(id), {
-                textNodes: textBox.textNodes, width: textBox.width, height: textBox.height, cursor: textBox.cursor, cursorElems: textBox.cursorElems
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.moveTextbox = function (id, isRelative, x, y, updateTime) {
-            var textBox = _this.getText(id);
-            var changeX;
-            var changeY;
-            if (isRelative) {
-                changeX = x;
-                changeY = y;
-            }
-            else {
-                changeX = x - textBox.x;
-                changeY = y - textBox.y;
-            }
-            textBox.x += changeX;
-            textBox.y += changeY;
-            for (var i = 0; i < textBox.textNodes.length; i++) {
-                var node = textBox.textNodes[i];
-                node.x += changeX;
-                node.y += changeY;
-            }
-            if (_this.currTextSel == id) {
-                _this.findCursorElems(textBox, _this.cursorStart, _this.cursorEnd);
-            }
-            var newTextView = Object.assign({}, _this.getViewElement(id), {
-                textNodes: textBox.textNodes, x: textBox.x, y: textBox.y, cursor: textBox.cursor, cursorElems: textBox.cursorElems, updateTime: updateTime
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.startTextWait = function (id) {
-            var textItem = _this.getText(id);
-            textItem.waiting = true;
-            var newTextView = Object.assign({}, _this.getViewElement(id), {
-                waiting: true
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newTextView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.updateText = function (newText) {
-            newText.textNodes = _this.calculateTextLines(newText);
-            if (_this.currTextSel == newText.id) {
-                _this.findCursorElems(newText, _this.cursorStart, _this.cursorEnd);
-            }
-            newText.waiting = false;
-            var newTextView = Object.assign({}, _this.getViewElement(newText.id), {
-                textNodes: newText.textNodes, width: newText.width, height: newText.height, cursor: newText.cursor, cursorElems: newText.cursorElems, waiting: false
-            });
-            var newElemList = _this.viewState.boardElements.set(newText.id, newTextView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
+            var newElemList = _this.viewState.boardElements.filter(function (element) { return element.id !== id; });
             _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
         };
         this.setMode = function (newMode) {
-            _this.updateView(Object.assign({}, _this.viewState, { mode: newMode }));
+            var palleteView = {};
+            var cursor = { cursor: 'auto', url: [], offset: { x: 0, y: 0 } };
+            if (newMode != BoardModes.SELECT && newMode != BoardModes.ERASE) {
+                palleteView = components.get(newMode).pallete.getCurrentViewState();
+                cursor = components.get(newMode).pallete.getCursor();
+            }
+            _this.cursor = cursor.cursor;
+            _this.cursorURL = cursor.url;
+            _this.cursorOffset = cursor.offset;
+            _this.updateView(Object.assign({}, _this.viewState, {
+                mode: newMode, palleteState: palleteView, cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset
+            }));
         };
-        this.setSize = function (newSize) {
-            var baseSize = _this.viewState.baseSize;
-            if (newSize == 0) {
-                baseSize = 0.5;
+        this.sendMessage = function (id, type, message) {
+            var serverId = _this.getBoardElement(id).serverId;
+            var msg = { id: serverId, type: type, payload: message };
+            console.log('Sending message: ' + JSON.stringify(msg));
+            _this.socket.emit('MSG-COMPONENT', msg);
+        };
+        this.selectGroup = function (ids) {
+            for (var i_2 = 0; i_2 < _this.currSelect.length; i_2++) {
+                var elem = _this.getBoardElement(_this.currSelect[i_2]);
+                if (elem.isDeleted) {
+                    console.log('Deselect is probably the issue.');
+                }
+                var newView = elem.handleDeselect();
+                _this.setElementView(elem.id, newView);
             }
-            else if (newSize == 1) {
-                baseSize = 1.0;
+            for (var i_3 = 0; i_3 < ids.length; i_3++) {
+                var elem = _this.getBoardElement(ids[i_3]);
+                if (!elem.isDeleted) {
+                    var newView = elem.handleSelect();
+                    _this.currSelect.push(elem.id);
+                    _this.setElementView(elem.id, newView);
+                }
             }
-            else if (newSize == 2) {
-                baseSize = 2.0;
+        };
+        this.handleElementOperation = function (id, undoOp, redoOp) {
+            if (undoOp && redoOp) {
+                _this.newOperation(id, undoOp, redoOp);
+            }
+            else if (undoOp || redoOp) {
+                console.error('Element provided either undo or redo operation. It must specify neither or both.');
+            }
+        };
+        this.handleElementMessages = function (id, type, messages) {
+            for (var i_4 = 0; i_4 < messages.length; i_4++) {
+                _this.sendMessage(id, type, messages[i_4]);
+            }
+        };
+        this.handleMouseElementSelect = function (e, elem, isSelected, cursor) {
+            if (isSelected) {
+                var alreadySelected = false;
+                for (var i_5 = 0; i_5 < _this.currSelect.length; i_5++) {
+                    if (_this.currSelect[i_5] == elem.id) {
+                        alreadySelected = true;
+                    }
+                }
+                if (!alreadySelected) {
+                    if (e.ctrlKey) {
+                        _this.currSelect.push(elem.id);
+                    }
+                    else {
+                        for (var i_6 = 0; i_6 < _this.currSelect.length; i_6++) {
+                            if (_this.currSelect[i_6] != elem.id) {
+                                var selElem = _this.getBoardElement(_this.currSelect[i_6]);
+                                var selElemView = selElem.handleDeselect();
+                                _this.setElementView(selElem.id, selElemView);
+                            }
+                        }
+                        _this.currSelect = [];
+                        _this.currSelect.push(elem.id);
+                    }
+                }
+                if (_this.currSelect.length == 1 && cursor) {
+                    if (_this.cursor != cursor.cursor || _this.cursorURL != cursor.url) {
+                        _this.cursor = cursor.cursor;
+                        _this.cursorURL = cursor.url;
+                        _this.cursorOffset = cursor.offset;
+                        _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
+                    }
+                }
             }
             else {
-                throw 'ERROR: Not a valid base size.';
+                if (_this.currSelect.length == 1 && _this.currSelect[0] == elem.id) {
+                    _this.cursor = 'auto';
+                    _this.cursorURL = [];
+                    _this.cursorOffset = { x: 0, y: 0 };
+                    _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
+                    _this.currSelect = [];
+                }
+                else {
+                    for (var i_7 = 0; i_7 < _this.currSelect.length; i_7++) {
+                        if (_this.currSelect[i_7] == elem.id) {
+                            _this.currSelect.splice(i_7, 1);
+                        }
+                    }
+                }
             }
-            _this.updateView(Object.assign({}, _this.viewState, { sizeMode: newSize, baseSize: baseSize }));
         };
-        this.setColour = function (newColour) {
-            _this.updateView(Object.assign({}, _this.viewState, { colour: newColour }));
-        };
-        this.setIsItalic = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isItalic: newState }));
-        };
-        this.setIsOline = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isOLine: newState }));
-        };
-        this.setIsUline = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isULine: newState }));
-        };
-        this.setIsTline = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isTLine: newState }));
-        };
-        this.setIsBold = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isBold: newState }));
-        };
-        this.setJustified = function (newState) {
-            _this.updateView(Object.assign({}, _this.viewState, { isJustified: newState }));
-        };
-        this.addHighlight = function (x, y, width, height, userId, colour) {
-            var d = new Date();
-            d.setDate(d.getDate() + 50);
-            var newHighlight = {
-                type: 'highlight', id: -1, user: userId, isDeleted: false, serverId: -1, x: x, y: y, width: width, height: height, colour: colour,
-                opBuffer: [], hoverTimer: null, infoElement: null, updateTime: d
-            };
-            var localId = _this.boardElems.length;
-            _this.boardElems[localId] = newHighlight;
-            newHighlight.id = localId;
-            var newHighlightView = {
-                id: localId, x: x, y: y, width: width, height: height, type: 'highlight', colour: colour, updateTime: d, selected: false
-            };
-            var newElemList = _this.viewState.boardElements.set(localId, newHighlightView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            return localId;
-        };
-        this.addFile = function (x, y, width, height, userId, isImage, fDesc, fType, extension, rotation, url, updateTime, serverId) {
-            if (url === void 0) { url = ''; }
-            var newUpload = {
-                type: 'file', id: -1, user: userId, isDeleted: false, serverId: serverId, x: x, y: y, width: width, height: height, isImage: isImage, fType: fType,
-                rotation: rotation, opBuffer: [], hoverTimer: null, infoElement: null, updateTime: updateTime
-            };
-            var localId = _this.boardElems.length;
-            _this.boardElems[localId] = newUpload;
-            newUpload.id = localId;
-            var isLoading = url == '' ? true : false;
-            var isUploader = userId == _this.userId || userId == 0 ? true : false;
-            var newUploadView = {
-                id: localId, x: x, y: y, width: width, height: height, isImage: isImage, extension: extension, rotation: rotation,
-                URL: url, isLoading: isLoading, isUploader: isUploader, percentUp: 0, type: 'file', updateTime: updateTime, selected: false
-            };
-            var newElemList = _this.viewState.boardElements.set(localId, newUploadView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-            return localId;
-        };
-        this.updateProgress = function (id, percent) {
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                percentUp: percent
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setUploadComplete = function (id, fileURL) {
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                percentUp: 100, isLoading: false, URL: fileURL
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.moveUpload = function (id, isRelative, x, y, updateTime) {
-            var file = _this.getUpload(id);
-            var changeX;
-            var changeY;
-            if (isRelative) {
-                changeX = x;
-                changeY = y;
+        this.handleTouchElementSelect = function (e, elem, isSelected, cursor) {
+            if (isSelected) {
+                if (e.ctrlKey) {
+                    var alreadySelected = false;
+                    for (var i_8 = 0; i_8 < _this.currSelect.length; i_8++) {
+                        if (_this.currSelect[i_8] == elem.id) {
+                            alreadySelected = true;
+                        }
+                    }
+                    if (!alreadySelected) {
+                        _this.currSelect.push(elem.id);
+                    }
+                }
+                else {
+                    for (var i_9 = 0; i_9 < _this.currSelect.length; i_9++) {
+                        if (_this.currSelect[i_9] != elem.id) {
+                            var selElem = _this.getBoardElement(_this.currSelect[i_9]);
+                            var selElemView = selElem.handleDeselect();
+                            _this.setElementView(selElem.id, selElemView);
+                        }
+                    }
+                    _this.currSelect = [];
+                    _this.currSelect.push(elem.id);
+                }
+                if (_this.currSelect.length == 1 && cursor) {
+                    _this.cursor = cursor.cursor;
+                    _this.cursorURL = cursor.url;
+                    _this.cursorOffset = cursor.offset;
+                    _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
+                }
             }
             else {
-                changeX = x - file.x;
-                changeY = y - file.y;
-            }
-            file.x += changeX;
-            file.y += changeY;
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                x: file.x, y: file.y, updateTime: updateTime
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.rotateUpload = function (id) {
-            var file = _this.getUpload(id);
-            file.rotation += 90;
-            if (file.rotation >= 360) {
-                file.rotation = 0;
-            }
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                rotation: file.rotation
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setUploadArea = function (id, width, height, updateTime) {
-            var file = _this.getUpload(id);
-            file.height = height;
-            file.width = width;
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                width: file.width, height: file.height, updateTime: updateTime
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            newElemList = newElemList.sort(_this.compareUpdateTime);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setUploadRotation = function (id, rotation) {
-            var file = _this.getUpload(id);
-            file.rotation = rotation;
-            var newFileView = Object.assign({}, _this.getViewElement(id), {
-                rotation: file.rotation
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newFileView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.moveGroup = function (isRelative, x, y, editTime) {
-            for (var i = 0; i < _this.currSelect.length; i++) {
-                var elem = _this.getBoardElement(_this.currSelect[i]);
-                if (elem.type == 'curve') {
-                    _this.moveCurve(elem.id, x, y, editTime);
-                }
-                else if (elem.type == 'text') {
-                    _this.moveTextbox(elem.id, isRelative, x, y, editTime);
-                }
-                else if (elem.type == 'file') {
-                    _this.moveUpload(elem.id, isRelative, x, y, editTime);
+                for (var i_10 = 0; i_10 < _this.currSelect.length; i_10++) {
+                    if (_this.currSelect[i_10] == elem.id) {
+                        _this.currSelect.splice(i_10, 1);
+                    }
                 }
             }
         };
-        this.startMove = function () {
-            _this.updateView(Object.assign({}, _this.viewState, { itemMoving: true }));
+        this.handleElementPalleteChanges = function (elem, changes) {
+            for (var j_1 = 0; j_1 < changes.length; j_1++) {
+                var change_1 = changes[j_1];
+                components.get(elem.type).pallete.handleChange(change_1);
+                for (var i_11 = 0; i_11 < _this.currSelect.length; i_11++) {
+                    var selElem = _this.getBoardElement(_this.currSelect[i_11]);
+                    if (selElem.id != elem.id && selElem.type == elem.type) {
+                        var retVal = selElem.handlePalleteChange(change_1);
+                        _this.handleElementMessages(selElem.id, selElem.type, retVal.serverMessages);
+                        _this.handleElementOperation(selElem.id, retVal.undoOp, retVal.redoOp);
+                        _this.setElementView(selElem.id, retVal.newView);
+                    }
+                }
+            }
         };
-        this.endMove = function () {
-            _this.currTextMove = -1;
-            _this.currCurveMove = -1;
-            _this.currFileMove = -1;
+        this.handleElementNewViewCentre = function (x, y) {
+            var whitElem = document.getElementById('whiteBoard-input');
+            var whitCont = document.getElementById('whiteboard-container');
+            var clientWidth = whitCont.clientWidth;
+            var clientHeight = whitCont.clientHeight;
+            var xChange = x - (_this.panX + clientWidth * _this.scaleF * 0.5);
+            var yChange = y - (_this.panY + clientHeight * _this.scaleF * 0.5);
+            var newPanX = _this.panX + xChange;
+            var newPanY = _this.panY + yChange;
+            if (newPanX < 0) {
+                newPanX = 0;
+            }
+            if (newPanY < 0) {
+                newPanY = 0;
+            }
+            _this.setViewBox(newPanX, newPanY, _this.scaleF);
+        };
+        this.handleRemoteEdit = function (id) {
+            for (var i_12 = 0; i_12 < _this.operationStack.length; i_12++) {
+                if (_this.operationStack[i_12].ids.indexOf(id) != -1) {
+                    var newOp = {
+                        ids: _this.operationStack[i_12].ids,
+                        undos: [(function (elemIds) {
+                                return function () { _this.selectGroup(elemIds); return null; };
+                            })(_this.operationStack[i_12].ids)],
+                        redos: [(function (elemIds) {
+                                return function () { _this.selectGroup(elemIds); return null; };
+                            })(_this.operationStack[i_12].ids)]
+                    };
+                    _this.operationStack.splice(i_12, 1, newOp);
+                }
+            }
+        };
+        this.handleInfoMessage = function (data) {
+        };
+        this.handleAlertMessage = function (msg) {
+            if (msg) {
+                _this.newAlert(msg.header, msg.message);
+            }
+        };
+        this.startMove = function (startX, startY) {
+            _this.groupStartX = startX;
+            _this.groupStartY = startY;
+            _this.groupMoving = true;
+            _this.cursor = 'move';
+            _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor }));
+            for (var i_13 = 0; i_13 < _this.currSelect.length; i_13++) {
+                var elem = _this.getBoardElement(_this.currSelect[i_13]);
+                var retVal = elem.startMove();
+            }
+        };
+        this.moveGroup = function (x, y, editTime) {
+            for (var i_14 = 0; i_14 < _this.currSelect.length; i_14++) {
+                var elem = _this.getBoardElement(_this.currSelect[i_14]);
+                var elemView = elem.handleMove(x, y);
+                _this.setElementView(elem.id, elemView);
+            }
+        };
+        this.endMove = function (endX, endY) {
             _this.groupMoving = false;
-            _this.updateView(Object.assign({}, _this.viewState, { itemMoving: false }));
+            _this.cursor = 'auto';
+            _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor }));
+            var undoOpList = [];
+            var redoOpList = [];
+            for (var i_15 = 0; i_15 < _this.currSelect.length; i_15++) {
+                var elem = _this.getBoardElement(_this.currSelect[i_15]);
+                var retVal = elem.endMove();
+                var undoOp = (function (element, changeX, changeY) {
+                    return function () {
+                        element.handleMove(-changeX, -changeY);
+                        var ret = element.endMove();
+                        _this.handleElementMessages(element.id, element.type, ret.serverMessages);
+                        _this.setElementView(element.id, ret.newView);
+                    };
+                })(elem, endX - _this.groupStartX, endY - _this.groupStartY);
+                var redoOp = (function (element, changeX, changeY) {
+                    return function () {
+                        element.handleMove(changeX, changeY);
+                        var ret = element.endMove();
+                        _this.handleElementMessages(element.id, element.type, ret.serverMessages);
+                        _this.setElementView(element.id, ret.newView);
+                    };
+                })(elem, endX - _this.groupStartX, endY - _this.groupStartY);
+                _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                _this.setElementView(elem.id, retVal.newView);
+                undoOpList.push(undoOp);
+                redoOpList.push(redoOp);
+            }
+            _this.operationStack.splice(_this.operationPos, _this.operationStack.length - _this.operationPos);
+            var newOp = { ids: _this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
+            _this.operationStack[_this.operationPos++] = newOp;
         };
-        this.startResize = function (horz, vert) {
-            _this.updateView(Object.assign({}, _this.viewState, { itemResizing: true, resizeHorz: horz, resizeVert: vert }));
+        this.selectElement = function (id) {
+            var elem = _this.getBoardElement(id);
+            if (!elem.isDeleted) {
+                var newElemView = elem.handleSelect();
+                _this.setElementView(id, newElemView);
+            }
         };
-        this.endResize = function () {
-            _this.currFileResize = -1;
-            _this.currTextResize = -1;
-            _this.updateView(Object.assign({}, _this.viewState, { itemResizing: false }));
+        this.deselectElement = function (id) {
+            var elem = _this.getBoardElement(id);
+            var newElemView = elem.handleDeselect();
+            _this.setElementView(elem.id, newElemView);
         };
         this.addInfoMessage = function (x, y, width, height, header, message) {
             var newInfo = {
@@ -1141,20 +1049,6 @@ var WhiteBoardController = (function () {
             var newInfoList = _this.viewState.infoElements.delete(id);
             _this.updateView(Object.assign({}, _this.viewState, { infoElements: newInfoList }));
         };
-        this.selectElement = function (id) {
-            var newElemView = Object.assign({}, _this.getViewElement(id), {
-                selected: true
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newElemView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.deselectElement = function (id) {
-            var newElemView = Object.assign({}, _this.getViewElement(id), {
-                selected: false
-            });
-            var newElemList = _this.viewState.boardElements.set(id, newElemView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
         this.setViewBox = function (panX, panY, scaleF) {
             var whitElem = document.getElementById("whiteBoard-input");
             var vBoxW = whitElem.clientWidth * scaleF;
@@ -1163,27 +1057,9 @@ var WhiteBoardController = (function () {
             _this.panX = panX;
             _this.panY = panY;
             var newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
-            _this.updateView(Object.assign({}, _this.viewState, { viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF }));
-        };
-        this.getStyle = function () {
-            return _this.viewState.isItalic ? 'italic' : 'normal';
-        };
-        this.getWeight = function () {
-            return _this.viewState.isBold ? 'bold' : 'normal';
-        };
-        this.getDecoration = function () {
-            if (_this.viewState.isOLine) {
-                return 'overline';
-            }
-            else if (_this.viewState.isTLine) {
-                return 'line-through';
-            }
-            else if (_this.viewState.isULine) {
-                return 'underline';
-            }
-            else {
-                return 'none';
-            }
+            _this.updateView(Object.assign({}, _this.viewState, {
+                viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF
+            }));
         };
         this.getBoardElement = function (id) {
             if (_this.boardElems[id]) {
@@ -1193,1366 +1069,81 @@ var WhiteBoardController = (function () {
                 throw 'Element does not exist';
             }
         };
-        this.getCurve = function (id) {
-            if (_this.getBoardElement(id).type == 'curve') {
-                return _this.getBoardElement(id);
-            }
-            else {
-                console.log('Type was: ' + _this.getBoardElement(id).type);
-                throw 'Element is not of curve type';
-            }
-        };
-        this.getText = function (id) {
-            if (_this.getBoardElement(id).type == 'text') {
-                return _this.getBoardElement(id);
-            }
-            else {
-                console.log('Type was: ' + _this.getBoardElement(id).type);
-                throw 'Element is not of text type';
-            }
-        };
-        this.getHighlight = function (id) {
-            if (_this.getBoardElement(id).type == 'highlight') {
-                return _this.getBoardElement(id);
-            }
-            else {
-                console.log('Type was: ' + _this.getBoardElement(id).type);
-                throw 'Element is not of highlight type';
-            }
-        };
-        this.getUpload = function (id) {
-            if (_this.getBoardElement(id).type == 'file') {
-                return _this.getBoardElement(id);
-            }
-            else {
-                console.log('Type was: ' + _this.getBoardElement(id).type);
-                throw 'Element is not of upload type';
-            }
-        };
-        this.getViewElement = function (id) {
-            return _this.viewState.boardElements.get(id);
-        };
         this.getInfoMessage = function (id) {
             return _this.infoElems[id];
         };
         this.undo = function () {
+            console.log('Undo, stack length. ' + _this.operationStack.length);
             if (_this.operationPos > 0) {
-                _this.operationStack[--_this.operationPos].undo();
+                var operation = _this.operationStack[--_this.operationPos];
+                for (var i_16 = 0; i_16 < operation.undos.length; i_16++) {
+                    var retVal = operation.undos[i_16]();
+                    if (retVal) {
+                        var elem = _this.getBoardElement(retVal.id);
+                        _this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        _this.setElementView(retVal.id, retVal.newView);
+                        if (retVal.newViewCentre) {
+                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                        }
+                        if (retVal.wasDelete) {
+                            _this.deleteElement(elem.id);
+                        }
+                    }
+                }
             }
         };
         this.redo = function () {
             if (_this.operationPos < _this.operationStack.length) {
-                _this.operationStack[_this.operationPos++].redo();
+                var operation = _this.operationStack[_this.operationPos++];
+                for (var i_17 = 0; i_17 < operation.redos.length; i_17++) {
+                    var retVal = operation.redos[i_17]();
+                    if (retVal) {
+                        var elem = _this.getBoardElement(retVal.id);
+                        _this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        _this.setElementView(retVal.id, retVal.newView);
+                        if (retVal.newViewCentre) {
+                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                        }
+                        if (retVal.wasDelete) {
+                            _this.deleteElement(elem.id);
+                        }
+                    }
+                }
             }
         };
         this.newOperation = function (itemId, undoOp, redoOp) {
             _this.operationStack.splice(_this.operationPos, _this.operationStack.length - _this.operationPos);
-            var newOp = { id: itemId, undo: undoOp, redo: redoOp };
+            var newOp = { ids: [itemId], undos: [undoOp], redos: [redoOp] };
             _this.operationStack[_this.operationPos++] = newOp;
-        };
-        this.remoteEdit = function (id) {
-            for (var i = 0; i < _this.operationStack.length; i++) {
-                if (_this.operationStack[i].id == id) {
-                    var newOp = { id: id, undo: function () { _this.selectElement(id); }, redo: function () { _this.selectElement(id); } };
-                    _this.operationStack.splice(i, 1, newOp);
-                }
-            }
         };
         this.undoItemEdit = function (id) {
             var elem = _this.getBoardElement(id);
-            if (elem.operationPos > 0) {
+            if (!elem.isDeleted && elem.operationPos > 0) {
                 elem.operationStack[--elem.operationPos].undo();
             }
         };
         this.redoItemEdit = function (id) {
             var elem = _this.getBoardElement(id);
-            if (elem.operationPos < elem.operationStack.length) {
+            if (!elem.isDeleted && elem.operationPos < elem.operationStack.length) {
                 elem.operationStack[elem.operationPos++].redo();
             }
         };
-        this.remoteItemEdit = function (id) {
-            var elem = _this.getBoardElement(id);
-            elem.operationPos = 0;
-            elem.operationStack = [];
-        };
         this.addHoverInfo = function (id) {
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var elem = _this.getBoardElement(id);
-            var infoId = _this.addInfoMessage(_this.mouseX, _this.mouseY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
+            var infoId = _this.addInfoMessage(_this.prevX - offsetX + 20, _this.prevY - offsetY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
             elem.infoElement = infoId;
         };
         this.removeHoverInfo = function (id) {
             var elem = _this.getBoardElement(id);
-            elem.infoElement = null;
+            elem.infoElement = -1;
+            _this.currentHover = -1;
             _this.removeInfoMessage(elem.infoElement);
-        };
-        this.sendGroupMove = function () {
-            for (var i = 0; i < _this.currSelect.length; i++) {
-                var elem = _this.getBoardElement(_this.currSelect[i]);
-                if (elem.type == 'curve') {
-                    _this.sendCurveMove(elem.id);
-                }
-                else if (elem.type == 'text') {
-                    _this.sendTextMove(elem.id);
-                }
-                else if (elem.type == 'file') {
-                    _this.sendFileMove(elem.id);
-                }
-            }
-        };
-        this.newEdit = function (textBox) {
-            textBox.editCount++;
-            if (textBox.editCount > 5) {
-                textBox.editCount = 0;
-                clearTimeout(_this.editTimer);
-                _this.textEdited(textBox);
-            }
-            else {
-                var self = _this;
-                clearTimeout(_this.editTimer);
-                _this.editTimer = setTimeout(function (tBox) {
-                    tBox.editCount = 0;
-                    self.textEdited(tBox);
-                    clearTimeout(this.editTimer);
-                }, 6000, textBox);
-            }
-            return textBox;
-        };
-        this.drawCurve = function (points, size, colour, scaleF, panX, panY) {
-            var reducedPoints;
-            var curves;
-            var minX = null;
-            var maxX = null;
-            var minY = null;
-            var maxY = null;
-            if (points.length > 1) {
-                reducedPoints = SmoothCurve(points);
-                reducedPoints = DeCluster(reducedPoints, 10);
-                for (var i = 0; i < reducedPoints.length; i++) {
-                    reducedPoints[i].x = reducedPoints[i].x * scaleF + panX;
-                    reducedPoints[i].y = reducedPoints[i].y * scaleF + panY;
-                    if (minX == null || reducedPoints[i].x < minX) {
-                        minX = reducedPoints[i].x;
-                    }
-                    if (maxX == null || reducedPoints[i].x > maxX) {
-                        maxX = reducedPoints[i].x;
-                    }
-                    if (minY == null || reducedPoints[i].y < minY) {
-                        minY = reducedPoints[i].y;
-                    }
-                    if (maxY == null || reducedPoints[i].y > maxY) {
-                        maxY = reducedPoints[i].y;
-                    }
-                }
-                curves = FitCurve(reducedPoints, reducedPoints.length, 5);
-            }
-            else {
-                curves = [];
-                curves[0] = { x: points[0].x * scaleF + panX, y: points[0].y * scaleF + panY };
-            }
-            var localId = _this.addCurve(minX, minY, maxX - minX, maxY - minY, curves, _this.userId, colour, size, new Date());
-            _this.sendCurve(localId, minX, minY, maxX - minX, maxY - minY, curves, colour, size);
-        };
-        this.sendCurve = function (localId, x, y, width, height, curves, colour, size) {
-            var self = _this;
-            _this.curveOutBuffer[localId] = { serverId: 0, localId: localId, colour: colour, curveSet: curves, size: size };
-            _this.curveOutTimeouts[localId] = setInterval(function () {
-                var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
-                self.socket.emit('CURVE', msg);
-            }, 60000);
-            var msg = { localId: localId, colour: colour, num_points: curves.length, size: size, x: x, y: y, width: width, height: height };
-            _this.socket.emit('CURVE', msg);
-        };
-        this.sendCurveMove = function (id) {
-            var curve = _this.getCurve(id);
-            if (curve.serverId) {
-                var msg = { serverId: curve.serverId, x: curve.x, y: curve.y };
-                _this.socket.emit('MOVE-CURVE', msg);
-            }
-            else {
-                var msg = { serverId: null, x: curve.x, y: curve.y };
-                var newOp = { type: 'MOVE-CURVE', message: msg };
-                curve.opBuffer.push(newOp);
-            }
-        };
-        this.deleteCurve = function (id) {
-            var curve = _this.getCurve(id);
-            if (curve.serverId) {
-                _this.socket.emit('DELETE-CURVE', curve.serverId);
-            }
-            else {
-                var newOp = { type: 'DELETE-CURVE', message: null };
-                curve.opBuffer.push(newOp);
-            }
-            _this.deleteElement(id);
-        };
-        this.placeHighlight = function (mouseX, mouseY, scaleF, panX, panY, rectWidth, rectHeight) {
-            var x = scaleF * mouseX + panX;
-            var y = scaleF * mouseY + panY;
-            var width = rectWidth * scaleF;
-            var height = rectHeight * scaleF;
-            var localId = _this.addHighlight(x, y, width, height, _this.userId, 0xffff00);
-            _this.userHighlight = localId;
-            _this.sendHighlight(x, y, width, height);
-        };
-        this.sendHighlight = function (posX, posY, width, height) {
-            var hMsg = { x: posX, y: posY, width: width, height: height };
-            _this.socket.emit('HIGHLIGHT', hMsg);
-        };
-        this.clearHighlight = function () {
-            if (_this.userHighlight != -1) {
-                _this.deleteElement(_this.userHighlight);
-                _this.userHighlight = -1;
-                _this.socket.emit('CLEAR-HIGHLIGHT', null);
-            }
-        };
-        this.placeLocalFile = function (mouseX, mouseY, scaleF, panX, panY, file) {
-            var x = scaleF * mouseX + panX;
-            var y = scaleF * mouseY + panY;
-            var width = 200 * scaleF;
-            var height = 200 * scaleF;
-            var isImage = false;
-            var fType = file.name.split('.').pop();
-            var mType = file.type;
-            var size = file.size;
-            console.log('File type is: ' + file.type);
-            if (mType.match(/octet-stream/)) {
-                _this.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
-            }
-            else {
-                isImage = mType.split('/')[0] == 'image' ? true : false;
-                if (!isImage) {
-                    width = 150 * scaleF;
-                }
-                if (size < 10485760) {
-                    var localId = _this.addFile(x, y, width, height, _this.userId, isImage, file.name, file.type, fType, 0, undefined, new Date());
-                    _this.sendLocalFile(x, y, width, height, file, localId);
-                }
-                else {
-                    _this.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-                }
-            }
-        };
-        this.sendLocalFile = function (posX, posY, width, height, file, localId) {
-            var newReader = new FileReader();
-            var self = _this;
-            newReader.onload = function (e) {
-                var serverId = self.getBoardElement(localId).serverId;
-                var newDataMsg = { serverId: serverId, piece: e.target.result };
-                self.socket.emit('FILE-DATA', newDataMsg);
-            };
-            _this.fileUploads[localId] = file;
-            _this.fileReaders[localId] = newReader;
-            var fExtension = file.name.split('.').pop();
-            var fileMsg = { localId: localId, x: posX, y: posY, width: width, height: height, fileSize: file.size, fileName: file.name, fileType: file.type, extension: fExtension };
-            _this.socket.emit('FILE-START', fileMsg);
-        };
-        this.sendFileData = function (serverId, place, percent, attempt) {
-            if (attempt === void 0) { attempt = 0; }
-            var localId = _this.uploadDict[serverId];
-            if (localId == null || localId == undefined) {
-                if (attempt < 5) {
-                    setTimeout(_this.sendFileData.bind(_this), 1000, serverId, place, percent, ++attempt);
-                }
-                else {
-                    _this.socket.emit('STOP-FILE', serverId);
-                }
-            }
-            else {
-                _this.updateProgress(localId, percent);
-                var file = _this.fileUploads[localId];
-                var reader = _this.fileReaders[localId];
-                var nplace = place * 65536;
-                var newFile = file.slice(nplace, nplace + Math.min(65536, (file.size - nplace)));
-                console.log('Sending File piece: ' + (place + 1) + ' out of ' + (Math.floor(file.size / 65536) + 1));
-                reader.readAsArrayBuffer(newFile);
-            }
-        };
-        this.placeRemoteFile = function (mouseX, mouseY, scaleF, panX, panY, url) {
-            console.log('Remote File Placed');
-            var x = scaleF * mouseX + panX;
-            var y = scaleF * mouseY + panY;
-            var width = 200 * scaleF;
-            var height = 200 * scaleF;
-            var loc = document.createElement("a");
-            loc.href = url;
-            var path = loc.pathname;
-            var fType = path.split('.').pop();
-            var fDesc = '';
-            var isImage = false;
-            var self = _this;
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                if (request.readyState === 4) {
-                    var type = request.getResponseHeader('Content-Type');
-                    var size = parseInt(request.getResponseHeader('Content-Length'));
-                    if (size > 10485760) {
-                        self.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-                    }
-                    else {
-                        if (type.match(/octete-stream/)) {
-                            self.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
-                        }
-                        else {
-                            if (type.match(/image/)) {
-                                isImage = true;
-                            }
-                            var localId = self.addFile(x, y, width, height, self.userId, isImage, fDesc, fType, fType, 0, undefined, new Date());
-                            self.sendRemoteFile(x, y, width, height, url, localId);
-                        }
-                    }
-                }
-            };
-            request.open('HEAD', url, true);
-            request.send(null);
-        };
-        this.sendRemoteFile = function (posX, posY, width, height, url, localId) {
-            console.log('Sending Remote File.');
-            var msg = { localId: localId, fileURL: url, x: posX, y: posY, width: width, height: height, fileDesc: '' };
-            _this.socket.emit('REMOTE-FILE', msg);
-        };
-        this.resizeFile = function (id, width, height) {
-            var file = _this.getUpload(id);
-            _this.setUploadArea(id, width, height, new Date());
-        };
-        this.sendFileMove = function (id) {
-            var file = _this.getUpload(_this.currFileMove);
-            if (file.serverId) {
-                var msg = { serverId: file.serverId, x: file.x, y: file.y };
-                _this.socket.emit('MOVE-FILE', msg);
-            }
-            else {
-                var msg = { serverId: null, x: file.x, y: file.y };
-                var newOp = { type: 'MOVE-FILE', message: msg };
-                file.opBuffer.push(newOp);
-            }
-        };
-        this.sendFileResize = function (id) {
-            var file = _this.getUpload(_this.currFileResize);
-            if (file.serverId) {
-                var msg = { serverId: file.serverId, width: file.width, height: file.height };
-                _this.socket.emit('RESIZE-FILE', msg);
-            }
-            else {
-                var msg = { serverId: null, width: file.width, height: file.height };
-                var newOp = { type: 'RESIZE-FILE', message: msg };
-                file.opBuffer.push(newOp);
-            }
-        };
-        this.sendFileRotate = function (id) {
-            var file = _this.getUpload(id);
-            if (file.serverId) {
-                var msg = { serverId: file.serverId, rotation: file.rotation };
-                _this.socket.emit('ROTATE-FILE', msg);
-            }
-            else {
-                var msg = { serverId: null, rotation: file.rotation };
-                var newOp = { type: 'ROTATE-FILE', message: msg };
-                file.opBuffer.push(newOp);
-            }
-        };
-        this.deleteFile = function (id) {
-            var fileBox = _this.getUpload(id);
-            if (fileBox.serverId) {
-                _this.socket.emit('DELETE-FILE', fileBox.serverId);
-            }
-            else {
-                var newOp = { type: 'DELETE-FILE', message: null };
-                fileBox.opBuffer.push(newOp);
-            }
-            _this.deleteElement(id);
-        };
-        this.releaseText = function (id) {
-            var textBox = _this.getText(id);
-            _this.stopLockText(id);
-            if (textBox.serverId) {
-                var msg = { serverId: textBox.serverId };
-                _this.socket.emit('RELEASE-TEXT', msg);
-            }
-            else {
-                var msg = { serverId: null };
-                var newOp = { type: 'RELEASE-TEXT', message: msg };
-                textBox.opBuffer.push(newOp);
-            }
-        };
-        this.sendTextJustified = function (id) {
-            var textBox = _this.getText(id);
-            if (textBox.serverId) {
-                var msg = { serverId: textBox.serverId, newState: !_this.viewState.isJustified };
-                _this.socket.emit('JUSTIFY-TEXT', msg);
-            }
-            else {
-                var msg = { serverId: null, newState: !_this.viewState.isJustified };
-                var newOp = { type: 'JUSTIFY-TEXT', message: msg };
-                textBox.opBuffer.push(newOp);
-            }
-        };
-        this.textEdited = function (textbox) {
-            var buffer;
-            var editNum;
-            if (_this.textOutBuffer[textbox.id]) {
-                buffer = _this.textOutBuffer[textbox.id];
-                editNum = buffer.editCount;
-                buffer.editCount++;
-            }
-            else {
-                buffer = {
-                    id: textbox.id, x: textbox.x, y: textbox.y, size: textbox.size, width: textbox.width, lastSent: 0,
-                    height: textbox.height, editCount: 1, editBuffer: [], justified: textbox.justified, styles: []
-                };
-                buffer.styles = textbox.styles.slice();
-                editNum = 0;
-            }
-            buffer.editBuffer[editNum] = { num_nodes: textbox.styles.length, nodes: [] };
-            for (var i = 0; i < textbox.styles.length; i++) {
-                buffer.editBuffer[editNum].nodes.push({ num: i, text: textbox.styles[i].text, colour: textbox.styles[i].colour,
-                    weight: textbox.styles[i].weight, decoration: textbox.styles[i].decoration, style: textbox.styles[i].style,
-                    start: textbox.styles[i].start, end: textbox.styles[i].end, editId: editNum
-                });
-            }
-            _this.textOutBuffer[textbox.id] = buffer;
-            if (textbox.serverId) {
-                var msg = { serverId: textbox.serverId, localId: editNum, bufferId: textbox.id, num_nodes: textbox.styles.length };
-                _this.socket.emit('EDIT-TEXT', msg);
-            }
-            else {
-                var msg = {
-                    localId: textbox.id, x: _this.textOutBuffer[textbox.id].x, y: _this.textOutBuffer[textbox.id].y, size: _this.textOutBuffer[textbox.id].size,
-                    width: _this.textOutBuffer[textbox.id].width, height: _this.textOutBuffer[textbox.id].height, justified: _this.textOutBuffer[textbox.id].justified
-                };
-                _this.socket.emit('TEXTBOX', msg);
-            }
-        };
-        this.resizeText = function (id, width, height) {
-            var textBox = _this.getText(id);
-            _this.setTextArea(id, width, height);
-        };
-        this.sendTextMove = function (id) {
-            var tbox = _this.getText(_this.currTextMove);
-            if (tbox.serverId) {
-                var msg = { serverId: tbox.serverId, x: tbox.x, y: tbox.y };
-                _this.socket.emit('MOVE-TEXT', msg);
-            }
-            else {
-                var msg = { serverId: null, x: tbox.x, y: tbox.y };
-                var newOp = { type: 'MOVE-TEXT', message: msg };
-                tbox.opBuffer.push(newOp);
-            }
-        };
-        this.sendTextResize = function (id) {
-            var textBox = _this.getText(id);
-            if (textBox.serverId) {
-                var msg = { serverId: textBox.serverId, width: textBox.width, height: textBox.height };
-                _this.socket.emit('RESIZE-TEXT', msg);
-            }
-            else {
-                var msg = { serverId: null, width: textBox.width, height: textBox.height };
-                var newOp = { type: 'RESIZE-TEXT', message: msg };
-                textBox.opBuffer.push(newOp);
-            }
-        };
-        this.deleteText = function (id) {
-            var textBox = _this.getText(id);
-            if (textBox.serverId) {
-                _this.socket.emit('DELETE-TEXT', textBox.serverId);
-            }
-            else {
-                var newOp = { type: 'DELETE-TEXT', message: null };
-                textBox.opBuffer.push(newOp);
-            }
-            _this.deleteElement(id);
-        };
-        this.lockText = function (id) {
-            var textBox = _this.getText(id);
-            _this.setTextGetLock(id);
-            if (textBox.serverId) {
-                var msg = { serverId: textBox.serverId };
-                _this.socket.emit('LOCK-TEXT', msg);
-            }
-            else {
-                var msg = { serverId: null };
-                var newOp = { type: 'LOCK-TEXT', message: msg };
-                textBox.opBuffer.push(newOp);
-            }
-        };
-        this.isCurrentStyle = function (style) {
-            if (style.colour == _this.viewState.colour && style.decoration == _this.getDecoration() && style.weight == _this.getWeight() && style.style == _this.getStyle()) {
-                return true;
-            }
-            else {
-                return false;
-            }
-        };
-        this.findXPos = function (textbox, loc) {
-            if (textbox.textNodes.length == 0) {
-                return 0;
-            }
-            var i = 1;
-            while (i < textbox.textNodes.length && textbox.textNodes[i].start <= loc) {
-                i++;
-            }
-            var line = textbox.textNodes[i - 1];
-            if (line.styles.length == 0) {
-                return 0;
-            }
-            i = 1;
-            while (i < line.styles.length && line.styles[i].locStart + line.start <= loc) {
-                i++;
-            }
-            var style = line.styles[i - 1];
-            if (line.start + style.locStart == loc) {
-                return style.startPos;
-            }
-            else {
-                var currMes = textbox.dist[loc] - textbox.dist[line.start + style.locStart];
-                return currMes + style.startPos;
-            }
-        };
-        this.findTextPos = function (textbox, x, y) {
-            var whitElem = document.getElementById("whiteBoard-output");
-            var elemRect = whitElem.getBoundingClientRect();
-            var xFind = 0;
-            if (y < textbox.y) {
-                return 0;
-            }
-            else {
-                var lineNum = Math.floor(((y - textbox.y) / (1.5 * textbox.size)) + 0.15);
-                if (lineNum >= textbox.textNodes.length) {
-                    return textbox.text.length;
-                }
-                if (!textbox.textNodes[lineNum]) {
-                    console.log('Line is: ' + lineNum);
-                }
-                if (x > textbox.x) {
-                    if (x > textbox.x + textbox.width) {
-                        return textbox.textNodes[lineNum].end;
-                    }
-                    else {
-                        xFind = x - textbox.x;
-                    }
-                }
-                else {
-                    return textbox.textNodes[lineNum].start;
-                }
-                var line = textbox.textNodes[lineNum];
-                if (line.styles.length == 0) {
-                    return line.start;
-                }
-                var i = 0;
-                while (i < line.styles.length && xFind > line.styles[i].startPos) {
-                    i++;
-                }
-                var curr = i - 1;
-                var style = line.styles[i - 1];
-                i = style.text.length - 1;
-                var currMes = textbox.dist[line.start + style.locStart + style.text.length - 1] - textbox.dist[line.start + style.locStart];
-                while (i > 0 && style.startPos + currMes > xFind) {
-                    i--;
-                    currMes = textbox.dist[line.start + style.locStart + i] - textbox.dist[line.start + style.locStart];
-                }
-                var selPoint;
-                if (i < style.text.length - 1) {
-                    if (xFind - (style.startPos + currMes) > (style.startPos + textbox.dist[line.start + style.locStart + i + 1] - textbox.dist[line.start + style.locStart]) - xFind) {
-                        selPoint = line.start + style.locStart + i + 1;
-                    }
-                    else {
-                        selPoint = line.start + style.locStart + i;
-                    }
-                }
-                else if (curr + 1 < line.styles.length) {
-                    if (xFind - (style.startPos + currMes) > line.styles[curr + 1].startPos - xFind) {
-                        selPoint = line.start + line.styles[curr + 1].locStart;
-                    }
-                    else {
-                        selPoint = line.start + style.locStart + i;
-                    }
-                }
-                else {
-                    if (xFind - (style.startPos + currMes) > (style.startPos + textbox.dist[line.start + style.locStart + i + 1] - textbox.dist[line.start + style.locStart]) - xFind) {
-                        selPoint = line.start + style.locStart + i + 1;
-                    }
-                    else {
-                        selPoint = line.start + style.locStart + i;
-                    }
-                }
-                return selPoint;
-            }
-        };
-        this.findCursorElems = function (textbox, cursorStart, cursorEnd) {
-            textbox.cursorElems = [];
-            if (textbox.textNodes.length == 0) {
-                textbox.cursor = { x: textbox.x, y: textbox.y, height: 1.5 * textbox.size };
-            }
-            for (var i = 0; i < textbox.textNodes.length; i++) {
-                var line = textbox.textNodes[i];
-                var selStart = null;
-                var selEnd = null;
-                var startFound = false;
-                var endFound = false;
-                if (cursorStart >= line.start && cursorStart <= line.end) {
-                    if (cursorStart == line.end && !line.endCursor) {
-                        selStart = textbox.width;
-                    }
-                    else {
-                        for (var j = 0; j < line.styles.length && !startFound; j++) {
-                            var style = line.styles[j];
-                            selStart = 0;
-                            selStart += style.dx;
-                            if (cursorStart <= line.start + style.locStart + style.text.length) {
-                                startFound = true;
-                                selStart += style.startPos + textbox.dist[cursorStart] - textbox.dist[line.start + style.locStart];
-                            }
-                        }
-                    }
-                }
-                else if (cursorStart < line.start && cursorEnd > line.start) {
-                    selStart = 0;
-                }
-                if (cursorEnd > line.start && cursorEnd <= line.end) {
-                    if (cursorEnd == line.end && !line.endCursor) {
-                        selEnd = textbox.width;
-                    }
-                    else {
-                        for (var j = 0; j < line.styles.length && !endFound; j++) {
-                            var style = line.styles[j];
-                            selEnd = 0;
-                            selEnd += style.dx;
-                            if (cursorEnd <= line.start + style.locStart + style.text.length) {
-                                endFound = true;
-                                selEnd += style.startPos + textbox.dist[cursorEnd] - textbox.dist[line.start + style.locStart];
-                            }
-                        }
-                    }
-                }
-                else if (cursorEnd >= line.end && cursorStart <= line.end) {
-                    selEnd = textbox.width;
-                }
-                if (cursorEnd >= line.start && cursorEnd <= line.end && (_this.startLeft || cursorStart == cursorEnd) && line.start != line.end) {
-                    if (cursorEnd != line.end || line.endCursor) {
-                        textbox.cursor = { x: textbox.x + selEnd, y: textbox.y + 1.5 * textbox.size * line.lineNum, height: 1.5 * textbox.size };
-                    }
-                }
-                else if (cursorStart >= line.start && cursorStart <= line.end && (!_this.startLeft || cursorStart == cursorEnd)) {
-                    if (cursorStart != line.end || line.endCursor) {
-                        textbox.cursor = { x: textbox.x + selStart, y: textbox.y + 1.5 * textbox.size * line.lineNum, height: 1.5 * textbox.size };
-                    }
-                }
-                if (selStart != null && selEnd != null && cursorStart != cursorEnd) {
-                    textbox.cursorElems.push({ x: textbox.x + selStart, y: textbox.y + 1.5 * textbox.size * line.lineNum, width: selEnd - selStart, height: 1.5 * textbox.size });
-                }
-            }
-        };
-        this.calculateLengths = function (textbox, start, end, prevEnd) {
-            var whitElem = document.getElementById("whiteBoard-output");
-            var tMount;
-            var startPoint;
-            var styleNode;
-            var change = 0;
-            var style = 0;
-            var oldDist = textbox.dist.slice();
-            while (style - 1 < textbox.styles.length && textbox.styles[style].end <= start - 2) {
-                style++;
-            }
-            if (start > 1) {
-                tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                tMount.setAttributeNS(null, "opacity", '0');
-                tMount.setAttributeNS(null, "x", '' + textbox.x);
-                tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-                tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-                whitElem.appendChild(tMount);
-                var charLength1;
-                var charLength2;
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 2)));
-                tMount.appendChild(styleNode);
-                charLength1 = styleNode.getComputedTextLength();
-                if (textbox.styles[style].end <= start - 1) {
-                    style++;
-                }
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-                tMount.appendChild(styleNode);
-                charLength2 = styleNode.getComputedTextLength();
-                startPoint = textbox.dist[start - 1] + tMount.getComputedTextLength() - charLength1 - charLength2;
-                whitElem.removeChild(tMount);
-                tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                tMount.setAttributeNS(null, "opacity", '0');
-                tMount.setAttributeNS(null, "x", '' + textbox.x);
-                tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-                tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-                whitElem.appendChild(tMount);
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-                tMount.appendChild(styleNode);
-                if (textbox.styles[style].end <= start) {
-                    style++;
-                }
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-                tMount.appendChild(styleNode);
-                textbox.dist[start + 1] = startPoint + tMount.getComputedTextLength();
-            }
-            else if (start > 0) {
-                startPoint = 0;
-                if (textbox.styles[style].end <= start - 1) {
-                    style++;
-                }
-                tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                tMount.setAttributeNS(null, "opacity", '0');
-                tMount.setAttributeNS(null, "x", '' + textbox.x);
-                tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-                tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-                whitElem.appendChild(tMount);
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start - 1)));
-                tMount.appendChild(styleNode);
-                if (textbox.styles[style].end <= start) {
-                    style++;
-                }
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-                tMount.appendChild(styleNode);
-                textbox.dist[start + 1] = startPoint + tMount.getComputedTextLength();
-            }
-            else {
-                startPoint = 0;
-                style = 0;
-                tMount = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                tMount.setAttributeNS(null, "opacity", '0');
-                tMount.setAttributeNS(null, "x", '' + textbox.x);
-                tMount.setAttributeNS(null, "font-size", '' + textbox.size);
-                tMount.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'space', 'preserve');
-                whitElem.appendChild(tMount);
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(start)));
-                tMount.appendChild(styleNode);
-                textbox.dist[1] = startPoint + tMount.getComputedTextLength();
-            }
-            for (var i = start + 1; i < end; i++) {
-                if (textbox.styles[style].end <= i) {
-                    style++;
-                }
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(i)));
-                tMount.appendChild(styleNode);
-                textbox.dist[i + 1] = startPoint + tMount.getComputedTextLength();
-            }
-            if (end < textbox.text.length) {
-                if (textbox.styles[style].end <= end) {
-                    style++;
-                }
-                styleNode = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                styleNode.setAttributeNS(null, "font-style", textbox.styles[style].style);
-                styleNode.setAttributeNS(null, "font-weight", textbox.styles[style].weight);
-                styleNode.appendChild(document.createTextNode(textbox.text.charAt(end)));
-                tMount.appendChild(styleNode);
-                change = startPoint + tMount.getComputedTextLength() - oldDist[prevEnd + 1];
-                for (var i = end; i < textbox.text.length; i++) {
-                    textbox.dist[i + 1] = oldDist[i + 1 + prevEnd - end] + change;
-                }
-            }
-            whitElem.removeChild(tMount);
-        };
-        this.calculateTextLines = function (textbox) {
-            var i;
-            var childText = [];
-            var currPos = 0;
-            var prevPos = 0;
-            var txtStart = 0;
-            var isWhiteSpace = true;
-            var dy = textbox.size;
-            var ddy = 1.5 * textbox.size;
-            var nodeCounter;
-            var computedTextLength;
-            var wordC;
-            var spaceC;
-            var line;
-            var wordsT = [];
-            var spacesT = [];
-            var startSpace = true;
-            var currY = textbox.y;
-            var lineCount = 0;
-            if (!textbox.text.length) {
-                return [];
-            }
-            for (i = 0; i < textbox.text.length; i++) {
-                if (isWhiteSpace) {
-                    if (!textbox.text.charAt(i).match(/\s/)) {
-                        if (i > 0) {
-                            spacesT.push(textbox.text.substring(txtStart, i));
-                            txtStart = i;
-                            isWhiteSpace = false;
-                        }
-                        else {
-                            startSpace = false;
-                            isWhiteSpace = false;
-                        }
-                    }
-                }
-                else {
-                    if (textbox.text.charAt(i).match(/\s/)) {
-                        wordsT.push(textbox.text.substring(txtStart, i));
-                        txtStart = i;
-                        isWhiteSpace = true;
-                    }
-                }
-            }
-            if (isWhiteSpace) {
-                spacesT.push(textbox.text.substring(txtStart, i));
-            }
-            else {
-                wordsT.push(textbox.text.substring(txtStart, i));
-            }
-            wordC = 0;
-            spaceC = 0;
-            nodeCounter = 0;
-            var nLineTrig;
-            while (wordC < wordsT.length || spaceC < spacesT.length) {
-                var lineComplete = false;
-                var word;
-                currY += dy;
-                var currLength = 0;
-                var tspanEl = {
-                    styles: [], x: textbox.x, y: currY, dx: 0, dy: dy, start: prevPos, end: prevPos, endCursor: true,
-                    justified: textbox.justified, lineNum: lineCount, text: ''
-                };
-                var progPos = true;
-                nLineTrig = false;
-                if (startSpace) {
-                    var fLine = spacesT[spaceC].indexOf('\n');
-                    if (fLine != -1) {
-                        if (spacesT[spaceC].length > 1) {
-                            if (fLine == 0) {
-                                nLineTrig = true;
-                                spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(1, spacesT[spaceC].length));
-                                spacesT[spaceC] = spacesT[spaceC].substring(0, 1);
-                            }
-                            else {
-                                progPos = false;
-                                spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(fLine, spacesT[spaceC].length));
-                                spacesT[spaceC] = spacesT[spaceC].substring(0, fLine);
-                            }
-                        }
-                        else {
-                            nLineTrig = true;
-                            startSpace = !startSpace;
-                        }
-                    }
-                    if (spaceC >= spacesT.length) {
-                        console.error('ERROR: Space array out of bounds');
-                        return [];
-                    }
-                    word = spacesT[spaceC];
-                    spaceC++;
-                }
-                else {
-                    if (wordC >= wordsT.length) {
-                        console.error('ERROR: Word array out of bounds');
-                        return [];
-                    }
-                    word = wordsT[wordC];
-                    wordC++;
-                }
-                if (nLineTrig) {
-                    word = '';
-                    lineComplete = true;
-                    tspanEl.justified = false;
-                    tspanEl.end = currPos;
-                    currPos++;
-                    prevPos = currPos;
-                }
-                computedTextLength = textbox.dist[currPos + word.length] - textbox.dist[currPos];
-                if (computedTextLength > textbox.width) {
-                    lineComplete = true;
-                    fDash = word.indexOf('-');
-                    if (fDash != -1 && computedTextLength > textbox.width) {
-                        var newStr = word.substring(fDash + 1, word.length);
-                        wordsT.splice(wordC, 0, newStr);
-                        word = word.substring(0, fDash + 1);
-                    }
-                    i = word.length;
-                    while (computedTextLength > textbox.width && i > 0) {
-                        computedTextLength = textbox.dist[currPos + word.substring(0, i).length] - textbox.dist[currPos];
-                        i--;
-                    }
-                    if (computedTextLength <= textbox.width) {
-                        if (startSpace) {
-                            if (i + 2 < word.length) {
-                                spacesT.splice(spaceC, 0, word.substring(i + 2, word.length));
-                            }
-                            else {
-                                startSpace = !startSpace;
-                            }
-                            word = word.substring(0, i + 1);
-                            currPos += word.length;
-                            tspanEl.end = currPos;
-                            prevPos = currPos + 1;
-                        }
-                        else {
-                            wordsT.splice(wordC, 0, word.substring(i + 1, word.length));
-                            word = word.substring(0, i + 1);
-                            currPos += word.length;
-                            tspanEl.end = currPos;
-                            tspanEl.endCursor = false;
-                            prevPos = currPos;
-                        }
-                    }
-                    else {
-                        console.error('TEXTBOX TOO SMALL FOR FIRST LETTERS.');
-                    }
-                }
-                else {
-                    currPos += word.length;
-                    if (!nLineTrig && progPos) {
-                        startSpace = !startSpace;
-                    }
-                }
-                line = word;
-                currLength = computedTextLength;
-                while (!lineComplete && (wordC < wordsT.length || spaceC < spacesT.length)) {
-                    if (startSpace) {
-                        var fLine = spacesT[spaceC].indexOf('\n');
-                        if (fLine != -1) {
-                            if (spacesT[spaceC].length > 1) {
-                                if (fLine == 0) {
-                                    nLineTrig = true;
-                                    spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(1, spacesT[spaceC].length));
-                                    spacesT[spaceC] = spacesT[spaceC].substring(0, 1);
-                                }
-                                else {
-                                    progPos = false;
-                                    spacesT.splice(spaceC + 1, 0, spacesT[spaceC].substring(fLine, spacesT[spaceC].length));
-                                    spacesT[spaceC] = spacesT[spaceC].substring(0, fLine);
-                                }
-                            }
-                            else {
-                                nLineTrig = true;
-                                startSpace = !startSpace;
-                            }
-                        }
-                        word = spacesT[spaceC];
-                    }
-                    else {
-                        word = wordsT[wordC];
-                    }
-                    if (nLineTrig) {
-                        word = '';
-                        lineComplete = true;
-                        tspanEl.justified = false;
-                        tspanEl.end = currPos;
-                        currPos++;
-                        prevPos = currPos;
-                    }
-                    computedTextLength = currLength + textbox.dist[currPos + word.length] - textbox.dist[currPos];
-                    if (computedTextLength > textbox.width) {
-                        lineComplete = true;
-                        if (startSpace) {
-                            if (word.length > 1) {
-                                i = word.length - 1;
-                                while (computedTextLength > textbox.width && i > 0) {
-                                    computedTextLength = currLength + textbox.dist[currPos + i] - textbox.dist[currPos];
-                                    i--;
-                                }
-                                if (computedTextLength <= textbox.width) {
-                                    if (i + 2 < word.length) {
-                                        var newStr = word.substring(i + 2, word.length);
-                                        spacesT.splice(spaceC, 0, newStr);
-                                        line += word.substring(0, i + 1);
-                                        currPos += word.substring(0, i + 1).length;
-                                        tspanEl.end = currPos;
-                                        currPos++;
-                                        prevPos = currPos;
-                                        spaceC++;
-                                    }
-                                    else {
-                                        line += word.substring(0, i + 1);
-                                        currPos += word.substring(0, i + 1).length;
-                                        tspanEl.end = currPos;
-                                        currPos++;
-                                        prevPos = currPos;
-                                        startSpace = !startSpace;
-                                        spaceC++;
-                                    }
-                                    currLength = computedTextLength;
-                                }
-                                else {
-                                    computedTextLength = currLength + textbox.dist[currPos + word.length - 1] - textbox.dist[currPos];
-                                    tspanEl.end = currPos;
-                                    prevPos = currPos + 1;
-                                    spacesT[spaceC] = spacesT[spaceC].substring(1, spacesT[spaceC].length);
-                                }
-                            }
-                            else {
-                                computedTextLength = currLength;
-                                tspanEl.end = currPos;
-                                currPos++;
-                                prevPos = currPos;
-                                startSpace = !startSpace;
-                                spaceC++;
-                            }
-                        }
-                        else {
-                            var fDash = word.indexOf('-');
-                            if (fDash != -1) {
-                                computedTextLength = currLength + textbox.dist[currPos + fDash + 1] - textbox.dist[currPos];
-                                if (computedTextLength <= textbox.width) {
-                                    var newStr = word.substring(fDash + 1, word.length);
-                                    wordsT.splice(wordC, 0, newStr);
-                                    wordC++;
-                                    line += word.substring(0, fDash + 1);
-                                    currPos += word.substring(0, fDash + 1).length;
-                                    tspanEl.end = currPos;
-                                    tspanEl.endCursor = false;
-                                    prevPos = currPos;
-                                    currLength = computedTextLength;
-                                }
-                                else {
-                                    computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
-                                    line = line.substring(0, line.length - 1);
-                                    tspanEl.end = currPos;
-                                    currPos++;
-                                    prevPos = currPos;
-                                }
-                            }
-                            else {
-                                computedTextLength = currLength - textbox.dist[currPos] + textbox.dist[currPos - 1];
-                                line = line.substring(0, line.length - 1);
-                                tspanEl.end = currPos - 1;
-                                prevPos = currPos;
-                            }
-                        }
-                    }
-                    else {
-                        line += word;
-                        currPos += word.length;
-                        if (nLineTrig) {
-                            spaceC++;
-                        }
-                        else {
-                            if (startSpace) {
-                                spaceC++;
-                            }
-                            else {
-                                wordC++;
-                            }
-                            if (progPos) {
-                                startSpace = !startSpace;
-                            }
-                        }
-                        currLength = computedTextLength;
-                    }
-                }
-                tspanEl.end = tspanEl.start + line.length;
-                tspanEl.text = line;
-                dy = ddy;
-                nodeCounter = 0;
-                if (wordC == wordsT.length && spaceC == spacesT.length) {
-                    tspanEl.justified = false;
-                }
-                var reqAdjustment = textbox.width - computedTextLength;
-                var numSpaces = tspanEl.text.length - tspanEl.text.replace(/\s/g, "").length;
-                var extraSpace = reqAdjustment / numSpaces;
-                var currStart = 0;
-                var currLoc = 0;
-                for (var j = 0; j < textbox.styles.length; j++) {
-                    if (textbox.styles[j].start < tspanEl.end && textbox.styles[j].end > tspanEl.start) {
-                        var startPoint = (textbox.styles[j].start < tspanEl.start) ? 0 : (textbox.styles[j].start - tspanEl.start);
-                        var endPoint = (textbox.styles[j].end > tspanEl.end) ? (tspanEl.end - tspanEl.start) : (textbox.styles[j].end - tspanEl.start);
-                        var styleText = tspanEl.text.slice(startPoint, endPoint);
-                        var newStyle;
-                        word = '';
-                        for (i = 0; i < styleText.length; i++) {
-                            if (styleText.charAt(i).match(/\s/)) {
-                                if (word.length > 0) {
-                                    newStyle =
-                                        {
-                                            key: nodeCounter, text: word, colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                            decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                        };
-                                    currStart += textbox.dist[tspanEl.start + currLoc + word.length] - textbox.dist[tspanEl.start + currLoc];
-                                    currLoc += word.length;
-                                    word = '';
-                                    tspanEl.styles.push(newStyle);
-                                    nodeCounter++;
-                                }
-                                if (tspanEl.justified) {
-                                    newStyle =
-                                        {
-                                            key: nodeCounter, text: styleText.charAt(i), colour: textbox.styles[j].colour, dx: extraSpace, locStart: currLoc,
-                                            decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                        };
-                                    currStart += extraSpace + textbox.dist[tspanEl.start + currLoc + 1] - textbox.dist[tspanEl.start + currLoc];
-                                }
-                                else {
-                                    newStyle =
-                                        {
-                                            key: nodeCounter, text: styleText.charAt(i), colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                            decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                        };
-                                    currStart += textbox.dist[tspanEl.start + currLoc + 1] - textbox.dist[tspanEl.start + currLoc];
-                                }
-                                currLoc += 1;
-                                tspanEl.styles.push(newStyle);
-                                nodeCounter++;
-                            }
-                            else {
-                                word += styleText.charAt(i);
-                                if (i == styleText.length - 1) {
-                                    newStyle =
-                                        {
-                                            key: nodeCounter, text: word, colour: textbox.styles[j].colour, dx: 0, locStart: currLoc,
-                                            decoration: textbox.styles[j].decoration, weight: textbox.styles[j].weight, style: textbox.styles[j].style, startPos: currStart
-                                        };
-                                    currStart += textbox.dist[tspanEl.start + currLoc + word.length] - textbox.dist[tspanEl.start + currLoc];
-                                    currLoc += word.length;
-                                    tspanEl.styles.push(newStyle);
-                                    nodeCounter++;
-                                }
-                            }
-                        }
-                    }
-                }
-                childText.push(tspanEl);
-                lineCount++;
-            }
-            if (nLineTrig) {
-                tspanEl = {
-                    styles: [], x: textbox.x, y: currY, dx: 0, dy: dy, start: prevPos, end: prevPos, endCursor: true,
-                    justified: false, lineNum: lineCount, text: ''
-                };
-                lineCount++;
-                childText.push(tspanEl);
-            }
-            if (lineCount * 1.5 * textbox.size > textbox.height) {
-                _this.resizeText(textbox.id, textbox.width, lineCount * 1.5 * textbox.size);
-                _this.sendTextResize(textbox.id);
-            }
-            return childText;
-        };
-        this.findXHelper = function (textItem, isUp, relative) {
-            var i;
-            var line;
-            if (isUp) {
-                i = 1;
-                while (i < textItem.textNodes.length && relative > textItem.textNodes[i].end) {
-                    i++;
-                }
-                line = textItem.textNodes[i - 1];
-            }
-            else {
-                i = 0;
-                while (i < textItem.textNodes.length - 1 && relative > textItem.textNodes[i].end) {
-                    i++;
-                }
-                line = textItem.textNodes[i + 1];
-            }
-            i = 0;
-            while (i < line.styles.length && _this.textIdealX >= line.styles[i].startPos) {
-                i++;
-            }
-            var curr = i - 1;
-            var style = line.styles[i - 1];
-            var currMes = textItem.dist[line.start + style.locStart + style.text.length - 1] - textItem.dist[line.start + style.locStart];
-            i = style.text.length - 1;
-            while (i > 0 && style.startPos + currMes > _this.textIdealX) {
-                i--;
-                currMes = textItem.dist[line.start + style.locStart + i] - textItem.dist[line.start + style.locStart];
-            }
-            if (i < style.text.length - 1) {
-                if (_this.textIdealX - (style.startPos + currMes) > (style.startPos + textItem.dist[line.start + style.locStart + i + 1] - textItem.dist[line.start + style.locStart]) - _this.textIdealX) {
-                    return line.start + style.locStart + i + 1;
-                }
-                else {
-                    return line.start + style.locStart + i;
-                }
-            }
-            else if (curr + 1 < line.styles.length) {
-                if (_this.textIdealX - (style.startPos + currMes) > line.styles[curr + 1].startPos - _this.textIdealX) {
-                    return line.start + line.styles[curr + 1].locStart;
-                }
-                else {
-                    return line.start + style.locStart + i;
-                }
-            }
-            else {
-                if (_this.textIdealX - (style.startPos + currMes) > (style.startPos + textItem.dist[line.start + style.locStart + i + 1] - textItem.dist[line.start + style.locStart]) - _this.textIdealX) {
-                    return line.start + style.locStart + i + 1;
-                }
-                else {
-                    return line.start + style.locStart + i;
-                }
-            }
-        };
-        this.insertText = function (textItem, start, end, text) {
-            var isNew = true;
-            var textStart = textItem.text.slice(0, start);
-            var textEnd = textItem.text.slice(end, textItem.text.length);
-            var styles = [];
-            var fullText = textStart + textEnd;
-            _this.startTextWait(_this.currTextEdit);
-            for (i = 0; i < textItem.styles.length; i++) {
-                var sty = textItem.styles[i];
-                if (sty.start >= start) {
-                    if (sty.start >= end) {
-                        if (styles.length > 0 && styles[styles.length - 1].colour == sty.colour
-                            && styles[styles.length - 1].decoration == sty.decoration
-                            && styles[styles.length - 1].weight == sty.weight
-                            && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - sty.start <= 200) {
-                            styles[styles.length - 1].end += sty.end - sty.start;
-                            styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
-                        }
-                        else {
-                            sty.start -= end - start;
-                            sty.end -= end - start;
-                            sty.text = fullText.slice(sty.start, sty.end);
-                            styles.push({ start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text });
-                        }
-                    }
-                    else {
-                        if (sty.end > end) {
-                            if (styles.length > 0 && styles[styles.length - 1].colour == sty.colour
-                                && styles[styles.length - 1].decoration == sty.decoration
-                                && styles[styles.length - 1].weight == sty.weight
-                                && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - end <= 200) {
-                                styles[styles.length - 1].end += sty.end - end;
-                                styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
-                            }
-                            else {
-                                sty.end += start - end;
-                                sty.start = start;
-                                sty.text = fullText.slice(sty.start, sty.end);
-                                styles.push({ start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text });
-                            }
-                        }
-                    }
-                }
-                else {
-                    if (sty.end > start) {
-                        if (sty.end > end) {
-                            sty.end -= end - start;
-                            sty.text = fullText.slice(sty.start, sty.end);
-                            styles.push({ start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text });
-                        }
-                        else {
-                            sty.end = start;
-                            sty.text = fullText.slice(sty.start, sty.end);
-                            styles.push({ start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text });
-                        }
-                    }
-                    else {
-                        sty.text = fullText.slice(sty.start, sty.end);
-                        styles.push({ start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration, style: sty.style, weight: sty.weight, text: sty.text });
-                    }
-                }
-            }
-            textItem.text = textStart + text + textEnd;
-            for (var i = 0; text.length > 0 && i < styles.length; i++) {
-                if (styles[i].end > start) {
-                    if (styles[i].start >= start) {
-                        if (styles[i].start == start && _this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200) {
-                            isNew = false;
-                            styles[i].start = start;
-                        }
-                        else {
-                            styles[i].start += text.length;
-                        }
-                        styles[i].end += text.length;
-                    }
-                    else if (styles[i].end >= start) {
-                        if (_this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200) {
-                            isNew = false;
-                            styles[i].end += text.length;
-                        }
-                        else {
-                            var newSplit = {
-                                start: start + text.length, end: styles[i].end + text.length, decoration: styles[i].decoration,
-                                weight: styles[i].weight, style: styles[i].style, colour: styles[i].colour
-                            };
-                            styles[i].end = start;
-                            styles.splice(i + 1, 0, newSplit);
-                            i++;
-                        }
-                    }
-                }
-                else if (styles[i].end == start) {
-                    if (_this.isCurrentStyle(styles[i]) && isNew && (styles[i].end - styles[i].start + text.length) <= 200) {
-                        isNew = false;
-                        styles[i].end = start + text.length;
-                    }
-                }
-                styles[i].text = textItem.text.slice(styles[i].start, styles[i].end);
-            }
-            if (isNew && text.length > 0) {
-                i = 0;
-                while (i < styles.length && styles[i].end <= start) {
-                    i++;
-                }
-                var newStyle = {
-                    start: start, end: start + text.length, decoration: _this.getDecoration(),
-                    weight: _this.getWeight(), style: _this.getStyle(), colour: _this.viewState.colour,
-                    text: textItem.text.slice(start, start + text.length)
-                };
-                styles.splice(i, 0, newStyle);
-            }
-            textItem.styles = styles;
-            textItem = _this.newEdit(textItem);
-            if (text.length == 0) {
-                if (start > 0) {
-                    _this.calculateLengths(textItem, start - 1, start, end);
-                }
-                else if (textItem.text.length > 0) {
-                    _this.calculateLengths(textItem, start, end, end + 1);
-                }
-            }
-            else {
-                _this.calculateLengths(textItem, start, start + text.length, end);
-            }
-            _this.updateText(textItem);
-        };
-        this.completeEdit = function (textId, userId, editId) {
-            var textItem;
-            var fullText = '';
-            var localId = _this.textDict[textId];
-            var editData = _this.textInBuffer[textId].editBuffer[userId][editId];
-            textItem = _this.getText(localId);
-            textItem.styles = [];
-            for (var i = 0; i < editData.nodes.length; i++) {
-                textItem.styles[editData.nodes[i].num] = editData.nodes[i];
-            }
-            for (var i = 0; i < textItem.styles.length; i++) {
-                fullText += textItem.styles[i].text;
-            }
-            textItem.text = fullText;
-            _this.startTextWait(localId);
-            _this.calculateLengths(textItem, 0, fullText.length, 0);
-            _this.updateText(textItem);
-        };
-        this.createCurveText = function (curve) {
-            var param = "M" + curve[0].x + "," + curve[0].y;
-            param = param + " C" + curve[1].x + "," + curve[1].y;
-            param = param + " " + curve[2].x + "," + curve[2].y;
-            param = param + " " + curve[3].x + "," + curve[3].y;
-            for (var i = 4; i + 2 < curve.length; i += 3) {
-                param = param + " C" + curve[i + 0].x + "," + curve[i + 0].y;
-                param = param + " " + curve[i + 1].x + "," + curve[i + 1].y;
-                param = param + " " + curve[i + 2].x + "," + curve[i + 2].y;
-            }
-            return param;
         };
         this.infoMessageTimeout = function (id, self) {
             if (_this.lMousePress || _this.rMousePress || _this.wMousePress) {
@@ -2575,381 +1166,95 @@ var WhiteBoardController = (function () {
                 return 0;
             }
         };
+        this.sendNewElement = function (msg) {
+            _this.socket.emit('NEW-ELEMENT', msg);
+        };
         this.setSocket = function (socket) {
             var self = _this;
             _this.socket = socket;
             _this.socket.on('JOIN', function (data) {
             });
-            _this.socket.on('CURVE', function (data) {
-                console.log('Recieved curve ID:' + data.serverId);
-                if (!self.curveDict[data.serverId] && !self.curveInBuffer[data.serverId]) {
-                    self.curveInBuffer[data.serverId] = {
-                        serverId: data.serverId, user: data.userId, size: data.size, num_points: data.num_points, num_recieved: 0, curveSet: new Array,
-                        colour: data.colour, updateTime: data.editTime, x: data.x, y: data.y, width: data.width, height: data.height
+            _this.socket.on('NEW-ELEMENT', function (data) {
+                if (self.elementDict[data.serverId] == undefined || self.elementDict[data.serverId] == null) {
+                    var localId = self.boardElems.length;
+                    var callbacks = {
+                        sendServerMsg: (function (id, type) { return function (msg) { self.sendMessage(id, type, msg); }; })(localId, data.type),
+                        createAlert: function (header, message) { },
+                        createInfo: function (x, y, width, height, header, message) { return self.addInfoMessage(x, y, width, height, header, message); },
+                        removeInfo: function (id) { self.removeInfoMessage(id); },
+                        updateBoardView: (function (id) { return function (newView) { self.setElementView(id, newView); }; })(localId),
+                        getAudioStream: function () { return self.getAudioStream(); },
+                        getVideoStream: function () { return self.getVideoStream(); }
                     };
-                    clearInterval(self.curveInTimeouts[data.serverId]);
-                    self.curveInTimeouts[data.serverId] = setInterval(function (id) {
-                        for (var j = 0; j < self.curveInBuffer[id].num_points; j++) {
-                            if (!self.curveInBuffer[id].curveSet[j]) {
-                                console.log('Sending Missing message.');
-                                var msg = { serverId: id, seq_num: j };
-                                self.socket.emit('MISSING-CURVE', msg);
+                    var creationArg = { id: localId, userId: data.userId, callbacks: callbacks, serverMsg: data.payload, serverId: data.serverId };
+                    self.boardElems[localId] = components.get(data.type).Element.createElement(creationArg);
+                    self.elementDict[data.serverId] = localId;
+                    self.setElementView(self.boardElems[localId].id, self.boardElems[localId].getCurrentViewState());
+                }
+            });
+            _this.socket.on('ELEMENT-ID', function (data) {
+                self.elementDict[data.serverId] = data.localId;
+                var elem = self.boardElems[data.localId];
+                var retVal = elem.setServerId(data.serverId);
+                self.handleElementMessages(elem.id, elem.type, retVal);
+            });
+            _this.socket.on('MSG-COMPONENT', function (data) {
+                if (self.elementDict[data.serverId] != undefined && self.elementDict[data.serverId] != null) {
+                    var elem = self.getBoardElement(self.elementDict[data.serverId]);
+                    if (elem.type == data.type) {
+                        var retVal = elem.handleServerMessage(data.payload);
+                        if (retVal.wasEdit) {
+                            self.handleRemoteEdit(elem.id);
+                        }
+                        self.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                        self.setElementView(elem.id, retVal.newView);
+                        self.handleInfoMessage(retVal.infoMessage);
+                        self.handleAlertMessage(retVal.alertMessage);
+                        if (retVal.wasDelete) {
+                            self.deleteElement(elem.id);
+                            if (self.currSelect.indexOf(elem.id)) {
+                                self.currSelect.splice(self.currSelect.indexOf(elem.id), 1);
+                            }
+                            if (self.currentHover == elem.id) {
+                                clearTimeout(elem.hoverTimer);
+                                self.removeHoverInfo(self.currentHover);
+                            }
+                            for (var i_18 = 0; i_18 < self.operationStack.length; i_18++) {
+                                if (self.operationStack[i_18].ids.indexOf(elem.id) != -1) {
+                                    console.log('Element in this set.');
+                                    if (self.operationStack[i_18].ids.length == 1) {
+                                        if (i_18 <= self.operationPos) {
+                                            self.operationPos--;
+                                        }
+                                        self.operationStack.splice(i_18--, 1);
+                                    }
+                                    else {
+                                        console.log('This should work.');
+                                        self.operationStack[i_18].ids.splice(self.operationStack[i_18].ids.indexOf(elem.id), 1);
+                                        var newOp = {
+                                            ids: self.operationStack[i_18].ids,
+                                            undos: [(function (elemIds) {
+                                                    return function () { self.selectGroup(elemIds); return null; };
+                                                })(self.operationStack[i_18].ids.slice())],
+                                            redos: [(function (elemIds) {
+                                                    return function () { self.selectGroup(elemIds); return null; };
+                                                })(self.operationStack[i_18].ids.slice())]
+                                        };
+                                        self.operationStack.splice(i_18, 1, newOp);
+                                    }
+                                }
                             }
                         }
-                    }, 30000, data.serverId);
-                }
-            });
-            _this.socket.on('POINT', function (data) {
-                var buffer = self.curveInBuffer[data.serverId];
-                if (buffer && buffer.num_recieved != buffer.num_points) {
-                    if (!buffer.curveSet[data.num]) {
-                        buffer.curveSet[data.num] = { x: data.x, y: data.y };
-                        buffer.num_recieved++;
-                    }
-                    if (buffer.num_recieved == buffer.num_points) {
-                        clearInterval(self.curveInTimeouts[data.serverId]);
-                        self.addCurve(buffer.x, buffer.y, buffer.width, buffer.height, buffer.curveSet, buffer.user, buffer.colour, buffer.size, buffer.updateTime, data.serverId);
-                        self.curveInBuffer[data.serverId] = null;
-                    }
-                }
-                else {
-                    clearInterval(self.curveInTimeouts[data.serverId]);
-                    self.socket.emit('UNKNOWN-CURVE', data.serverId);
-                }
-            });
-            _this.socket.on('IGNORE-CURVE', function (curveId) {
-                clearInterval(self.curveInTimeouts[curveId]);
-            });
-            _this.socket.on('CURVEID', function (data) {
-                self.curveOutBuffer[data.localId].serverId = data.serverId;
-                clearInterval(self.curveOutTimeouts[data.localId]);
-                var curveItem = self.getCurve(data.localId);
-                curveItem.serverId = data.serverId;
-                self.curveDict[data.serverId] = data.localId;
-                for (var i = 0; i < self.curveOutBuffer[data.localId].curveSet.length; i++) {
-                    var curve = self.curveOutBuffer[data.localId].curveSet[i];
-                    var msg = { serverId: data.serverId, num: i, x: curve.x, y: curve.y };
-                    self.socket.emit('POINT', msg);
-                }
-            });
-            _this.socket.on('CURVE-COMPLETE', function (serverId) {
-                var curve = self.getCurve(self.curveDict[serverId]);
-                while (curve.opBuffer.length > 0) {
-                    var op = curve.opBuffer.shift();
-                    if (op.message == null) {
-                        self.socket.emit(op.type, serverId);
                     }
                     else {
-                        var msg = {};
-                        Object.assign(msg, op.message, { serverId: serverId });
-                        self.socket.emit(op.type, msg);
+                        console.error('Received bad element message.');
                     }
                 }
-            });
-            _this.socket.on('MISSED-CURVE', function (data) {
-                var curve;
-                for (var i = 0; i < self.curveOutBuffer.length; i++) {
-                    if (self.curveOutBuffer[i].serverId == data.serverId) {
-                        curve = self.curveOutBuffer[i].curveSet[data.num];
-                    }
+                else if (data.type && data.serverId) {
+                    var msg = { type: data.type, id: data.serverId };
+                    console.log('Unknown element. ID: ' + data.serverId);
+                    self.socket.emit('UNKNOWN-ELEMENT', msg);
                 }
-                var msg = { serverId: data.serverId, num: data.num, x: curve.x, y: curve.y };
-                self.socket.emit('POINT', msg);
-            });
-            _this.socket.on('DROPPED-CURVE', function (serverId) {
-                clearInterval(self.curveInTimeouts[serverId]);
-                self.curveInBuffer[serverId] = null;
-            });
-            _this.socket.on('MOVE-CURVE', function (data) {
-                var localId = self.curveDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-CURVE', data.serverId);
-                }
-                else {
-                    var curve = self.getCurve(localId);
-                    self.moveCurve(localId, data.x - curve.x, data.y - curve.y, data.editTime);
-                }
-            });
-            _this.socket.on('DELETE-CURVE', function (serverId) {
-                var localId = self.curveDict[serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-CURVE', serverId);
-                }
-                else {
-                    self.deleteElement(localId);
-                }
-            });
-            _this.socket.on('TEXTBOX', function (data) {
-                if (!self.textInBuffer[data.serverId]) {
-                    self.textInBuffer[data.serverId] = {
-                        x: data.x, y: data.y, width: data.width, height: data.height, user: data.userId,
-                        editLock: data.editLock, styles: [], size: data.size, justified: data.justified, editBuffer: []
-                    };
-                    var localId = self.addTextbox(data.x, data.y, data.width, data.height, data.size, data.justified, data.userId, data.editLock, data.editTime, data.serverId);
-                    self.textDict[data.serverId] = localId;
-                }
-            });
-            _this.socket.on('STYLENODE', function (data) {
-                if (!self.textInBuffer[data.serverId]) {
-                    console.log('STYLENODE: Unkown text, ID: ' + data.serverId);
-                    console.log(data);
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    if (self.textInBuffer[data.serverId].editBuffer[data.userId]) {
-                        if (self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId]) {
-                            var buffer = self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId];
-                            buffer.nodes.push(data);
-                            if (buffer.nodes.length == buffer.num_nodes) {
-                                self.completeEdit(data.serverId, data.userId, data.editId);
-                            }
-                        }
-                        else {
-                            console.log('STYLENODE: Unkown edit, ID: ' + data.editId + ' text ID: ' + data.serverId);
-                            self.socket.emit('UNKNOWN-EDIT', data.editId);
-                        }
-                    }
-                    else {
-                        console.log('WOAH BUDDY! User ID: ' + data.userId);
-                    }
-                }
-            });
-            _this.socket.on('TEXTID', function (data) {
-                var textBox = self.getText(data.localId);
-                textBox.serverId = data.serverId;
-                self.textDict[data.serverId] = data.localId;
-                while (textBox.opBuffer.length > 0) {
-                    var op = textBox.opBuffer.shift();
-                    if (op.message == null) {
-                        self.socket.emit(op.type, data.serverId);
-                    }
-                    else {
-                        var msg = {};
-                        Object.assign(msg, op.message, { serverId: data.serverId });
-                        self.socket.emit(op.type, msg);
-                    }
-                }
-            });
-            _this.socket.on('LOCK-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    self.setTextLock(localId, data.userId);
-                }
-            });
-            _this.socket.on('LOCKID-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    if (self.gettingLock != -1 && self.getText(self.gettingLock).serverId == data.serverId) {
-                        self.setTextEdit(localId);
-                    }
-                    else {
-                        var msg = { serverId: data.serverId };
-                        self.socket.emit('RELEASE-TEXT', msg);
-                    }
-                }
-            });
-            _this.socket.on('EDITID-TEXT', function (data) {
-                var buffer = self.textOutBuffer;
-                if (data.localId > buffer[data.bufferId].lastSent || !buffer[data.bufferId].lastSent) {
-                    buffer[data.bufferId].lastSent = data.localId;
-                    for (var i = 0; i < buffer[data.bufferId].editBuffer[data.localId].nodes.length; i++) {
-                        buffer[data.bufferId].editBuffer[data.localId].nodes[i].editId = data.editId;
-                        var node = buffer[data.bufferId].editBuffer[data.localId].nodes[i];
-                        var msg = {
-                            editId: node.editId, num: node.num, start: node.start, end: node.end, text: node.text, weight: node.weight, style: node.style,
-                            decoration: node.decoration, colour: node.colour
-                        };
-                        self.socket.emit('STYLENODE', msg);
-                    }
-                }
-            });
-            _this.socket.on('FAILED-TEXT', function (data) {
-            });
-            _this.socket.on('REFUSED-TEXT', function (data) {
-            });
-            _this.socket.on('RELEASE-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    self.setTextUnLock(localId);
-                }
-            });
-            _this.socket.on('EDIT-TEXT', function (data) {
-                if (!self.textInBuffer[data.serverId]) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    if (!self.textInBuffer[data.serverId].editBuffer[data.userId]) {
-                        self.textInBuffer[data.serverId].editBuffer[data.userId] = [];
-                    }
-                    self.textInBuffer[data.serverId].editBuffer[data.userId][data.editId] = { num_nodes: data.num_nodes, nodes: [] };
-                }
-            });
-            _this.socket.on('MOVE-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    self.moveTextbox(localId, false, data.x, data.y, data.editTime);
-                }
-            });
-            _this.socket.on('JUSTIFY-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    self.setTextJustified(data.serverId, data.newState);
-                }
-            });
-            _this.socket.on('RESIZE-TEXT', function (data) {
-                var localId = self.textDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', data.serverId);
-                }
-                else {
-                    self.setTextArea(localId, data.width, data.height);
-                }
-            });
-            _this.socket.on('DELETE-TEXT', function (serverId) {
-                var localId = self.textDict[serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-TEXT', serverId);
-                }
-                else {
-                    self.deleteElement(localId);
-                }
-            });
-            _this.socket.on('IGNORE-TEXT', function (serverId) {
-            });
-            _this.socket.on('DROPPED-TEXT', function (data) {
-            });
-            _this.socket.on('MISSED-TEXT', function (data) {
-            });
-            _this.socket.on('HIGHLIGHT', function (data) {
-                if (self.hilightDict[data.userId]) {
-                    self.deleteElement(self.hilightDict[data.userId]);
-                    self.hilightDict[data.userId] = null;
-                }
-                var localId = self.addHighlight(data.x, data.y, data.width, data.height, data.userId, data.colour);
-                self.hilightDict[data.userId] = localId;
-            });
-            _this.socket.on('CLEAR-HIGHLIGHT', function (userId) {
-                if (self.hilightDict[userId]) {
-                    self.deleteElement(self.hilightDict[userId]);
-                    self.hilightDict[userId] = null;
-                }
-            });
-            _this.socket.on('FILE-START', function (data) {
-                console.log('Recieved File Start.');
-                console.log('File type is: ' + data.fileType);
-                var isImage = data.fileType.split('/')[0] == 'image' ? true : false;
-                var localId;
-                if (data.url) {
-                    console.log('Adding completed file.');
-                    localId = self.addFile(data.x, data.y, data.width, data.height, data.userId, isImage, data.fileDesc, data.fileType, data.extension, data.rotation, data.url, data.editTime, data.serverId);
-                }
-                else {
-                    localId = self.addFile(data.x, data.y, data.width, data.height, data.userId, isImage, data.fileDesc, data.fileType, data.extension, data.rotation, undefined, data.editTime, data.serverId);
-                }
-                console.log('Logging file in dictionary, ServerID: ' + data.serverId + ' LocalID: ' + localId);
-                self.uploadDict[data.serverId] = localId;
-            });
-            _this.socket.on('FILEID', function (data) {
-                console.log('FILEID Received.');
-                var file = self.getUpload(data.localId);
-                self.uploadDict[data.serverId] = data.localId;
-                file.serverId = data.serverId;
-                while (file.opBuffer.length > 0) {
-                    var op = file.opBuffer.shift();
-                    if (op.message == null) {
-                        self.socket.emit(op.type, data.serverId);
-                    }
-                    else {
-                        var msg = {};
-                        Object.assign(msg, op.message, { serverId: data.serverId });
-                        self.socket.emit(op.type, msg);
-                    }
-                }
-            });
-            _this.socket.on('FILE-DATA', function (data) {
-                console.log('Received Request for more file data.');
-                self.sendFileData(data.serverId, data.place, data.percent);
-            });
-            _this.socket.on('FILE-DONE', function (data) {
-                console.log('Received File Done.');
-                var localId = self.uploadDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', data.serverId);
-                }
-                else {
-                    self.setUploadComplete(localId, data.fileURL);
-                }
-            });
-            _this.socket.on('MOVE-FILE', function (data) {
-                console.log('Recieved move file. ServerID: ' + data.serverId);
-                var localId = self.uploadDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', data.serverId);
-                }
-                else {
-                    self.moveUpload(localId, false, data.x, data.y, data.editTime);
-                }
-            });
-            _this.socket.on('RESIZE-FILE', function (data) {
-                console.log('Recieved resize file.');
-                var localId = self.uploadDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', data.serverId);
-                }
-                else {
-                    self.setUploadArea(localId, data.width, data.height, data.editTime);
-                }
-            });
-            _this.socket.on('ROTATE-FILE', function (data) {
-                console.log('Recieved rotate file.');
-                var localId = self.uploadDict[data.serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', data.serverId);
-                }
-                else {
-                    self.setUploadRotation(localId, data.rotation);
-                }
-            });
-            _this.socket.on('DELETE-FILE', function (serverId) {
-                var localId = self.uploadDict[serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', serverId);
-                }
-                else {
-                    self.deleteElement(localId);
-                }
-            });
-            _this.socket.on('ABANDON-FILE', function (serverId) {
-                var localId = self.uploadDict[serverId];
-                if (localId == null || localId == undefined) {
-                    self.socket.emit('UNKNOWN-FILE', serverId);
-                }
-                else {
-                    self.deleteElement(localId);
-                }
-            });
-            _this.socket.on('FILE-OVERSIZE', function (localId) {
-                self.deleteElement(localId);
-                self.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
-            });
-            _this.socket.on('FILE-BADTYPE', function (localId) {
-                self.deleteElement(localId);
-                self.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
             });
             _this.socket.on('ERROR', function (message) {
                 console.log('SERVER: ' + message);
@@ -2960,76 +1265,17 @@ var WhiteBoardController = (function () {
             var whitElem = document.getElementById("whiteBoard-input");
             var context = whitElem.getContext('2d');
             context.clearRect(0, 0, whitElem.width, whitElem.height);
-            _this.isWriting = false;
-            _this.clearHighlight();
-            if (_this.currTextEdit > -1) {
-                var textBox = _this.getText(_this.currTextEdit);
-                var lineCount = textBox.textNodes.length;
-                if (lineCount == 0) {
-                    lineCount = 1;
-                }
-                if (lineCount * 1.5 * textBox.size < textBox.height) {
-                    _this.resizeText(_this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                    _this.sendTextResize(_this.currTextEdit);
-                }
-                _this.releaseText(_this.currTextEdit);
+            for (var i_19 = 0; i_19 < _this.currSelect.length; i_19++) {
+                var elem = _this.getBoardElement(_this.currSelect[i_19]);
+                var retVal = elem.handleDeselect();
+                _this.setElementView(elem.id, retVal);
             }
-            else if (_this.gettingLock > -1) {
-                _this.releaseText(_this.gettingLock);
-            }
+            _this.currSelect = [];
             _this.setMode(newMode);
         };
-        this.sizeChange = function (newSize) {
-            _this.setSize(newSize);
-        };
-        this.styleChange = function () {
-            if (_this.currTextEdit != -1 && _this.cursorStart != _this.cursorEnd) {
-                var textItem = _this.getText(_this.currTextEdit);
-                var text = textItem.text.substring(_this.cursorStart, _this.cursorEnd);
-                _this.insertText(textItem, _this.cursorStart, _this.cursorEnd, text);
-            }
-        };
-        this.colourChange = function (newColour) {
-            _this.setColour(newColour);
-            _this.styleChange();
-        };
-        this.boldChange = function (newState) {
-            _this.setIsBold(newState);
-            _this.styleChange();
-        };
-        this.italicChange = function (newState) {
-            _this.setIsItalic(newState);
-            _this.styleChange();
-        };
-        this.underlineChange = function (newState) {
-            if (newState) {
-                _this.setIsOline(false);
-                _this.setIsTline(false);
-            }
-            _this.setIsUline(newState);
-            _this.styleChange();
-        };
-        this.overlineChange = function (newState) {
-            if (newState) {
-                _this.setIsUline(false);
-                _this.setIsTline(false);
-            }
-            _this.setIsOline(newState);
-            _this.styleChange();
-        };
-        this.throughlineChange = function (newState) {
-            if (newState) {
-                _this.setIsOline(false);
-                _this.setIsUline(false);
-            }
-            _this.setIsTline(newState);
-            _this.styleChange();
-        };
-        this.justifiedChange = function (newState) {
-            _this.setJustified(newState);
-            if (_this.currTextEdit != -1) {
-                _this.setTextJustified(_this.currTextEdit, !_this.viewState.isJustified);
-            }
+        this.changeEraseSize = function (newSize) {
+            var newView = Object.assign({}, _this.viewState, { eraseSize: newSize });
+            _this.updateView(newView);
         };
         this.elementMouseOver = function (id, e) {
             var elem = _this.getBoardElement(id);
@@ -3039,251 +1285,305 @@ var WhiteBoardController = (function () {
             }
             else {
                 var prevElem = _this.getBoardElement(_this.currentHover);
-                clearTimeout(elem.hoverTimer);
+                clearTimeout(prevElem.hoverTimer);
             }
         };
         this.elementMouseOut = function (id, e) {
             var elem = _this.getBoardElement(id);
             if (_this.currentHover == id) {
                 clearTimeout(elem.hoverTimer);
-                _this.currentHover = -1;
+                _this.removeHoverInfo(_this.currentHover);
             }
         };
-        this.curveMouseClick = function (id) {
-            if (_this.viewState.mode == 2) {
-                var curve = _this.getCurve(id);
-                if (_this.isHost || _this.userId == curve.user) {
-                    _this.deleteCurve(id);
-                }
-            }
-        };
-        this.curveMouseMove = function (id) {
-            if (_this.viewState.mode == 2 && _this.lMousePress) {
-                var curve = _this.getCurve(id);
-                if (_this.isHost || _this.userId == curve.user) {
-                    _this.deleteCurve(id);
-                }
-            }
-        };
-        this.curveMouseDown = function (id, e) {
-            if (_this.viewState.mode == 3) {
-                if (_this.currSelect.length > 0) {
-                    _this.groupMoving = true;
-                    _this.startMove();
-                }
-                else {
-                    _this.currCurveMove = id;
-                    _this.startMove();
-                    _this.prevX = e.clientX;
-                    _this.prevY = e.clientY;
-                }
-            }
-        };
-        this.textMouseClick = function (id) {
-            if (_this.viewState.mode == 2) {
-                var textBox = _this.getText(id);
-                if (_this.isHost || _this.userId == textBox.user) {
-                    _this.deleteText(id);
-                }
-            }
-        };
-        this.textMouseDblClick = function (id) {
-            var textBox = _this.getText(id);
-            if (_this.gettingLock != -1 && _this.gettingLock != id) {
-                _this.releaseText(_this.gettingLock);
-            }
-            if (_this.currTextEdit != -1) {
-                if (_this.currTextEdit != id) {
-                    _this.releaseText(_this.currTextEdit);
-                    var tbox = _this.getText(_this.currTextEdit);
-                    var lineCount = tbox.textNodes.length;
-                    if (lineCount == 0) {
-                        lineCount = 1;
-                    }
-                    if (lineCount * 1.5 * tbox.size < tbox.height) {
-                        _this.resizeText(_this.currTextEdit, tbox.width, lineCount * 1.5 * tbox.size);
-                        _this.sendTextResize(_this.currTextEdit);
-                    }
-                }
-            }
-            else {
-                if (_this.isHost || _this.userId == textBox.user) {
-                    _this.lockText(id);
-                }
-            }
-        };
-        this.textMouseMoveDown = function (id, e) {
-            if (_this.currSelect.length > 0) {
-                _this.groupMoving = true;
-                _this.startMove();
-            }
-            else {
-                _this.currTextMove = id;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                _this.startMove();
-            }
-        };
-        this.textMouseResizeDown = function (id, vert, horz, e) {
-            if (_this.currSelect.length > 0) {
-                _this.groupMoving = true;
-                _this.startMove();
-            }
-            else {
-                _this.currTextResize = id;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                _this.vertResize = vert;
-                _this.horzResize = horz;
-                _this.startResize(horz, vert);
-            }
-        };
-        this.textMouseMove = function (id) {
-            if (_this.viewState.mode == 2 && _this.lMousePress) {
-                var textBox = _this.getText(id);
-                if (_this.isHost || _this.userId == textBox.user) {
-                    _this.deleteText(id);
-                }
-            }
-        };
-        this.fileMouseClick = function (id) {
-            if (_this.viewState.mode == 2) {
-                var fileBox = _this.getUpload(id);
-                if (_this.isHost || _this.userId == fileBox.user) {
-                    _this.deleteFile(id);
-                }
-            }
-        };
-        this.clearAlert = function () {
-            _this.removeAlert();
-        };
-        this.highlightTagClick = function (id) {
-            console.log('Highligh tag click processed.');
-            var whitElem = document.getElementById('whiteBoard-input');
-            var whitCont = document.getElementById('whiteboard-container');
-            var clientWidth = whitCont.clientWidth;
-            var clientHeight = whitCont.clientHeight;
-            var highlight = _this.getHighlight(id);
-            var xCentre = highlight.x + highlight.width / 2;
-            var yCentre = highlight.y + highlight.height / 2;
-            var xChange = xCentre - (_this.panX + clientWidth * _this.scaleF * 0.5);
-            var yChange = yCentre - (_this.panY + clientHeight * _this.scaleF * 0.5);
-            var newPanX = _this.panX + xChange;
-            var newPanY = _this.panY + yChange;
-            if (newPanX < 0) {
-                newPanX = 0;
-            }
-            if (newPanY < 0) {
-                newPanY = 0;
-            }
-            _this.setViewBox(newPanX, newPanY, _this.scaleF);
-        };
-        this.fileMouseMoveDown = function (id, e) {
-            if (_this.currSelect.length > 0) {
-                _this.groupMoving = true;
-                _this.startMove();
-            }
-            else {
-                _this.currFileMove = id;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                _this.startMove();
-            }
-        };
-        this.fileMouseResizeDown = function (id, vert, horz, e) {
-            if (_this.currSelect.length > 0) {
-                _this.groupMoving = true;
-                _this.startMove();
-            }
-            else {
-                _this.currFileResize = id;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                _this.vertResize = vert;
-                _this.horzResize = horz;
-                _this.startResize(horz, vert);
-            }
-        };
-        this.fileRotateClick = function (id) {
-            var file = _this.getUpload(id);
-            if (_this.isHost || _this.userId == file.user) {
-                _this.rotateUpload(id);
-                _this.sendFileRotate(id);
-            }
-        };
-        this.fileMouseMove = function (id) {
-            if (_this.viewState.mode == 2 && _this.lMousePress) {
-                var fileBox = _this.getUpload(id);
-                if (_this.isHost || _this.userId == fileBox.user) {
-                    _this.deleteFile(id);
-                }
-            }
-        };
-        this.contextCopy = function (e) {
-            document.execCommand("copy");
-        };
-        this.contextCut = function (e) {
-            document.execCommand("cut");
-        };
-        this.contextPaste = function (e) {
-            document.execCommand("paste");
-        };
-        this.onCopy = function (e) {
-            console.log('COPY EVENT');
-            if (_this.isWriting && _this.cursorStart != _this.cursorEnd) {
-                var textItem = _this.getText(_this.currTextEdit);
-                e.clipboardData.setData('text/plain', textItem.text.substring(_this.cursorStart, _this.cursorEnd));
-            }
-        };
-        this.onPaste = function (e) {
-            console.log('PASTE EVENT');
-            if (_this.isWriting) {
-                var textItem = _this.getText(_this.currTextEdit);
-                var data = e.clipboardData.getData('text/plain');
-                _this.insertText(textItem, _this.cursorStart, _this.cursorEnd, data);
-                _this.cursorStart = _this.cursorStart + data.length;
-                _this.cursorEnd = _this.cursorStart;
-                _this.changeTextSelect(_this.currTextEdit, true);
-            }
-        };
-        this.onCut = function (e) {
-            console.log('CUT EVENT');
-        };
-        this.dragOver = function (e) {
+        this.elementMouseDown = function (id, e, componenet, subId) {
             e.preventDefault();
-        };
-        this.drop = function (e) {
+            var elem = _this.getBoardElement(id);
             var whitElem = document.getElementById("whiteBoard-input");
             var elemRect = whitElem.getBoundingClientRect();
             var offsetY = elemRect.top - document.body.scrollTop;
             var offsetX = elemRect.left - document.body.scrollLeft;
-            var x = Math.round(e.clientX - offsetX);
-            var y = Math.round(e.clientY - offsetY);
-            e.preventDefault();
-            if (e.dataTransfer.files.length > 0) {
-                if (e.dataTransfer.files.length == 1) {
-                    var file = e.dataTransfer.files[0];
-                    _this.placeLocalFile(x, y, _this.scaleF, _this.panX, _this.panY, file);
+            var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+            var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+            if (_this.currentHover == id) {
+                clearTimeout(elem.hoverTimer);
+                _this.removeHoverInfo(_this.currentHover);
+            }
+            if (_this.viewState.mode == BoardModes.SELECT) {
+                if (_this.currSelect.length > 1 && elem.isSelected) {
+                    _this.startMove(xPos, yPos);
+                }
+                else {
+                    var retVal = elem.handleMouseDown(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                    _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                    _this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
+                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if (retVal.newViewCentre) {
+                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    _this.handleInfoMessage(retVal.infoMessage);
+                    _this.handleAlertMessage(retVal.alertMessage);
+                    _this.setElementView(id, retVal.newView);
+                }
+                _this.mouseDownHandled = true;
+            }
+            _this.prevX = e.clientX;
+            _this.prevY = e.clientY;
+        };
+        this.elementMouseMove = function (id, e, componenet, subId) {
+            var elem = _this.getBoardElement(id);
+            if (_this.viewState.mode == BoardModes.ERASE) {
+                if (_this.lMousePress) {
+                    if (_this.isHost || _this.userId == elem.user) {
+                        var retVal = elem.handleErase();
+                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                        _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                        _this.deleteElement(id);
+                        if (_this.currentHover == id) {
+                            clearTimeout(elem.hoverTimer);
+                            _this.removeHoverInfo(_this.currentHover);
+                        }
+                    }
                 }
             }
-            else {
-                var url = e.dataTransfer.getData('text/plain');
-                _this.placeRemoteFile(x, y, _this.scaleF, _this.panX, _this.panY, url);
+            else if (_this.viewState.mode == BoardModes.SELECT && !_this.groupMoving) {
+                var changeX = (e.clientX - _this.prevX) * _this.scaleF;
+                var changeY = (e.clientY - _this.prevY) * _this.scaleF;
+                var retVal = elem.handleMouseMove(e, changeX, changeY, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+                _this.prevX = e.clientX;
+                _this.prevY = e.clientY;
             }
         };
+        this.elementMouseUp = function (id, e, componenet, subId) {
+            if (_this.viewState.mode == BoardModes.SELECT) {
+                var elem = _this.getBoardElement(id);
+                var whitElem_1 = document.getElementById("whiteBoard-input");
+                var elemRect_1 = whitElem_1.getBoundingClientRect();
+                var offsetY = elemRect_1.top - document.body.scrollTop;
+                var offsetX = elemRect_1.left - document.body.scrollLeft;
+                var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+                var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+                var retVal = elem.handleMouseUp(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+            }
+        };
+        this.elementMouseClick = function (id, e, componenet, subId) {
+            var elem = _this.getBoardElement(id);
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
+            var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+            var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+            if (_this.viewState.mode == BoardModes.ERASE) {
+                if (_this.isHost || _this.userId == elem.user) {
+                    var retVal = elem.handleErase();
+                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                    _this.deleteElement(id);
+                    if (_this.currentHover == id) {
+                        clearTimeout(elem.hoverTimer);
+                        _this.removeHoverInfo(_this.currentHover);
+                    }
+                }
+            }
+            else if (_this.viewState.mode == BoardModes.SELECT && _this.currSelect.length < 2) {
+                var retVal = elem.handleMouseClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+            }
+        };
+        this.elementMouseDoubleClick = function (id, e, componenet, subId) {
+            if (_this.viewState.mode == BoardModes.SELECT) {
+                var elem = _this.getBoardElement(id);
+                var whitElem_2 = document.getElementById("whiteBoard-input");
+                var elemRect_2 = whitElem_2.getBoundingClientRect();
+                var offsetY = elemRect_2.top - document.body.scrollTop;
+                var offsetX = elemRect_2.left - document.body.scrollLeft;
+                var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+                var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+                var retVal = elem.handleDoubleClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+                e.stopPropagation();
+            }
+        };
+        this.elementTouchStart = function (id, e, componenet, subId) {
+            var elem = _this.getBoardElement(id);
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
+            var localTouches;
+            for (var i_20 = 0; i_20 < e.touches.length; i_20++) {
+                var touch = e.touches.item(i_20);
+                var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
+                var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
+                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+            }
+            if (_this.currSelect.length > 1 && elem.isSelected) {
+            }
+            else {
+                var retVal = elem.handleTouchStart(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleTouchElementSelect(e, elem, retVal.isSelected, retVal.cursor);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+                _this.touchStartHandled = true;
+            }
+            _this.prevTouch = e.touches;
+        };
+        this.elementTouchMove = function (id, e, componenet, subId) {
+            var touchMoves;
+            if (_this.viewState.mode == BoardModes.ERASE) {
+                var elem = _this.getBoardElement(id);
+                if (_this.isHost || _this.userId == elem.user) {
+                    var retVal = elem.handleErase();
+                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                    _this.deleteElement(id);
+                }
+            }
+            else if (_this.viewState.mode == BoardModes.SELECT && !_this.groupMoving) {
+                for (var i_21 = 0; i_21 < e.touches.length; i_21++) {
+                    var touch = e.touches.item(i_21);
+                    for (var j_2 = 0; j_2 < _this.prevTouch.length; j_2++) {
+                        if (_this.prevTouch[j_2].identifier == touch.identifier) {
+                            var xChange = (touch.clientX - _this.prevTouch[j_2].clientX) * _this.scaleF;
+                            var yChange = (touch.clientY - _this.prevTouch[j_2].clientY) * _this.scaleF;
+                            var touchChange = { x: xChange, y: yChange, identifer: touch.identifier };
+                            touchMoves.push(touchChange);
+                        }
+                    }
+                }
+                var retVal = elem.handleTouchMove(e, touchMoves, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+                _this.prevTouch = e.touches;
+            }
+        };
+        this.elementTouchEnd = function (id, e, componenet, subId) {
+            if (_this.viewState.mode == BoardModes.SELECT) {
+                var elem = _this.getBoardElement(id);
+                var whitElem_3 = document.getElementById("whiteBoard-input");
+                var elemRect_3 = whitElem_3.getBoundingClientRect();
+                var offsetY = elemRect_3.top - document.body.scrollTop;
+                var offsetX = elemRect_3.left - document.body.scrollLeft;
+                var localTouches = void 0;
+                for (var i_22 = 0; i_22 < e.touches.length; i_22++) {
+                    var touch = e.touches.item(i_22);
+                    var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
+                    var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
+                    localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+                }
+                var retVal = elem.handleTouchEnd(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+            }
+        };
+        this.elementTouchCancel = function (id, e, componenet, subId) {
+            if (_this.viewState.mode == BoardModes.SELECT) {
+                var elem = _this.getBoardElement(id);
+                var whitElem_4 = document.getElementById("whiteBoard-input");
+                var elemRect_4 = whitElem_4.getBoundingClientRect();
+                var offsetY = elemRect_4.top - document.body.scrollTop;
+                var offsetX = elemRect_4.left - document.body.scrollLeft;
+                var localTouches = void 0;
+                for (var i_23 = 0; i_23 < e.touches.length; i_23++) {
+                    var touch = e.touches.item(i_23);
+                    var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
+                    var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
+                    localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+                }
+                var retVal = elem.handleTouchCancel(e, localTouches, components.get(elem.type).pallete, componenet, subId);
+                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
+                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
+                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
+                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if (retVal.newViewCentre) {
+                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                _this.handleInfoMessage(retVal.infoMessage);
+                _this.handleAlertMessage(retVal.alertMessage);
+                _this.setElementView(id, retVal.newView);
+            }
+        };
+        this.elementDragOver = function (id, e, componenet, subId) {
+            e.stopPropagation();
+        };
+        this.elementDrop = function (id, e, componenet, subId) {
+            e.stopPropagation();
+        };
         this.mouseDown = function (e) {
+            e.preventDefault();
             if (!_this.lMousePress && !_this.wMousePress && !_this.rMousePress) {
-                _this.clearHighlight();
                 _this.lMousePress = e.buttons & 1 ? true : false;
                 _this.rMousePress = e.buttons & 2 ? true : false;
                 _this.wMousePress = e.buttons & 4 ? true : false;
                 _this.isPoint = true;
-                var whitElem = document.getElementById("whiteBoard-input");
-                var elemRect = whitElem.getBoundingClientRect();
-                var offsetY = elemRect.top - document.body.scrollTop;
-                var offsetX = elemRect.left - document.body.scrollLeft;
-                whitElem.width = whitElem.clientWidth;
-                whitElem.height = whitElem.clientHeight;
+                var whitElem_5 = document.getElementById("whiteBoard-input");
+                var elemRect_5 = whitElem_5.getBoundingClientRect();
+                var offsetY = elemRect_5.top - document.body.scrollTop;
+                var offsetX = elemRect_5.left - document.body.scrollLeft;
+                whitElem_5.width = whitElem_5.clientWidth;
+                whitElem_5.height = whitElem_5.clientHeight;
                 _this.prevX = e.clientX;
                 _this.prevY = e.clientY;
                 var newPoint = { x: 0, y: 0 };
@@ -3292,37 +1592,39 @@ var WhiteBoardController = (function () {
                 newPoint.y = Math.round(e.clientY - offsetY);
                 _this.pointList[_this.pointList.length] = newPoint;
                 _this.downPoint = { x: Math.round(e.clientX - offsetX), y: Math.round(e.clientY - offsetY) };
-                if (e.buttons == 1 && !_this.viewState.itemMoving && !_this.viewState.itemResizing) {
-                    if (_this.currTextEdit > -1) {
-                        var textBox = _this.getText(_this.currTextEdit);
-                        _this.cursorStart = _this.findTextPos(textBox, (e.clientX - offsetX) * _this.scaleF + _this.panX, (e.clientY - offsetY) * _this.scaleF + _this.panY);
-                        _this.cursorEnd = _this.cursorStart;
-                        _this.textDown = _this.cursorStart;
-                        _this.changeTextSelect(_this.currTextEdit, true);
+                if (_this.viewState.alertElements.size == 0) {
+                    _this.blockAlert = true;
+                    _this.updateView(Object.assign({}, _this.viewState, { blockAlert: true }));
+                }
+            }
+            if (_this.mouseDownHandled) {
+                _this.mouseDownHandled = false;
+            }
+            else {
+                if (_this.currSelect.length > 0) {
+                    for (var i_24 = 0; i_24 < _this.currSelect.length; i_24++) {
+                        _this.deselectElement(_this.currSelect[i_24]);
                     }
-                    _this.selectDrag = true;
+                    _this.currSelect = [];
+                }
+                else {
+                    if (_this.lMousePress && _this.viewState.mode == BoardModes.SELECT) {
+                        _this.selectDrag = true;
+                    }
+                }
+                if (_this.currentHover != -1) {
+                    var elem = _this.getBoardElement(_this.currentHover);
+                    if (elem.infoElement != -1) {
+                        _this.removeHoverInfo(_this.currentHover);
+                    }
+                    clearTimeout(elem.hoverTimer);
                 }
             }
-            if (_this.currSelect.length > 0) {
-                for (var i = 0; i < _this.currSelect.length; i++) {
-                    _this.deselectElement(_this.currSelect[i]);
-                }
-                _this.currSelect = [];
-            }
-            if (_this.currentHover != -1) {
-                var elem = _this.getBoardElement(_this.currentHover);
-                if (elem.infoElement) {
-                    _this.removeHoverInfo(_this.currentHover);
-                }
-            }
-        };
-        this.touchDown = function () {
-            _this.touchPress = true;
         };
         this.mouseMove = function (e) {
             if (_this.currentHover != -1) {
                 var elem = _this.getBoardElement(_this.currentHover);
-                if (elem.infoElement) {
+                if (elem.infoElement != -1) {
                     _this.removeHoverInfo(_this.currentHover);
                 }
                 else {
@@ -3353,235 +1655,21 @@ var WhiteBoardController = (function () {
                 var newPoint = { x: 0, y: 0 };
                 newPoint.x = Math.round(e.clientX - offsetX);
                 newPoint.y = Math.round(e.clientY - offsetY);
-                if (_this.viewState.mode == 0) {
-                    if (_this.pointList.length) {
-                        if (Math.round(_this.pointList[_this.pointList.length - 1].x - newPoint.x) < _this.scaleF || Math.round(_this.pointList[_this.pointList.length - 1].y - newPoint.y)) {
-                            _this.isPoint = false;
-                            context.beginPath();
-                            context.strokeStyle = _this.viewState.colour;
-                            context.lineWidth = _this.viewState.baseSize;
-                            context.moveTo(_this.pointList[_this.pointList.length - 1].x, _this.pointList[_this.pointList.length - 1].y);
-                            context.lineTo(newPoint.x, newPoint.y);
-                            context.stroke();
-                            _this.pointList[_this.pointList.length] = newPoint;
-                        }
-                    }
-                    else {
-                        _this.pointList[_this.pointList.length] = newPoint;
-                    }
-                }
-                else if (_this.viewState.mode == 1 && !_this.rMousePress) {
-                    if (_this.currTextResize != -1) {
+                _this.pointList.push(newPoint);
+                if (_this.viewState.mode == BoardModes.SELECT) {
+                    if (_this.groupMoving) {
                         var changeX = (e.clientX - _this.prevX) * _this.scaleF;
                         var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        var tbox = _this.getText(_this.currTextResize);
-                        var newWidth = _this.horzResize ? tbox.width + changeX : tbox.width;
-                        var newHeight = _this.vertResize ? tbox.height + changeY : tbox.height;
-                        _this.resizeText(_this.currTextResize, newWidth, newHeight);
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.textResized = true;
-                    }
-                    else if (_this.currTextMove != -1) {
-                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.moveTextbox(_this.currTextMove, true, changeX, changeY, new Date());
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.textMoved = true;
-                    }
-                    else if (_this.currTextSel != -1) {
-                        var textBox = _this.getText(_this.currTextEdit);
-                        var newLoc = _this.findTextPos(textBox, (e.clientX - offsetX) * _this.scaleF + _this.panX, (e.clientY - offsetY) * _this.scaleF + _this.panY);
-                        if (_this.textDown < newLoc) {
-                            _this.cursorStart = _this.textDown;
-                            _this.cursorEnd = newLoc;
-                            _this.startLeft = true;
-                        }
-                        else {
-                            _this.cursorStart = newLoc;
-                            _this.cursorEnd = _this.textDown;
-                            _this.startLeft = false;
-                        }
-                        _this.changeTextSelect(_this.currTextSel, true);
-                    }
-                    else {
-                        var rectLeft_1;
-                        var rectTop_1;
-                        var rectWidth_1;
-                        var rectHeight_1;
-                        if (newPoint.x > _this.downPoint.x) {
-                            rectLeft_1 = _this.downPoint.x;
-                            rectWidth_1 = newPoint.x - _this.downPoint.x;
-                        }
-                        else {
-                            rectLeft_1 = newPoint.x;
-                            rectWidth_1 = _this.downPoint.x - newPoint.x;
-                        }
-                        if (newPoint.y > _this.downPoint.y) {
-                            rectTop_1 = _this.downPoint.y;
-                            rectHeight_1 = newPoint.y - _this.downPoint.y;
-                        }
-                        else {
-                            rectTop_1 = newPoint.y;
-                            rectHeight_1 = _this.downPoint.y - newPoint.y;
-                        }
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        if (rectWidth_1 > 0 && rectHeight_1 > 0) {
-                            context.beginPath();
-                            context.strokeStyle = 'black';
-                            context.setLineDash([5]);
-                            context.strokeRect(rectLeft_1, rectTop_1, rectWidth_1, rectHeight_1);
-                            context.stroke();
-                        }
-                    }
-                }
-                else if (_this.viewState.mode == 2 && !_this.rMousePress) {
-                }
-                else if (_this.viewState.mode == 3) {
-                    if (_this.currCurveMove != -1) {
-                        _this.moveCurve(_this.currCurveMove, (e.clientX - _this.prevX) * _this.scaleF, (e.clientY - _this.prevY) * _this.scaleF, new Date());
-                        _this.curveChangeX += (e.clientX - _this.prevX) * _this.scaleF;
-                        _this.curveChangeY += (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.curveMoved = true;
-                    }
-                    else if (_this.currTextMove != -1) {
-                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.moveTextbox(_this.currTextMove, true, changeX, changeY, new Date());
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.textMoved = true;
-                    }
-                    else if (_this.currFileMove != -1) {
-                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.moveUpload(_this.currFileMove, true, changeX, changeY, new Date());
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.fileMoved = true;
-                    }
-                    else if (_this.currFileResize != -1) {
-                        var changeX_1 = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY_1 = (e.clientY - _this.prevY) * _this.scaleF;
-                        var file = _this.getUpload(_this.currFileResize);
-                        var newWidth_1 = _this.horzResize ? file.width + changeX_1 : file.width;
-                        var newHeight_1 = _this.vertResize ? file.height + changeY_1 : file.height;
-                        _this.resizeFile(_this.currFileResize, newWidth_1, newHeight_1);
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.fileResized = true;
-                    }
-                    else if (_this.groupMoving) {
-                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.moveGroup(true, changeX, changeY, new Date());
+                        _this.moveGroup(changeX, changeY, new Date());
                         _this.prevX = e.clientX;
                         _this.prevY = e.clientY;
                         _this.groupMoved = true;
                     }
                     else if (_this.selectDrag) {
-                        var rectLeft_2;
-                        var rectTop_2;
-                        var rectWidth_2;
-                        var rectHeight_2;
-                        if (newPoint.x > _this.downPoint.x) {
-                            rectLeft_2 = _this.downPoint.x;
-                            rectWidth_2 = newPoint.x - _this.downPoint.x;
-                        }
-                        else {
-                            rectLeft_2 = newPoint.x;
-                            rectWidth_2 = _this.downPoint.x - newPoint.x;
-                        }
-                        if (newPoint.y > _this.downPoint.y) {
-                            rectTop_2 = _this.downPoint.y;
-                            rectHeight_2 = newPoint.y - _this.downPoint.y;
-                        }
-                        else {
-                            rectTop_2 = newPoint.y;
-                            rectHeight_2 = _this.downPoint.y - newPoint.y;
-                        }
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        if (rectWidth_2 > 0 && rectHeight_2 > 0) {
-                            context.beginPath();
-                            context.strokeStyle = 'black';
-                            context.setLineDash([5]);
-                            context.strokeRect(rectLeft_2, rectTop_2, rectWidth_2, rectHeight_2);
-                            context.stroke();
-                        }
-                        _this.selectLeft = _this.panX + rectLeft_2 * _this.scaleF;
-                        _this.selectTop = _this.panY + rectTop_2 * _this.scaleF;
-                        _this.selectWidth = rectWidth_2 * _this.scaleF;
-                        _this.selectHeight = rectHeight_2 * _this.scaleF;
-                    }
-                }
-                else if (_this.viewState.mode == 4 && !_this.rMousePress) {
-                    var rectLeft;
-                    var rectTop;
-                    var rectWidth;
-                    var rectHeight;
-                    if (newPoint.x > _this.downPoint.x) {
-                        rectLeft = _this.downPoint.x;
-                        rectWidth = newPoint.x - _this.downPoint.x;
-                    }
-                    else {
-                        rectLeft = newPoint.x;
-                        rectWidth = _this.downPoint.x - newPoint.x;
-                    }
-                    if (newPoint.y > _this.downPoint.y) {
-                        rectTop = _this.downPoint.y;
-                        rectHeight = newPoint.y - _this.downPoint.y;
-                    }
-                    else {
-                        rectTop = newPoint.y;
-                        rectHeight = _this.downPoint.y - newPoint.y;
-                    }
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                    if (rectWidth > 0 && rectHeight > 0) {
-                        context.beginPath();
-                        context.globalAlpha = 0.4;
-                        context.fillStyle = 'yellow';
-                        context.fillRect(rectLeft, rectTop, rectWidth, rectHeight);
-                        context.stroke();
-                        context.globalAlpha = 1.0;
-                    }
-                }
-            }
-            _this.mouseX = e.clientX;
-            _this.mouseY = e.clientY;
-        };
-        this.touchMove = function (e) {
-            if (_this.touchPress) {
-            }
-        };
-        this.mouseUp = function (e) {
-            if (_this.lMousePress && !_this.wMousePress) {
-                var whitElem = document.getElementById("whiteBoard-input");
-                var context = whitElem.getContext('2d');
-                if (_this.viewState.mode == 0) {
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                    if (_this.isPoint) {
-                        var elemRect = whitElem.getBoundingClientRect();
-                        var offsetY = elemRect.top - document.body.scrollTop;
-                        var offsetX = elemRect.left - document.body.scrollLeft;
-                    }
-                    _this.drawCurve(_this.pointList, _this.scaleF * _this.viewState.baseSize, _this.viewState.colour, _this.scaleF, _this.panX, _this.panY);
-                }
-                else if (_this.viewState.mode == 1) {
-                    if (!_this.isWriting) {
                         var rectLeft = void 0;
                         var rectTop = void 0;
                         var rectWidth = void 0;
                         var rectHeight = void 0;
-                        var elemRect = whitElem.getBoundingClientRect();
-                        var offsetY = elemRect.top - document.body.scrollTop;
-                        var offsetX = elemRect.left - document.body.scrollLeft;
-                        var newPoint = { x: 0, y: 0 };
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        newPoint.x = Math.round(e.clientX - offsetX);
-                        newPoint.y = Math.round(e.clientY - offsetY);
                         if (newPoint.x > _this.downPoint.x) {
                             rectLeft = _this.downPoint.x;
                             rectWidth = newPoint.x - _this.downPoint.x;
@@ -3598,63 +1686,79 @@ var WhiteBoardController = (function () {
                             rectTop = newPoint.y;
                             rectHeight = _this.downPoint.y - newPoint.y;
                         }
-                        if (rectWidth > 10 && rectHeight > 10) {
-                            var x = rectLeft * _this.scaleF + _this.panX;
-                            var y = rectTop * _this.scaleF + _this.panY;
-                            var width = rectWidth * _this.scaleF;
-                            var height = rectHeight * _this.scaleF;
-                            _this.isWriting = true;
-                            _this.cursorStart = 0;
-                            _this.cursorEnd = 0;
-                            var localId = _this.addTextbox(x, y, width, height, _this.scaleF * _this.viewState.baseSize * 20, _this.viewState.isJustified, _this.userId, _this.userId, new Date());
-                            _this.setTextEdit(localId);
-                        }
-                    }
-                    else if (_this.rMousePress) {
-                        _this.isWriting = false;
-                        if (_this.currTextEdit > -1) {
-                            var textBox = _this.getText(_this.currTextEdit);
-                            var lineCount = textBox.textNodes.length;
-                            if (lineCount == 0) {
-                                lineCount = 1;
-                            }
-                            if (lineCount * 1.5 * textBox.size < textBox.height) {
-                                _this.resizeText(_this.currTextEdit, textBox.width, lineCount * 1.5 * textBox.size);
-                                _this.sendTextResize(_this.currTextEdit);
-                            }
-                            _this.releaseText(_this.currTextEdit);
-                        }
-                        else if (_this.gettingLock > -1) {
-                            _this.releaseText(_this.gettingLock);
-                        }
                         context.clearRect(0, 0, whitElem.width, whitElem.height);
+                        if (rectWidth > 0 && rectHeight > 0) {
+                            context.beginPath();
+                            context.strokeStyle = 'black';
+                            context.setLineDash([5]);
+                            context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
+                            context.stroke();
+                        }
+                        _this.selectLeft = _this.panX + rectLeft * _this.scaleF;
+                        _this.selectTop = _this.panY + rectTop * _this.scaleF;
+                        _this.selectWidth = rectWidth * _this.scaleF;
+                        _this.selectHeight = rectHeight * _this.scaleF;
+                    }
+                    else if (_this.currSelect.length == 1) {
+                        var elem = _this.getBoardElement(_this.currSelect[0]);
+                        var changeX_1 = (e.clientX - _this.prevX) * _this.scaleF;
+                        var changeY_1 = (e.clientY - _this.prevY) * _this.scaleF;
+                        var retVal = elem.handleBoardMouseMove(e, changeX_1, changeY_1, components.get(elem.type).pallete);
+                        _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                        _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        if (retVal.newViewCentre) {
+                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                        }
+                        _this.handleInfoMessage(retVal.infoMessage);
+                        _this.handleAlertMessage(retVal.alertMessage);
+                        _this.setElementView(elem.id, retVal.newView);
                     }
                 }
-                else if (_this.viewState.mode == 3) {
-                    if (_this.selectDrag) {
-                        _this.selectDrag = false;
+                else if (!_this.rMousePress && _this.viewState.mode != BoardModes.ERASE) {
+                    if (_this.currSelect.length == 0) {
                         context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        for (var i = 0; i < _this.boardElems.length; i++) {
-                            var elem = _this.boardElems[i];
-                            if (elem.x + elem.width > _this.selectLeft && elem.y + elem.height > _this.selectTop) {
-                                if (_this.selectLeft + _this.selectWidth > elem.x && _this.selectTop + _this.selectHeight > elem.y) {
-                                    _this.currSelect.push(i);
-                                    _this.selectElement(i);
-                                }
-                            }
+                        var data = {
+                            palleteState: components.get(_this.viewState.mode).pallete, pointList: _this.pointList
+                        };
+                        components.get(_this.viewState.mode).DrawHandle(data, context);
+                    }
+                    else if (_this.currSelect.length == 1) {
+                        var elem = _this.getBoardElement(_this.currSelect[0]);
+                        var changeX_2 = (e.clientX - _this.prevX) * _this.scaleF;
+                        var changeY_2 = (e.clientY - _this.prevY) * _this.scaleF;
+                        var retVal = elem.handleBoardMouseMove(e, changeX_2, changeY_2, components.get(elem.type).pallete);
+                        _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                        _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        if (retVal.newViewCentre) {
+                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
                         }
+                        _this.handleInfoMessage(retVal.infoMessage);
+                        _this.handleAlertMessage(retVal.alertMessage);
+                        _this.setElementView(elem.id, retVal.newView);
                     }
                 }
-                else if (_this.viewState.mode == 4) {
-                    var rectLeft = void 0;
-                    var rectTop = void 0;
-                    var rectWidth = void 0;
-                    var rectHeight = void 0;
-                    var elemRect = whitElem.getBoundingClientRect();
-                    var offsetY = elemRect.top - document.body.scrollTop;
-                    var offsetX = elemRect.left - document.body.scrollLeft;
-                    var newPoint = { x: 0, y: 0 };
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
+            }
+            _this.prevX = e.clientX;
+            _this.prevY = e.clientY;
+        };
+        this.mouseUp = function (e) {
+            if (_this.lMousePress && !_this.wMousePress) {
+                var whitElem_6 = document.getElementById("whiteBoard-input");
+                var context = whitElem_6.getContext('2d');
+                var rectLeft = void 0;
+                var rectTop = void 0;
+                var rectWidth = void 0;
+                var rectHeight = void 0;
+                var elemRect_6 = whitElem_6.getBoundingClientRect();
+                var offsetY = elemRect_6.top - document.body.scrollTop;
+                var offsetX = elemRect_6.left - document.body.scrollLeft;
+                var newPoint = { x: 0, y: 0 };
+                context.clearRect(0, 0, whitElem_6.width, whitElem_6.height);
+                if (_this.currSelect.length == 0) {
                     newPoint.x = Math.round(e.clientX - offsetX);
                     newPoint.y = Math.round(e.clientY - offsetY);
                     if (newPoint.x > _this.downPoint.x) {
@@ -3673,47 +1777,203 @@ var WhiteBoardController = (function () {
                         rectTop = newPoint.y;
                         rectHeight = _this.downPoint.y - newPoint.y;
                     }
-                    if (rectWidth > 10 && rectHeight > 10) {
-                        _this.placeHighlight(rectLeft, rectTop, _this.scaleF, _this.panX, _this.panY, rectWidth, rectHeight);
+                    var x = rectLeft * _this.scaleF + _this.panX;
+                    var y = rectTop * _this.scaleF + _this.panY;
+                    var width = rectWidth * _this.scaleF;
+                    var height = rectHeight * _this.scaleF;
+                    if (_this.viewState.mode == BoardModes.SELECT) {
+                        if (_this.selectDrag) {
+                            context.clearRect(0, 0, whitElem_6.width, whitElem_6.height);
+                            _this.boardElems.forEach(function (elem) {
+                                if (!elem.isDeleted && elem.isComplete && elem.x >= _this.selectLeft && elem.y >= _this.selectTop) {
+                                    if (_this.selectLeft + _this.selectWidth >= elem.x + elem.width && _this.selectTop + _this.selectHeight >= elem.y + elem.height) {
+                                        _this.currSelect.push(elem.id);
+                                        _this.selectElement(elem.id);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    else if (_this.viewState.mode != BoardModes.ERASE) {
+                        var self_1 = _this;
+                        var localId = _this.boardElems.push(null) - 1;
+                        var callbacks = {
+                            sendServerMsg: (function (id, type) { return function (msg) { self_1.sendMessage(id, type, msg); }; })(localId, self_1.viewState.mode),
+                            createAlert: function (header, message) { },
+                            createInfo: function (x, y, width, height, header, message) { return self_1.addInfoMessage(x, y, width, height, header, message); },
+                            removeInfo: function (id) { self_1.removeInfoMessage(id); },
+                            updateBoardView: (function (id) { return function (newView) { self_1.setElementView(id, newView); }; })(localId),
+                            getAudioStream: function () { return self_1.getAudioStream(); },
+                            getVideoStream: function () { return self_1.getVideoStream(); }
+                        };
+                        var data = {
+                            id: localId, userId: _this.userId, callbacks: callbacks, x: x, y: y, width: width, height: height,
+                            pointList: _this.pointList, scaleF: _this.scaleF, panX: _this.panX, panY: _this.panY,
+                            palleteState: components.get(_this.viewState.mode).pallete
+                        };
+                        var newElem = components.get(_this.viewState.mode).Element.createElement(data);
+                        if (newElem) {
+                            var undoOp = (function (elem) { return elem.erase.bind(elem); })(newElem);
+                            var redoOp = (function (elem) { return elem.restore.bind(elem); })(newElem);
+                            _this.boardElems[localId] = newElem;
+                            var viewState = newElem.getCurrentViewState();
+                            _this.setElementView(localId, viewState);
+                            var payload = newElem.getNewMsg();
+                            var msg = { type: newElem.type, payload: payload };
+                            _this.handleElementOperation(localId, undoOp, redoOp);
+                            _this.sendNewElement(msg);
+                        }
+                        else {
+                            _this.boardElems.splice(localId, 1);
+                        }
                     }
                 }
+                else if (_this.currSelect.length == 1) {
+                    var elem = _this.getBoardElement(_this.currSelect[0]);
+                    var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+                    var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+                    var retVal = elem.handleBoardMouseUp(e, xPos, yPos, components.get(elem.type).pallete);
+                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    _this.handleMouseElementSelect(e, elem, retVal.isSelected);
+                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if (retVal.newViewCentre) {
+                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    _this.handleInfoMessage(retVal.infoMessage);
+                    _this.handleAlertMessage(retVal.alertMessage);
+                    _this.setElementView(elem.id, retVal.newView);
+                }
+                if (_this.groupMoved) {
+                    var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
+                    var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
+                    _this.groupMoved = false;
+                    _this.endMove(xPos, yPos);
+                }
             }
-            if (_this.curveMoved) {
-                _this.curveMoved = false;
-                _this.sendCurveMove(_this.currCurveMove);
+            if (_this.blockAlert) {
+                _this.blockAlert = false;
+                _this.updateView(Object.assign({}, _this.viewState, { blockAlert: false }));
             }
-            else if (_this.textMoved) {
-                _this.textMoved = false;
-                _this.sendTextMove(_this.currTextMove);
-            }
-            else if (_this.textResized) {
-                _this.textResized = false;
-                _this.sendTextResize(_this.currTextEdit);
-            }
-            else if (_this.fileMoved) {
-                _this.fileMoved = false;
-                _this.sendFileMove(_this.currFileMove);
-            }
-            else if (_this.fileResized) {
-                _this.fileResized = false;
-                _this.sendFileResize(_this.currFileResize);
-            }
-            else if (_this.groupMoved) {
-                _this.groupMoved = false;
-                _this.sendGroupMove();
-            }
-            _this.curveChangeX = 0;
-            _this.curveChangeY = 0;
+            _this.selectDrag = false;
             _this.lMousePress = false;
             _this.wMousePress = false;
             _this.rMousePress = false;
             _this.pointList = [];
-            _this.moving = false;
-            _this.endMove();
-            _this.endResize();
         };
-        this.touchUp = function () {
+        this.touchStart = function () {
+            _this.touchPress = true;
+        };
+        this.touchMove = function (e) {
+            if (_this.touchPress) {
+            }
+        };
+        this.touchEnd = function () {
             _this.touchPress = false;
+        };
+        this.touchCancel = function () {
+        };
+        this.keyDown = function (e) {
+            if (e.keyCode === 8) {
+                if (_this.currSelect.length == 1) {
+                    e.preventDefault();
+                    var elem = _this.getBoardElement(_this.currSelect[0]);
+                    var retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
+                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if (retVal.newViewCentre) {
+                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    _this.handleInfoMessage(retVal.infoMessage);
+                    _this.handleAlertMessage(retVal.alertMessage);
+                    _this.setElementView(elem.id, retVal.newView);
+                }
+            }
+        };
+        this.keyPress = function (e) {
+            var inputChar = e.key;
+            if (e.ctrlKey) {
+                if (inputChar == 'z') {
+                    if (_this.currSelect.length == 1 && _this.getBoardElement(_this.currSelect[0]).isEditing) {
+                        _this.undoItemEdit(_this.currSelect[0]);
+                    }
+                    else {
+                        _this.undo();
+                    }
+                }
+                else if (inputChar == 'y') {
+                    if (_this.currSelect.length == 1 && _this.getBoardElement(_this.currSelect[0]).isEditing) {
+                        _this.redoItemEdit(_this.currSelect[0]);
+                    }
+                    else {
+                        _this.redo();
+                    }
+                }
+            }
+            else {
+                if (_this.currSelect.length == 1) {
+                    e.preventDefault();
+                    var elem = _this.getBoardElement(_this.currSelect[0]);
+                    var retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
+                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    if (retVal.newViewCentre) {
+                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    _this.handleInfoMessage(retVal.infoMessage);
+                    _this.handleAlertMessage(retVal.alertMessage);
+                    _this.setElementView(elem.id, retVal.newView);
+                }
+            }
+        };
+        this.contextCopy = function (e) {
+            document.execCommand("copy");
+        };
+        this.contextCut = function (e) {
+            document.execCommand("cut");
+        };
+        this.contextPaste = function (e) {
+            document.execCommand("paste");
+        };
+        this.onCopy = function (e) {
+            console.log('COPY EVENT');
+        };
+        this.onPaste = function (e) {
+            console.log('PASTE EVENT');
+        };
+        this.onCut = function (e) {
+            console.log('CUT EVENT');
+        };
+        this.dragOver = function (e) {
+            e.preventDefault();
+        };
+        this.drop = function (e) {
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
+            var x = Math.round(e.clientX - offsetX);
+            var y = Math.round(e.clientY - offsetY);
+            e.preventDefault();
+        };
+        this.palleteChange = function (change) {
+            var retVal = components.get(_this.viewState.mode).pallete.handleChange(change);
+            var cursor = components.get(_this.viewState.mode).pallete.getCursor();
+            _this.cursor = cursor.cursor;
+            _this.cursorURL = cursor.url;
+            _this.cursorOffset = cursor.offset;
+            var newView = Object.assign({}, _this.viewState, {
+                palleteState: retVal, cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset
+            });
+            _this.updateView(newView);
+            if (_this.currSelect.length == 1) {
+                var elem = _this.getBoardElement(_this.currSelect[0]);
+                if (elem.type == _this.viewState.mode) {
+                    elem.handlePalleteChange(change);
+                }
+            }
         };
         this.windowResize = function (e) {
             var whitElem = document.getElementById("whiteBoard-input");
@@ -3723,6 +1983,9 @@ var WhiteBoardController = (function () {
             whitElem.width = whitElem.clientWidth;
             whitElem.height = whitElem.clientHeight;
             _this.setViewBox(_this.panX, _this.panY, _this.scaleF);
+        };
+        this.windowUnload = function (e) {
+            _this.socket.emit('LEAVE', null);
         };
         this.mouseWheel = function (e) {
             var whitElem = document.getElementById("whiteBoard-input");
@@ -3768,393 +2031,37 @@ var WhiteBoardController = (function () {
             }
             _this.setViewBox(newPanX, newPanY, newScale);
         };
-        this.keyDown = function (e) {
-            if (e.keyCode === 8) {
-                if (_this.isWriting) {
-                    e.preventDefault();
-                    var textItem = _this.getText(_this.currTextEdit);
-                    if (_this.cursorEnd > 0) {
-                        if (e.ctrlKey) {
-                            if (_this.cursorStart > 0) {
-                            }
-                        }
-                        else {
-                            if (_this.cursorStart == _this.cursorEnd) {
-                                _this.cursorStart--;
-                            }
-                            var start = _this.cursorStart;
-                            var end = _this.cursorEnd;
-                            _this.cursorEnd = _this.cursorStart;
-                            _this.insertText(textItem, start, end, '');
-                        }
-                    }
-                }
-            }
-        };
-        this.keyUp = function (e) {
-        };
-        this.keyPress = function (e) {
-            var inputChar = e.key;
-            if (_this.isWriting) {
-                e.preventDefault();
-                e.stopPropagation();
-                var textItem;
-                var i;
-                var line;
-                var style;
-                switch (inputChar) {
-                    case 'ArrowLeft':
-                        textItem = _this.getText(_this.currTextEdit);
-                        var newStart = _this.cursorStart;
-                        var newEnd = _this.cursorEnd;
-                        if (_this.cursorStart == _this.cursorEnd || !_this.startLeft) {
-                            if (_this.cursorStart > 0) {
-                                if (e.ctrlKey) {
-                                    i = _this.cursorStart > 0 ? _this.cursorStart - 1 : 0;
-                                    while (i > 0 && !textItem.text.charAt(i - 1).match(/\s/)) {
-                                        i--;
-                                    }
-                                    newStart = i;
-                                }
-                                else {
-                                    if (newStart > 0) {
-                                        newStart--;
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            if (e.ctrlKey) {
-                                i = _this.cursorEnd > 0 ? _this.cursorEnd - 1 : 0;
-                                while (i > 0 && !textItem.text.charAt(i - 1).match(/\s/)) {
-                                    i--;
-                                }
-                                newEnd = i;
-                            }
-                            else {
-                                if (newEnd > 0) {
-                                    newEnd--;
-                                }
-                            }
-                        }
-                        if (e.shiftKey) {
-                            if (_this.cursorStart == _this.cursorEnd) {
-                                _this.startLeft = false;
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                            else if (newStart > newEnd) {
-                                _this.startLeft = false;
-                                _this.cursorStart = newEnd;
-                                _this.cursorEnd = newStart;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                        }
-                        else {
-                            _this.cursorStart = _this.cursorStart == _this.cursorEnd || !_this.startLeft ? newStart : newEnd;
-                            _this.cursorEnd = _this.cursorStart;
-                        }
-                        _this.changeTextSelect(_this.currTextEdit, true);
-                        break;
-                    case 'ArrowRight':
-                        textItem = _this.getText(_this.currTextEdit);
-                        var newStart = _this.cursorStart;
-                        var newEnd = _this.cursorEnd;
-                        if (_this.cursorStart == _this.cursorEnd || _this.startLeft) {
-                            if (_this.cursorEnd < textItem.text.length) {
-                                if (e.ctrlKey) {
-                                    i = _this.cursorEnd + 1;
-                                    while (i < textItem.text.length && !(textItem.text.charAt(i - 1).match(/\s/) && textItem.text.charAt(i).match(/[^\s]/))) {
-                                        i++;
-                                    }
-                                    newEnd = i;
-                                }
-                                else {
-                                    if (newEnd < textItem.text.length) {
-                                        newEnd++;
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            if (e.ctrlKey) {
-                                i = _this.cursorStart < textItem.text.length ? _this.cursorStart + 1 : textItem.text.length;
-                                while (i < textItem.text.length && !(textItem.text.charAt(i - 1).match(/\s/) && textItem.text.charAt(i).match(/[^\s]/))) {
-                                    i++;
-                                }
-                                newStart = i;
-                            }
-                            else {
-                                if (newStart < textItem.text.length) {
-                                    newStart++;
-                                }
-                            }
-                        }
-                        if (e.shiftKey) {
-                            if (_this.cursorStart == _this.cursorEnd) {
-                                _this.startLeft = true;
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                            else if (newStart > newEnd) {
-                                _this.startLeft = true;
-                                _this.cursorStart = newEnd;
-                                _this.cursorEnd = newStart;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                        }
-                        else {
-                            _this.cursorStart = _this.cursorStart == _this.cursorEnd || _this.startLeft ? newEnd : newStart;
-                            _this.cursorEnd = _this.cursorStart;
-                        }
-                        _this.changeTextSelect(_this.currTextEdit, true);
-                        break;
-                    case 'ArrowUp':
-                        textItem = _this.getText(_this.currTextEdit);
-                        var newStart;
-                        var newEnd;
-                        if (e.ctrlKey) {
-                            if (_this.startLeft && _this.cursorStart != _this.cursorEnd) {
-                                i = _this.cursorEnd - 1;
-                                while (i > 0 && !textItem.text.charAt(i - 1).match('\n')) {
-                                    i--;
-                                }
-                                if (i < 0) {
-                                    i = 0;
-                                }
-                                newStart = _this.cursorStart;
-                                newEnd = i;
-                            }
-                            else {
-                                i = _this.cursorStart - 1;
-                                while (i > 0 && !textItem.text.charAt(i - 1).match('\n')) {
-                                    i--;
-                                }
-                                if (i < 0) {
-                                    i = 0;
-                                }
-                                newStart = i;
-                                newEnd = _this.cursorEnd;
-                            }
-                        }
-                        else {
-                            if (_this.startLeft && _this.cursorStart != _this.cursorEnd) {
-                                newStart = _this.cursorStart;
-                                if (_this.cursorEnd <= textItem.textNodes[0].end) {
-                                    newEnd = _this.cursorEnd;
-                                }
-                                else {
-                                    newEnd = _this.findXHelper(textItem, true, _this.cursorEnd);
-                                }
-                            }
-                            else {
-                                newEnd = _this.cursorEnd;
-                                if (_this.cursorStart <= textItem.textNodes[0].end) {
-                                    newStart = _this.cursorStart;
-                                }
-                                else {
-                                    newStart = _this.findXHelper(textItem, true, _this.cursorStart);
-                                }
-                            }
-                        }
-                        if (e.shiftKey) {
-                            if (_this.cursorStart == _this.cursorEnd) {
-                                _this.startLeft = false;
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                            else if (newEnd < newStart) {
-                                _this.startLeft = false;
-                                _this.cursorStart = newEnd;
-                                _this.cursorEnd = newStart;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                        }
-                        else {
-                            if (_this.startLeft && _this.cursorStart != _this.cursorEnd) {
-                                _this.cursorStart = newEnd;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                            }
-                            _this.cursorEnd = _this.cursorStart;
-                        }
-                        _this.changeTextSelect(_this.currTextEdit, false);
-                        break;
-                    case 'ArrowDown':
-                        textItem = _this.getText(_this.currTextEdit);
-                        var newStart;
-                        var newEnd;
-                        if (e.ctrlKey) {
-                            if (_this.startLeft || _this.cursorStart == _this.cursorEnd) {
-                                i = _this.cursorEnd + 1;
-                                while (i < textItem.text.length && !textItem.text.charAt(i).match('\n')) {
-                                    i++;
-                                }
-                                newStart = _this.cursorStart;
-                                newEnd = i;
-                            }
-                            else {
-                                i = _this.cursorStart + 1;
-                                while (i < textItem.text.length && !textItem.text.charAt(i).match('\n')) {
-                                    i++;
-                                }
-                                newStart = i;
-                                newEnd = _this.cursorEnd;
-                            }
-                        }
-                        else {
-                            if (_this.startLeft || _this.cursorStart == _this.cursorEnd) {
-                                newStart = _this.cursorStart;
-                                if (_this.cursorEnd >= textItem.textNodes[textItem.textNodes.length - 1].start) {
-                                    newEnd = _this.cursorEnd;
-                                }
-                                else {
-                                    newEnd = _this.findXHelper(textItem, false, _this.cursorEnd);
-                                }
-                            }
-                            else {
-                                newEnd = _this.cursorEnd;
-                                if (_this.cursorStart >= textItem.textNodes[textItem.textNodes.length - 1].start) {
-                                    newStart = _this.cursorStart;
-                                }
-                                else {
-                                    newStart = _this.findXHelper(textItem, false, _this.cursorStart);
-                                }
-                            }
-                        }
-                        if (e.shiftKey) {
-                            if (_this.cursorStart == _this.cursorEnd) {
-                                _this.startLeft = true;
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                            else if (newEnd < newStart) {
-                                _this.startLeft = true;
-                                _this.cursorStart = newEnd;
-                                _this.cursorEnd = newStart;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                                _this.cursorEnd = newEnd;
-                            }
-                        }
-                        else {
-                            if (_this.startLeft || _this.cursorStart == _this.cursorEnd) {
-                                _this.cursorStart = newEnd;
-                            }
-                            else {
-                                _this.cursorStart = newStart;
-                            }
-                            _this.cursorEnd = _this.cursorStart;
-                        }
-                        _this.changeTextSelect(_this.currTextEdit, false);
-                        break;
-                    case 'Backspace':
-                        textItem = _this.getText(_this.currTextEdit);
-                        if (_this.cursorEnd > 0) {
-                            if (e.ctrlKey) {
-                                if (_this.cursorStart > 0) {
-                                }
-                            }
-                            else {
-                                if (_this.cursorStart == _this.cursorEnd) {
-                                    _this.cursorStart--;
-                                }
-                                var start = _this.cursorStart;
-                                var end = _this.cursorEnd;
-                                _this.cursorEnd = _this.cursorStart;
-                                _this.insertText(textItem, start, end, '');
-                            }
-                        }
-                        break;
-                    case 'Enter':
-                        inputChar = '\n';
-                    default:
-                        textItem = _this.getText(_this.currTextEdit);
-                        if (e.ctrlKey) {
-                            if (inputChar == 'a' || inputChar == 'A') {
-                            }
-                            else if (inputChar == 'j') {
-                            }
-                            else if (inputChar == 'b') {
-                            }
-                            else if (inputChar == 'i') {
-                            }
-                        }
-                        else {
-                            var start = _this.cursorStart;
-                            var end = _this.cursorEnd;
-                            _this.cursorStart++;
-                            _this.cursorEnd = _this.cursorStart;
-                            _this.insertText(textItem, start, end, inputChar);
-                        }
-                        break;
-                }
-            }
-            else {
-                if (e.ctrlKey) {
-                    if (inputChar == 'z') {
-                        if (_this.currSelect.length == 1) {
-                            _this.undoItemEdit(_this.currSelect[0]);
-                        }
-                        else {
-                            _this.undo();
-                        }
-                    }
-                    else if (inputChar == 'y') {
-                        if (_this.currSelect.length == 1) {
-                            _this.redoItemEdit(_this.currSelect[0]);
-                        }
-                        else {
-                            _this.redo();
-                        }
-                    }
-                }
-            }
+        this.clearAlert = function () {
+            _this.removeAlert();
         };
         this.isHost = isHost;
         this.userId = userId;
         var dispatcher = {
             elementMouseOver: this.elementMouseOver,
             elementMouseOut: this.elementMouseOut,
-            curveMouseDown: this.curveMouseDown,
-            curveMouseClick: this.curveMouseClick,
-            curveMouseMove: this.curveMouseMove,
-            textMouseClick: this.textMouseClick,
-            textMouseDblClick: this.textMouseDblClick,
-            textMouseMove: this.textMouseMove,
-            textMouseMoveDown: this.textMouseMoveDown,
-            textMouseResizeDown: this.textMouseResizeDown,
-            fileMouseClick: this.fileMouseClick,
-            fileMouseMove: this.fileMouseMove,
-            fileMouseMoveDown: this.fileMouseMoveDown,
-            fileMouseResizeDown: this.fileMouseResizeDown,
-            fileRotateClick: this.fileRotateClick,
-            highlightTagClick: this.highlightTagClick,
+            elementMouseDown: this.elementMouseDown,
+            elementMouseMove: this.elementMouseMove,
+            elementMouseUp: this.elementMouseUp,
+            elementMouseClick: this.elementMouseClick,
+            elementMouseDoubleClick: this.elementMouseDoubleClick,
+            elementTouchStart: this.elementTouchStart,
+            elementTouchMove: this.elementTouchMove,
+            elementTouchEnd: this.elementTouchEnd,
+            elementTouchCancel: this.elementTouchCancel,
+            elementDragOver: this.elementDragOver,
+            elementDrop: this.elementDrop,
             clearAlert: this.clearAlert,
-            colourChange: this.colourChange,
             modeChange: this.modeChange,
-            sizeChange: this.sizeChange,
-            boldChange: this.boldChange,
-            italicChange: this.italicChange,
-            underlineChange: this.underlineChange,
-            overlineChange: this.overlineChange,
-            throughlineChange: this.throughlineChange,
-            justifiedChange: this.justifiedChange,
-            mouseDown: this.mouseDown,
+            palleteChange: this.palleteChange,
+            changeEraseSize: this.changeEraseSize,
             mouseWheel: this.mouseWheel,
+            mouseDown: this.mouseDown,
             mouseMove: this.mouseMove,
             mouseUp: this.mouseUp,
+            touchStart: this.touchStart,
+            touchMove: this.touchMove,
+            touchEnd: this.touchEnd,
+            touchCancel: this.touchCancel,
             contextCopy: this.contextCopy,
             contextCut: this.contextCut,
             contextPaste: this.contextPaste,
@@ -4171,24 +2078,23 @@ var WhiteBoardController = (function () {
             viewWidth: 0,
             viewHeight: 0,
             viewScale: 1,
-            mode: 0,
-            sizeMode: 1,
+            mode: BoardModes.SELECT,
             baseSize: 1.0,
-            colour: 'black',
-            isBold: false,
-            isItalic: false,
-            isOLine: false,
-            isULine: false,
-            isTLine: false,
-            isJustified: true,
+            eraseSize: 1.0,
+            blockAlert: false,
             itemMoving: false,
             itemResizing: false,
             resizeHorz: false,
             resizeVert: false,
+            palleteState: {},
             boardElements: Immutable.OrderedMap(),
             infoElements: Immutable.List(),
             alertElements: Immutable.List(),
-            dispatcher: dispatcher
+            cursor: 'auto',
+            cursorURL: [],
+            cursorOffset: { x: 0, y: 0 },
+            dispatcher: dispatcher,
+            components: components
         };
     }
     return WhiteBoardController;

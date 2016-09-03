@@ -18,8 +18,12 @@
         {% javascripts '@AppBundle/Resources/public/js/tutorial/MediaContainer.js'
                        '@AppBundle/Resources/public/js/tutorial/WhiteBoardController.js'
                        '@AppBundle/Resources/public/js/tutorial/WhiteBoardView.js'
+                       '@AppBundle/Resources/public/js/tutorial/Elements/FreeCurveElement.js'
                        '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
             <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/WhiteBoardWorker.js' output='js/compiled/WhiteBoardWorker.js' %}
         {% endjavascripts %}
     </article>
 {% endblock %}
