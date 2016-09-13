@@ -828,15 +828,20 @@ const BoardModes = {
     ERASE: 'ERASE'
 }
 
+const ElementMessageTypes = {
+    DELETE: 0,
+    RESTORE: 1,
+    MOVE: 2
+};
+
 const enum WorkerMessageTypes {
-    START,
-    SETSOCKET,
     UPDATEVIEW,
     SETVBOX,
     AUDIOSTREAM,
     VIDEOSTREAM,
     NEWVIEWCENTRE,
-    NEWELEMENT,
+    SETSELECT,
+    ELEMENTMESSAGE,
     ELEMENTVIEW,
     ELEMENTDELETE,
     NEWALERT,
@@ -845,252 +850,50 @@ const enum WorkerMessageTypes {
     REMOVEINFO
 }
 
-abstract class BoardElement {
-    serverId: number;
-    readonly id: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    user: number;
-    updateTime: Date;
-    isDeleted: boolean;
-    type: string;
-    opBuffer: Array<UserMessage>;
-    hoverTimer: number;
-    infoElement: number;
-    operationStack: Array<Operation>;
-    operationPos: number;
-    isSelected: boolean;
-    isComplete: boolean;
-    isEditing: boolean;
-
-    currentViewState: ComponentViewState;
-
-    // Callback Functions for Internal Element Induced Updates
-    sendServerMsg: (msg: UserMessage) => void;
-    createAlert: (header: string, message: string) => void;
-    createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) => void;
-    updateBoardView: (newView: ComponentViewState) => void;
-    getAudioStream: () => void;
-    getVideoStream: () => void;
-
-    constructor(type: string, id: number, x: number, y: number, width: number, height: number,
-        callbacks: ElementCallbacks, serverId?: number, updateTime?: Date)
-    {
-        this.id = id;
-        this.type = type;
-        this.sendServerMsg = callbacks.sendServerMsg;
-        this.createAlert = callbacks.createAlert;
-        this.createInfo = callbacks.createInfo;
-        this.updateBoardView = callbacks.updateBoardView;
-        this.getAudioStream = callbacks.getAudioStream;
-        this.getVideoStream = callbacks.getVideoStream;
-        this.serverId = serverId;
-        this.opBuffer = [];
-        this.infoElement = -1;
-        this.isEditing = false;
-        this.isSelected = false;
-
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-
-        if(updateTime)
-        {
-            this.updateTime = updateTime;
-        }
-        else
-        {
-            this.updateTime = new Date();
-        }
-    }
-
-    /** Update the view state of this object.
-     *
-     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
-     *
-     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
-     *
-     * @return {ComponentViewState} The new view state
-     */
-    protected updateView(updatedParams: Object)
-    {
-        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
-        return this.currentViewState;
-    }
-
-    /**   Get the current view state for this element.
-     *
-     *    @return {ComponentViewState} The view state of this element given it's current internal state
-     */
-    public getCurrentViewState()
-    {
-        return this.currentViewState;
-    }
-
-    /** Remove undo redo to preserve integrity
-     *
-     *
-     *
-     */
-    protected remoteEdit()
-    {
-        this.operationPos = 0;
-        this.operationStack = [];
-    }
-
-    protected getDefaultInputReturn()
-    {
-        let retVal: ElementInputReturn =
-        {
-            newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: this.isSelected,
-            newViewCentre: null, infoMessage: null, alertMessage: null
-        };
-
-        return retVal;
-    }
-
-    protected checkForServerId(messages: Array<UserMessage>)
-    {
-        if(!this.serverId)
-        {
-            for(let i = 0; i < messages.length; i++)
-            {
-                console.log('No serverId, adding message to buffer.');
-                this.opBuffer.push(messages[i]);
-            }
-
-            return [];
-        }
-        else
-        {
-            return messages;
-        }
-    }
-
-    /**   Undo the last internal state edit
-     *
-     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server,
-     *    required changes to the pallete state
-     */
-    public handleUndo()
-    {
-        let retVal: ElementUndoRedoReturn = null;
-
-        // Undo item operation at current stack position
-        if(this.operationPos > 0)
-        {
-            retVal = this.operationStack[--this.operationPos].undo();
-        }
-
-        return retVal;
-    }
-
-    /**   Redo the last undone internal state edit
-     *
-     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server
-     *    required changes to the pallete state
-     */
-    public handleRedo()
-    {
-        let retVal: ElementUndoRedoReturn = null;
-
-        // Redo operation at current stack position
-        if(this.operationPos < this.operationStack.length)
-        {
-            retVal = this.operationStack[this.operationPos++].redo();
-        }
-
-        return retVal;
-    }
-
-    abstract setServerId(id: number): Array<UserMessage>;
-    abstract getNewMsg(): UserNewElementPayload;
-
-    abstract erase(): ElementUndoRedoReturn;
-    abstract restore(): ElementUndoRedoReturn;
-    abstract handleErase(): ElementInputReturn;
-
-    abstract handleMouseDown(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputStartReturn;
-    abstract handleMouseMove(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleMouseUp(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleMouseClick(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleDoubleClick(e: MouseEvent, localX: number, localY: number, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleTouchStart(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputStartReturn;
-    abstract handleTouchMove(e: TouchEvent, touchChange: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleTouchEnd(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-    abstract handleTouchCancel(e: TouchEvent, localTouches: Array<Point>, palleteState: BoardPallete, component?: number, subId?: number):
-        ElementInputReturn;
-
-    abstract handleBoardMouseDown(e: MouseEvent, x: number, y: number, palleteState: BoardPallete): ElementInputStartReturn;
-    abstract handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleBoardMouseUp(e: MouseEvent, x: number, y: number, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleBoardTouchStart(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputStartReturn;
-    abstract handleBoardTouchMove(e: TouchEvent, toucheChange: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleBoardTouchEnd(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleBoardTouchCancel(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleKeyPress(e: KeyboardEvent, input: string, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleCopy(e: ClipboardEvent, palleteState: BoardPallete): void;
-    abstract handlePaste(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleCut(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleCustomContext(item: number, palleteState: BoardPallete): ElementInputReturn;
-
-    abstract handleServerMessage(message): ElementMessageReturn;
-
-    abstract handleDeselect(): ComponentViewState;
-    abstract handleSelect(): ComponentViewState;
-
-    abstract handleHover(): HoverMessage;
-
-    abstract handlePalleteChange(changes: BoardPalleteChange): ElementPalleteReturn;
-
-    abstract audioStream(stream: MediaStream): void;
-    abstract videoStream(stream: MediaStream): void;
-
-    abstract startMove(): ComponentViewState;
-    abstract handleMove(changeX: number, changeY: number): ComponentViewState;
-    abstract endMove(): ElementMoveReturn;
-}
-
-abstract class BoardPallete {
-
-    currentViewState: BoardPalleteViewState;
-
-    abstract getCurrentViewState() : BoardPalleteViewState;
-
-    /** Update the view state of this object.
-     *
-     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
-     *
-     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
-     *
-     * @return {ComponentViewState} The new view state
-     */
-    protected updateView(updatedParams: Object)
-    {
-        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
-        return this.currentViewState;
-    }
-
-    abstract handleChange(changeMsg: BoardPalleteChange) : BoardPalleteViewState;
-
-    abstract getCursor() : ElementCursor;
+const enum ControllerMessageTypes {
+    START,
+    SETOPTIONS,
+    REGISTER,
+    MODECHANGE,
+    AUDIOSTREAM,
+    VIDEOSTREAM,
+    NEWELEMENT,
+    ELEMENTID,
+    BATCHMOVE,
+    BATCHDELETE,
+    BATCHRESTORE,
+    ELEMENTMESSAGE,
+    ELEMENTMOUSEOVER,
+    ELEMENTMOUSEOUT,
+    ELEMENTMOUSEDOWN,
+    ELEMENTERASE,
+    ELEMENTMOUSEMOVE,
+    ELEMENTMOUSEUP,
+    ELEMENTMOUSECLICK,
+    ELEMENTMOUSEDBLCLICK,
+    ELEMENTTOUCHSTART,
+    ELEMENTTOUCHMOVE,
+    ELEMENTTOUCHEND,
+    ELEMENTTOUCHCANCEL,
+    ELEMENTDRAG,
+    ELEMENTDROP,
+    MOUSEDOWN,
+    MOUSEMOVE,
+    MOUSEUP,
+    TOUCHSTART,
+    TOUCHMOVE,
+    TOUCHEND,
+    TOUCHCANCEL,
+    KEYBOARDINPUT,
+    UNDO,
+    REDO,
+    PALLETECHANGE,
+    LEAVE,
+    ERROR
 }
 
 interface BoardComponent {
     componentName: string;
-    pallete: BoardPallete;
-    Element;
     ElementView;
     PalleteView;
     ModeView
@@ -1099,18 +902,12 @@ interface BoardComponent {
 
 let components: Immutable.Map<string, BoardComponent> = Immutable.Map<string, BoardComponent>();
 
-let registerComponent = (componentName: string, Element, ElementView, Pallete, PalleteView, ModeView, DrawHandle) =>
+let registerComponentView = (componentName: string, ElementView, PalleteView, ModeView, DrawHandle) =>
 {
-    let pallete = null;
-    if(Pallete)
-    {
-        pallete = new Pallete();
-    }
-
+    console.log('Registering view for: ' + componentName);
     let newComp: BoardComponent =
     {
-        componentName: componentName, Element: Element, ElementView: ElementView, pallete: pallete, PalleteView: PalleteView,
-        ModeView: ModeView, DrawHandle: DrawHandle
+        componentName: componentName, ElementView: ElementView, PalleteView: PalleteView, ModeView: ModeView, DrawHandle: DrawHandle
     };
     components = components.set(componentName, newComp);
 }
@@ -1131,106 +928,88 @@ class WhiteBoardController
 
     isHost: boolean = false;
     userId: number  = 0;
+    allowAllEdit: boolean = false;
+    allowUserEdit: boolean = true;
     socket: Socket  = null;
+    worker;
 
     lMousePress: boolean = false;
     wMousePress: boolean = false;
     rMousePress: boolean = false;
     touchPress:  boolean = false;
-    moving:      boolean = false;
 
     scaleF:   number = 1;
     panX:     number = 0;
     panY:     number = 0;
     scaleNum: number = 0;
 
-    pointList:    Array<Point> = [];
-    isPoint:      boolean      = true;
-    prevX:        number       = 0;
-    prevY:        number       = 0;
-    prevTouch:    TouchList;
+    pointList:        Array<Point> = [];
+    isPoint:          boolean      = true;
+    prevX:            number       = 0;
+    prevY:            number       = 0;
+    prevTouch:        TouchList;
+    selectDrag:       boolean      = false;
+    mouseDownHandled: boolean      = false;
 
     downPoint:    Point;
-    groupStartX:  number       = 0;
-    groupStartY:  number       = 0;
+    blockAlert:   boolean = false;
 
-    mouseDownHandled:   boolean = false;
-    touchStartHandled:  boolean = false;
-
-    currentHover:   number  = -1;
-    blockAlert:     boolean = false;
-    selectDrag:     boolean = false;
-    selectLeft:     number;
-    selectTop:      number;
-    selectWidth:    number;
-    selectHeight:   number;
-    currSelect:     Array<number> = [];
-    groupMoving:    boolean = false;
-    groupMoved:     boolean = false;
-
-    operationStack: Array<WhiteBoardOperation> = [];
-    operationPos:   number = 0;
+    selectCount:  number = 0;
 
     fileUploads: Array<File>       = [];
     fileReaders: Array<FileReader> = [];
 
-    elementDict:  Array<number>       = [];
-    boardElems:   Array<BoardElement> = [];
-    infoElems:    Array<InfoMessage>  = [];
     cursor:       string;
     cursorURL:    Array<string>;
     cursorOffset: Point;
 
-
-
-    textOutBuffer:    Array<TextOutBufferElement>  = [];
-    textInBuffer:     Array<TextInBufferElement>   = [];
-
-    constructor(isHost: boolean, userId: number)
+    constructor(isHost: boolean, userId: number, allEdit: boolean, userEdit: boolean, workerUrl: string, componentFiles: Array<string>)
     {
         this.isHost = isHost;
         this.userId = userId;
+        this.allowAllEdit = allEdit;
+        this.allowUserEdit = userEdit;
 
         let dispatcher: WhiteBoardDispatcher = {
-            elementMouseOver: this.elementMouseOver,
-            elementMouseOut: this.elementMouseOut,
-            elementMouseDown: this.elementMouseDown,
-            elementMouseMove: this.elementMouseMove,
-            elementMouseUp: this.elementMouseUp,
-            elementMouseClick: this.elementMouseClick,
-            elementMouseDoubleClick: this.elementMouseDoubleClick,
+            elementMouseOver: this.elementMouseOver.bind(this),
+            elementMouseOut: this.elementMouseOut.bind(this),
+            elementMouseDown: this.elementMouseDown.bind(this),
+            elementMouseMove: this.elementMouseMove.bind(this),
+            elementMouseUp: this.elementMouseUp.bind(this),
+            elementMouseClick: this.elementMouseClick.bind(this),
+            elementMouseDoubleClick: this.elementMouseDoubleClick.bind(this),
 
-            elementTouchStart: this.elementTouchStart,
-            elementTouchMove: this.elementTouchMove,
-            elementTouchEnd: this.elementTouchEnd,
-            elementTouchCancel: this.elementTouchCancel,
+            elementTouchStart: this.elementTouchStart.bind(this),
+            elementTouchMove: this.elementTouchMove.bind(this),
+            elementTouchEnd: this.elementTouchEnd.bind(this),
+            elementTouchCancel: this.elementTouchCancel.bind(this),
 
-            elementDragOver: this.elementDragOver,
-            elementDrop: this.elementDrop,
+            elementDragOver: this.elementDragOver.bind(this),
+            elementDrop: this.elementDrop.bind(this),
 
-            clearAlert: this.clearAlert,
-            modeChange: this.modeChange,
-            palleteChange: this.palleteChange,
-            changeEraseSize: this.changeEraseSize,
+            clearAlert: this.clearAlert.bind(this),
+            modeChange: this.modeChange.bind(this),
+            palleteChange: this.palleteChange.bind(this),
+            changeEraseSize: this.changeEraseSize.bind(this),
 
-            mouseWheel: this.mouseWheel,
-            mouseDown: this.mouseDown,
-            mouseMove: this.mouseMove,
-            mouseUp: this.mouseUp,
+            mouseWheel: this.mouseWheel.bind(this),
+            mouseDown: this.mouseDown.bind(this),
+            mouseMove: this.mouseMove.bind(this),
+            mouseUp: this.mouseUp.bind(this),
 
-            touchStart: this.touchStart,
-            touchMove: this.touchMove,
-            touchEnd: this.touchEnd,
-            touchCancel: this.touchCancel,
+            touchStart: this.touchStart.bind(this),
+            touchMove: this.touchMove.bind(this),
+            touchEnd: this.touchEnd.bind(this),
+            touchCancel: this.touchCancel.bind(this),
 
-            contextCopy: this.contextCopy,
-            contextCut: this.contextCut,
-            contextPaste: this.contextPaste,
-            onCopy: this.onCopy,
-            onPaste: this.onPaste,
-            onCut: this.onCut,
-            dragOver: this.dragOver,
-            drop: this.drop
+            contextCopy: this.contextCopy.bind(this),
+            contextCut: this.contextCut.bind(this),
+            contextPaste: this.contextPaste.bind(this),
+            onCopy: this.onCopy.bind(this),
+            onPaste: this.onPaste.bind(this),
+            onCut: this.onCut.bind(this),
+            dragOver: this.dragOver.bind(this),
+            drop: this.drop.bind(this)
         };
 
         this.viewState = {
@@ -1245,15 +1024,6 @@ class WhiteBoardController
             eraseSize: 1.0,
             blockAlert: false,
 
-
-
-            itemMoving: false,
-            itemResizing: false,
-            resizeHorz: false,
-            resizeVert: false,
-
-
-
             palleteState: {},
             boardElements: Immutable.OrderedMap<number, ComponentViewState>(),
             infoElements:  Immutable.List<InfoElement>(),
@@ -1266,9 +1036,172 @@ class WhiteBoardController
             dispatcher: dispatcher,
             components: components
         };
+
+        let self = this;
+        this.worker = new Worker(workerUrl);
+
+        this.worker.onmessage = (e) =>
+        {
+            self.setSelectCount.bind(this)(e.data.selectCount);
+
+            if(e.data.viewUpdate != undefined && e.data.viewUpdate != null)
+            {
+                self.setViewState.bind(this)(e.data.viewUpdate);
+            }
+            if(e.data.newViewBox != undefined && e.data.newViewBox != null)
+            {
+                self.setViewBox.bind(this)(e.data.newViewBox.panX, e.data.newViewBox.panY, e.data.newViewBox.scaleF);
+            }
+            if(e.data.newViewCentre != undefined && e.data.newViewCentre != null)
+            {
+                self.handleElementNewViewCentre.bind(this)(e.data.newViewCentre.x, e.data.newViewCentre.y);
+            }
+            if(e.data.elementViews.length > 0)
+            {
+                self.setElementViews.bind(this)(e.data.elementViews);
+            }
+            if(e.data.deleteElements.length > 0)
+            {
+                self.deleteElements.bind(this)(e.data.deleteElements);
+            }
+            for(let i = 0; i < e.data.alerts.length; i++)
+            {
+                self.newAlert.bind(this)(e.data.alerts[i]);
+            }
+            if(e.data.removeAlert)
+            {
+                self.removeAlert.bind(this)();
+            }
+            if(e.data.infoMessages.length > 0)
+            {
+                self.addInfoMessages.bind(this)(e.data.infoMessages);
+            }
+            if(e.data.removeInfos.length > 0)
+            {
+                self.removeInfoMessages.bind(this)(e.data.removeInfos);
+            }
+
+            for(let i = 0; i < e.data.elementMessages.length; i++)
+            {
+                self.handleMessage.bind(this)(e.data.elementMessages[i].type, e.data.elementMessages[i].message);
+            }
+            for(let i = 0; i < e.data.audioRequests.length; i++)
+            {
+                self.getAudioStream.bind(this)(e.data.audioRequests[i]);
+            }
+            for(let i = 0; i < e.data.videoRequests.length; i++)
+            {
+                self.getVideoStream.bind(this)(e.data.videoRequests[i]);
+            }
+
+            if(e.data.elementMoves.length > 0)
+            {
+                console.log('Sending group move.');
+                let message: UserMessage = { header: ElementMessageTypes.MOVE, payload: e.data.elementMoves };
+                let messageCont: UserMessageContainer = { id: null, type: 'ANY', payload: message };
+
+                self.handleMessage.bind(this)('MSG-COMPONENT', messageCont);
+            }
+            if(e.data.elementDeletes.length > 0)
+            {
+                let message: UserMessage = { header: ElementMessageTypes.DELETE, payload: e.data.elementDeletes };
+                let messageCont: UserMessageContainer = { id: null, type: 'ANY', payload: message };
+
+                self.handleMessage.bind(this)('MSG-COMPONENT', messageCont);
+            }
+            if(e.data.elementRestores.length > 0)
+            {
+                let message: UserMessage = { header: ElementMessageTypes.RESTORE, payload: e.data.elementRestores };
+                let messageCont: UserMessageContainer = { id: null, type: 'ANY', payload: message };
+
+                self.handleMessage.bind(this)('MSG-COMPONENT', messageCont);
+            }
+
+        };
+
+        let message = { type: ControllerMessageTypes.START, componentFiles: componentFiles, allEdit: this.allowAllEdit, userEdit: this.allowUserEdit };
+        this.worker.postMessage(message);
     }
 
-    setView = (view) =>
+    setSocket(socket)
+    {
+        this.socket = socket;
+
+        let self = this;
+
+        this.socket.on('JOIN', function(data: ServerBoardJoinMessage)
+        {
+
+        });
+
+        this.socket.on('OPTIONS', function(data: ServerOptionsMessage)
+        {
+            /* TODO: Implement room options */
+        });
+
+        this.socket.on('NEW-ELEMENT', function(data: ServerMessageContainer)
+        {
+            let message = { type: ControllerMessageTypes.NEWELEMENT, data: data };
+            self.worker.postMessage(message);
+        });
+
+        this.socket.on('ELEMENT-ID', function(data: ServerIdMessage)
+        {
+            let message = { type: ControllerMessageTypes.ELEMENTID, data: data };
+            self.worker.postMessage(message);
+        });
+
+        this.socket.on('MSG-COMPONENT', function(data: ServerMessageContainer)
+        {
+            if(data.type == 'ANY')
+            {
+                if(data.payload.header == ElementMessageTypes.MOVE)
+                {
+                    let message = { type: ControllerMessageTypes.BATCHMOVE, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+                else if(data.payload.header == ElementMessageTypes.DELETE)
+                {
+                    let message = { type: ControllerMessageTypes.BATCHDELETE, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+                else if(data.payload.header == ElementMessageTypes.RESTORE)
+                {
+                    let message = { type: ControllerMessageTypes.BATCHRESTORE, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+            }
+            else
+            {
+                let message = { type: ControllerMessageTypes.ELEMENTMESSAGE, data: data };
+                self.worker.postMessage(message);
+            }
+        });
+
+        this.socket.on('ERROR', function(message: string)
+        {
+            console.log('SERVER: ' + message);
+
+            let errMsg = { type: ControllerMessageTypes.ERROR, error: message };
+            self.worker.postMessage(errMsg);
+        });
+    }
+
+    handleMessage(type: string, message: UserMessageContainer)
+    {
+        this.socket.emit(type, message);
+    }
+
+    setRoomOptions(allowAllEdit: boolean, allowUserEdit: boolean)
+    {
+        this.allowAllEdit = allowAllEdit;
+        this.allowUserEdit = allowUserEdit;
+
+        let message = { type: ControllerMessageTypes.SETOPTIONS, allowAllEdit: this.allowAllEdit, allowUserEdit: this.allowUserEdit };
+        this.worker.postMessage(message);
+    }
+
+    setView(view)
     {
         var whitElem  = document.getElementById('whiteBoard-input') as HTMLCanvasElement;
         var whitCont  = document.getElementById('whiteboard-container');
@@ -1277,10 +1210,10 @@ class WhiteBoardController
         whitElem.style.height = whitCont.clientHeight + 'px';
         whitElem.width = whitElem.clientWidth;
         whitElem.height = whitElem.clientHeight;
-        window.addEventListener('resize', this.windowResize);
-        window.addEventListener('beforeunload', this.windowUnload);
-        document.addEventListener('keypress', this.keyPress);
-        document.addEventListener('keydown', this.keyDown);
+        window.addEventListener('resize', this.windowResize.bind(this));
+        window.addEventListener('beforeunload', this.windowUnload.bind(this));
+        document.addEventListener('keypress', this.keyPress.bind(this));
+        document.addEventListener('keydown', this.keyDown.bind(this));
 
         var newVBox = '0 0 ' + whitElem.width + ' ' + whitElem.height;
 
@@ -1302,282 +1235,71 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    updateView = (viewState: WhiteBoardViewState) : void =>
+    updateView(viewState: WhiteBoardViewState)
     {
         this.viewState = viewState;
         this.view.storeUpdate(this.viewState);
     }
 
-    setElementView = (id: number, newView: ComponentViewState) : void =>
+    setViewState(newParams: Object)
     {
-        if(newView == null)
+        this.updateView(Object.assign({}, this.viewState, newParams));
+    }
+
+    setElementViews(upadates: Array<{id: number, view: ComponentViewState}>)
+    {
+        let newElemList = this.viewState.boardElements;
+
+        for(let i = 0; i < upadates.length; i++)
         {
-            console.log("Issue tracked here.");
+            newElemList = newElemList.set(upadates[i].id, upadates[i].view);
         }
-        let newElemList = this.viewState.boardElements.set(id, newView);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
+
+        this.setViewState({ boardElements: newElemList });
     }
 
-    getAudioStream = () : MediaStream =>
+    setSelectCount(newCount: number)
     {
+        this.selectCount = newCount;
+    }
+
+    getAudioStream(id: number)
+    {
+        /* TODO */
         return null;
     }
 
-    getVideoStream = () : MediaStream =>
+    getVideoStream(id: number)
     {
+        /* TODO */
         return null;
     }
 
-    newAlert = (type: string, message: string) : void =>
+    newAlert(alertView: AlertElement)
     {
-        let newMsg : AlertElement = { type: type, message: message };
-        let newElemList = this.viewState.alertElements.push(newMsg);
-
-        this.updateView(Object.assign({}, this.viewState, { alertElements: newElemList}));
+        let newElemList = this.viewState.alertElements.push(alertView);
+        this.setViewState({ alertElements: newElemList });
     }
 
-    removeAlert = () : void =>
+    removeAlert()
     {
         let newElemList = this.viewState.alertElements.shift();
-
-        this.updateView(Object.assign({}, this.viewState, { alertElements: newElemList }));
+        this.setViewState({ alertElements: newElemList });
     }
 
-    deleteElement = (id: number) : void =>
+    deleteElements(ids: Array<number>)
     {
-        let newElemList = this.viewState.boardElements.filter(element => element.id !== id);
-        this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList }));
-    }
-
-    setMode = (newMode: string) : void =>
-    {
-        let palleteView: BoardPalleteViewState = {};
-        let cursor: ElementCursor = { cursor: 'auto', url: [], offset: { x: 0, y: 0 } };
-
-        if(newMode != BoardModes.SELECT && newMode != BoardModes.ERASE)
-        {
-            palleteView = components.get(newMode).pallete.getCurrentViewState();
-            cursor = components.get(newMode).pallete.getCursor();
-        }
-
-        this.cursor = cursor.cursor;
-        this.cursorURL = cursor.url;
-        this.cursorOffset = cursor.offset;
-
-        this.updateView(Object.assign({}, this.viewState,
-        {
-            mode: newMode, palleteState: palleteView, cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset
-        }));
-    }
-
-    sendMessage = (id: number, type: string, message: UserMessage) : void =>
-    {
-        let serverId = this.getBoardElement(id).serverId;
-        let msg: UserMessageContainer = { id: serverId, type: type, payload: message };
-        console.log('Sending message: ' + JSON.stringify(msg));
-        this.socket.emit('MSG-COMPONENT', msg);
-    }
-
-    selectGroup = (ids: Array<number>) : void =>
-    {
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
-
-            if(elem.isDeleted)
-            {
-                console.log('Deselect is probably the issue.');
-            }
-
-            let newView = elem.handleDeselect();
-
-            this.setElementView(elem.id, newView);
-        }
+        let newElemList = this.viewState.boardElements;
 
         for(let i = 0; i < ids.length; i++)
         {
-            let elem = this.getBoardElement(ids[i]);
-            if(!elem.isDeleted)
-            {
-                let newView = elem.handleSelect();
-                this.currSelect.push(elem.id);
-                this.setElementView(elem.id, newView);
-            }
+            newElemList = newElemList.filter(element => element.id !== ids[i]);
         }
+
+        this.setViewState({ boardElements: newElemList });
     }
 
-    handleElementOperation = (id: number, undoOp: () => ElementUndoRedoReturn, redoOp: () => ElementUndoRedoReturn) : void =>
-    {
-        if(undoOp && redoOp)
-        {
-            this.newOperation(id, undoOp, redoOp);
-        }
-        else if(undoOp || redoOp)
-        {
-            console.error('Element provided either undo or redo operation. It must specify neither or both.');
-        }
-    }
-
-    handleElementMessages = (id: number, type: string, messages: Array<UserMessage>) : void =>
-    {
-        for(let i = 0; i < messages.length; i++)
-        {
-            this.sendMessage(id, type, messages[i]);
-        }
-    }
-
-    handleMouseElementSelect = (e: MouseEvent, elem: BoardElement, isSelected: boolean, cursor?: ElementCursor) : void =>
-    {
-        if(isSelected)
-        {
-            let alreadySelected = false;
-
-            for(let i = 0; i < this.currSelect.length; i++)
-            {
-                if(this.currSelect[i] == elem.id)
-                {
-                    alreadySelected = true;
-                }
-            }
-
-            if(!alreadySelected)
-            {
-                if(e.ctrlKey)
-                {
-                    this.currSelect.push(elem.id);
-                }
-                else
-                {
-                    for(let i = 0; i < this.currSelect.length; i++)
-                    {
-                        if(this.currSelect[i] != elem.id)
-                        {
-                            let selElem = this.getBoardElement(this.currSelect[i]);
-                            let selElemView = selElem.handleDeselect();
-                            this.setElementView(selElem.id, selElemView);
-                        }
-                    }
-                    this.currSelect = [];
-                    this.currSelect.push(elem.id);
-                }
-            }
-
-            if(this.currSelect.length == 1 && cursor)
-            {
-                if(this.cursor != cursor.cursor || this.cursorURL != cursor.url)
-                {
-                    this.cursor = cursor.cursor;
-                    this.cursorURL = cursor.url;
-                    this.cursorOffset = cursor.offset;
-
-                    this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
-                }
-            }
-        }
-        else
-        {
-            if(this.currSelect.length == 1 && this.currSelect[0] == elem.id)
-            {
-                this.cursor = 'auto';
-                this.cursorURL = [];
-                this.cursorOffset = { x: 0, y: 0 };
-
-                this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
-                this.currSelect = [];
-            }
-            else
-            {
-                for(let i = 0; i < this.currSelect.length; i++)
-                {
-                    if(this.currSelect[i] == elem.id)
-                    {
-                        this.currSelect.splice(i, 1);
-                    }
-                }
-            }
-        }
-    }
-
-    handleTouchElementSelect = (e: TouchEvent, elem: BoardElement, isSelected: boolean, cursor?: ElementCursor) : void =>
-    {
-        if(isSelected)
-        {
-            if(e.ctrlKey)
-            {
-                let alreadySelected = false;
-                for(let i = 0; i < this.currSelect.length; i++)
-                {
-                    if(this.currSelect[i] == elem.id)
-                    {
-                        alreadySelected = true;
-                    }
-                }
-
-                if(!alreadySelected)
-                {
-                    this.currSelect.push(elem.id);
-                }
-            }
-            else
-            {
-                for(let i = 0; i < this.currSelect.length; i++)
-                {
-                    if(this.currSelect[i] != elem.id)
-                    {
-                        let selElem = this.getBoardElement(this.currSelect[i]);
-                        let selElemView = selElem.handleDeselect();
-                        this.setElementView(selElem.id, selElemView);
-                    }
-                }
-
-                this.currSelect = [];
-                this.currSelect.push(elem.id);
-            }
-
-            if(this.currSelect.length == 1 && cursor)
-            {
-                this.cursor = cursor.cursor;
-                this.cursorURL = cursor.url;
-                this.cursorOffset = cursor.offset;
-
-                this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset }));
-            }
-        }
-        else
-        {
-            for(let i = 0; i < this.currSelect.length; i++)
-            {
-                if(this.currSelect[i] == elem.id)
-                {
-                    this.currSelect.splice(i, 1);
-                }
-            }
-        }
-    }
-
-    handleElementPalleteChanges = (elem: BoardElement, changes: Array<BoardPalleteChange>): void =>
-    {
-        for(let j = 0; j < changes.length; j++)
-        {
-            let change = changes[j];
-            components.get(elem.type).pallete.handleChange(change);
-
-            for(let i = 0; i < this.currSelect.length; i++)
-            {
-                let selElem = this.getBoardElement(this.currSelect[i]);
-                if(selElem.id != elem.id && selElem.type == elem.type)
-                {
-                    let retVal = selElem.handlePalleteChange(change);
-
-                    this.handleElementMessages(selElem.id, selElem.type, retVal.serverMessages);
-                    this.handleElementOperation(selElem.id, retVal.undoOp, retVal.redoOp);
-                    this.setElementView(selElem.id, retVal.newView);
-                }
-            }
-        }
-    }
-
-    handleElementNewViewCentre = (x: number, y: number): void =>
+    handleElementNewViewCentre(x: number, y: number)
     {
         let whitElem  = document.getElementById('whiteBoard-input') as HTMLCanvasElement;
         let whitCont  = document.getElementById('whiteboard-container');
@@ -1602,168 +1324,31 @@ class WhiteBoardController
         this.setViewBox(newPanX, newPanY, this.scaleF);
     }
 
-    handleRemoteEdit = (id: number) : void =>
+    addInfoMessages(newInfoViews)
     {
-        // Remove all operations related to this item from operation buffer
-        for(let i = 0; i < this.operationStack.length; i++)
+        let newInfoList = this.viewState.infoElements;
+
+        for(let i = 0; i < newInfoViews.length; i++)
         {
-            if(this.operationStack[i].ids.indexOf(id) != -1)
-            {
-                // Replace operation with one that will just select the item (better user interation that removing or doing nothing)
-                let newOp: WhiteBoardOperation =
-                {
-                    ids: this.operationStack[i].ids,
-                    undos: [((elemIds) =>
-                    {
-                        return () => { this.selectGroup(elemIds); return null; };
-                    })(this.operationStack[i].ids)],
-                    redos: [((elemIds) =>
-                    {
-                        return () => { this.selectGroup(elemIds); return null; };
-                    })(this.operationStack[i].ids)]
-                };
-
-                this.operationStack.splice(i, 1, newOp);
-            }
-        }
-    }
-
-    handleInfoMessage = (data: InfoMessageData) : void =>
-    {
-        /* TODO: */
-    }
-
-    handleAlertMessage = (msg: AlertMessageData) : void =>
-    {
-        if(msg)
-        {
-            this.newAlert(msg.header, msg.message);
-        }
-    }
-
-    startMove = (startX: number, startY: number) : void =>
-    {
-        this.groupStartX = startX;
-        this.groupStartY = startY;
-        this.groupMoving = true;
-        this.cursor = 'move';
-        this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor }));
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
-            let retVal = elem.startMove();
-        }
-    }
-
-    moveGroup = (x: number, y: number, editTime: Date) : void =>
-    {
-        // Loop over currently selected items, determine type and use appropriate method
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
-
-            let elemView = elem.handleMove(x, y);
-            this.setElementView(elem.id, elemView);
-        }
-    }
-
-    endMove = (endX: number, endY: number) : void =>
-    {
-        this.groupMoving = false;
-        this.cursor = 'auto';
-        this.updateView(Object.assign({}, this.viewState, { cursor: this.cursor }));
-
-        let undoOpList = [];
-        let redoOpList = [];
-
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
-            let retVal = elem.endMove();
-
-            let undoOp = ((element, changeX, changeY) =>
-            {
-                return () =>
-                {
-                    element.handleMove(-changeX, -changeY);
-                    let ret = element.endMove();
-                    this.handleElementMessages(element.id, element.type, ret.serverMessages);
-                    this.setElementView(element.id, ret.newView);
-                };
-            })(elem, endX - this.groupStartX, endY - this.groupStartY);
-            let redoOp = ((element, changeX, changeY) =>
-            {
-                return () =>
-                {
-                    element.handleMove(changeX, changeY);
-                    let ret = element.endMove();
-                    this.handleElementMessages(element.id, element.type, ret.serverMessages);
-                    this.setElementView(element.id, ret.newView);
-                };
-            })(elem, endX - this.groupStartX, endY - this.groupStartY);
-
-            this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-            this.setElementView(elem.id, retVal.newView);
-
-            undoOpList.push(undoOp);
-            redoOpList.push(redoOp);
+            newInfoList = this.viewState.infoElements.push(newInfoViews[i]);
         }
 
-        // Remove redo operations ahead of current position
-        this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
-
-        // Add new operation to the stack
-        let newOp: WhiteBoardOperation = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
-        this.operationStack[this.operationPos++] = newOp;
+        this.setViewState({ infoElements: newInfoList });
     }
 
-    selectElement = (id: number) : void =>
+    removeInfoMessages(ids: Array<number>)
     {
-        let elem = this.getBoardElement(id);
+        let newInfoList = this.viewState.infoElements;
 
-        if(!elem.isDeleted)
+        for(let i = 0; i < ids.length; i++)
         {
-            let newElemView = elem.handleSelect();
-            this.setElementView(id, newElemView);
+            newInfoList = this.viewState.infoElements.delete(ids[i]);
         }
+
+        this.setViewState({ infoElements: newInfoList });
     }
 
-    deselectElement = (id: number) : void =>
-    {
-        let elem = this.getBoardElement(id);
-        let newElemView = elem.handleDeselect();
-        this.setElementView(elem.id, newElemView);
-    }
-
-    addInfoMessage = (x: number, y: number, width: number, height: number, header: string, message: string) : number =>
-    {
-        let newInfo: InfoMessage =
-        {
-            id: -1, x: x, y: y, width: width, height: height, header: header, message: message
-        };
-
-        let localId = this.infoElems.length;
-        this.infoElems[localId] = newInfo;
-        newInfo.id = localId;
-
-        let newInfoView : InfoElement =
-        {
-            x: x, y: y, width: width, height: height, header: header, message: message
-        };
-
-        let newInfoList = this.viewState.infoElements.push(newInfoView);
-        this.updateView(Object.assign({}, this.viewState, { infoElements: newInfoList}));
-
-        return localId;
-    }
-
-    removeInfoMessage = (id: number) : void =>
-    {
-        let newInfoList = this.viewState.infoElements.delete(id);
-        this.updateView(Object.assign({}, this.viewState, { infoElements: newInfoList}));
-    }
-
-    setViewBox = (panX: number, panY: number, scaleF: number) : void =>
+    setViewBox(panX: number, panY: number, scaleF: number)
     {
         let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let vBoxW = whitElem.clientWidth * scaleF;
@@ -1776,10 +1361,7 @@ class WhiteBoardController
         let newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
 
         // console.log('Updating Viewbox to: ' + newView);
-        this.updateView(Object.assign({}, this.viewState,
-            {
-                viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF
-            }));
+        this.setViewState({ viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF });
     }
 
     /***********************************************************************************************************************************************************
@@ -1791,155 +1373,7 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    getBoardElement = (id: number) : BoardElement =>
-    {
-        if(this.boardElems[id])
-        {
-            return this.boardElems[id];
-        }
-        else
-        {
-            throw 'Element does not exist';
-        }
-    }
-
-    getInfoMessage = (id: number) : InfoMessage =>
-    {
-        return this.infoElems[id];
-    }
-
-    undo = () : void =>
-    {
-        console.log('Undo, stack length. ' + this.operationStack.length);
-        // Undo operation at current stack position
-        if(this.operationPos > 0)
-        {
-            let operation = this.operationStack[--this.operationPos];
-
-            for(let i = 0; i < operation.undos.length; i++)
-            {
-                let retVal: ElementUndoRedoReturn = operation.undos[i]();
-                if(retVal)
-                {
-                    let elem = this.getBoardElement(retVal.id);
-
-
-                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
-                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    this.setElementView(retVal.id, retVal.newView);
-                    if(retVal.newViewCentre)
-                    {
-                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    if(retVal.wasDelete)
-                    {
-                        this.deleteElement(elem.id);
-                    }
-                }
-            }
-        }
-    }
-
-    redo = () : void =>
-    {
-        // Redo operation at current stack position
-        if(this.operationPos < this.operationStack.length)
-        {
-            let operation =  this.operationStack[this.operationPos++];
-            for(let i = 0; i < operation.redos.length; i++)
-            {
-                let retVal: ElementUndoRedoReturn = operation.redos[i]();
-
-                if(retVal)
-                {
-                    let elem = this.getBoardElement(retVal.id);
-                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
-                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    this.setElementView(retVal.id, retVal.newView);
-                    if(retVal.newViewCentre)
-                    {
-                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    if(retVal.wasDelete)
-                    {
-                        this.deleteElement(elem.id);
-                    }
-                }
-            }
-        }
-    }
-
-    newOperation = (itemId:  number, undoOp: () => ElementUndoRedoReturn, redoOp: () => ElementUndoRedoReturn) : void =>
-    {
-        // Remove redo operations ahead of current position
-        this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
-
-        // Add new operation to the stack
-        let newOp: WhiteBoardOperation = { ids: [itemId], undos: [undoOp], redos: [redoOp] };
-        this.operationStack[this.operationPos++] = newOp;
-    }
-
-    undoItemEdit = (id: number) : void =>
-    {
-        let elem = this.getBoardElement(id);
-
-        // Undo item operation at current stack position
-        if(!elem.isDeleted && elem.operationPos > 0)
-        {
-            elem.operationStack[--elem.operationPos].undo();
-        }
-    }
-
-    redoItemEdit = (id: number) : void =>
-    {
-        let elem = this.getBoardElement(id);
-
-        // Redo operation at current stack position
-        if(!elem.isDeleted && elem.operationPos < elem.operationStack.length)
-        {
-            elem.operationStack[elem.operationPos++].redo();
-        }
-    }
-
-    addHoverInfo = (id: number) : void =>
-    {
-        /* TODO: Only display over whiteboard, and adjust width and height */
-        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-        let elemRect = whitElem.getBoundingClientRect();
-        let offsetY  = elemRect.top - document.body.scrollTop;
-        let offsetX  = elemRect.left - document.body.scrollLeft;
-
-        let elem = this.getBoardElement(id);
-        let infoId = this.addInfoMessage(this.prevX - offsetX + 20, this.prevY - offsetY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
-
-        elem.infoElement = infoId;
-    }
-
-    removeHoverInfo = (id: number) : void =>
-    {
-        let elem = this.getBoardElement(id);
-        elem.infoElement = -1;
-        this.currentHover = -1;
-        this.removeInfoMessage(elem.infoElement);
-    }
-
-    infoMessageTimeout = (id: number, self) : void =>
-    {
-        if(this.lMousePress || this.rMousePress || this.wMousePress)
-        {
-            // Reset timeout as a mouse button is pressed
-            let elem = this.getBoardElement(id);
-
-            clearTimeout(elem.hoverTimer);
-            elem.hoverTimer = setTimeout(this.infoMessageTimeout, 2000, id);
-        }
-        else
-        {
-            this.addHoverInfo(id);
-        }
-    }
-
-    compareUpdateTime = (elem1: ComponentViewState, elem2: ComponentViewState) : number =>
+    compareUpdateTime(elem1: ComponentViewState, elem2: ComponentViewState)
     {
         if(elem1.updateTime.getTime() > elem2.updateTime.getTime())
         {
@@ -1955,159 +1389,6 @@ class WhiteBoardController
         }
     }
 
-    sendNewElement = (msg: UserNewElementMessage) : void =>
-    {
-        this.socket.emit('NEW-ELEMENT', msg);
-    }
-
-    /***********************************************************************************************************************************************************
-     *
-     *
-     *
-     * SOCKET CODE
-     *
-     *
-     *
-     **********************************************************************************************************************************************************/
-    setSocket = (socket: Socket) : void =>
-    {
-        var self = this;
-        this.socket = socket;
-
-        this.socket.on('JOIN', function(data: ServerBoardJoinMessage)
-        {
-
-        });
-
-        this.socket.on('NEW-ELEMENT', function(data: ServerMessageContainer)
-        {
-            if(self.elementDict[data.serverId] == undefined || self.elementDict[data.serverId] == null)
-            {
-                let localId = self.boardElems.length;
-                let callbacks: ElementCallbacks =
-                {
-                    sendServerMsg: ((id: number, type: string) =>
-                    { return (msg: UserMessage) => { self.sendMessage(id, type, msg) }; })(localId, data.type),
-                    createAlert: (header: string, message: string) => {},
-                    createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
-                    { return self.addInfoMessage(x, y, width, height, header, message); },
-                    removeInfo: (id: number) => { self.removeInfoMessage(id); },
-                    updateBoardView: ((id: number) =>
-                    { return (newView: ComponentViewState) => { self.setElementView(id, newView); }; })(localId),
-                    getAudioStream: () => { return self.getAudioStream(); },
-                    getVideoStream: () => { return self.getVideoStream(); }
-                }
-                let creationArg: CreationData = { id: localId, userId: data.userId, callbacks: callbacks, serverMsg: data.payload, serverId: data.serverId };
-                self.boardElems[localId] = components.get(data.type).Element.createElement(creationArg);
-                self.elementDict[data.serverId] = localId;
-
-                self.setElementView(self.boardElems[localId].id, self.boardElems[localId].getCurrentViewState());
-            }
-        });
-
-        this.socket.on('ELEMENT-ID', function(data: ServerIdMessage)
-        {
-            self.elementDict[data.serverId] = data.localId;
-            let elem = self.boardElems[data.localId];
-            let retVal = elem.setServerId(data.serverId);
-
-            self.handleElementMessages(elem.id, elem.type, retVal);
-        });
-
-        this.socket.on('MSG-COMPONENT', function(data: ServerMessageContainer)
-        {
-            if(self.elementDict[data.serverId] != undefined && self.elementDict[data.serverId] != null)
-            {
-                let elem = self.getBoardElement(self.elementDict[data.serverId])
-                if(elem.type == data.type)
-                {
-                    let retVal = elem.handleServerMessage(data.payload);
-
-                    if(retVal.wasEdit)
-                    {
-                        self.handleRemoteEdit(elem.id);
-                    }
-
-                    self.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    self.setElementView(elem.id, retVal.newView);
-                    self.handleInfoMessage(retVal.infoMessage);
-                    self.handleAlertMessage(retVal.alertMessage);
-
-                    if(retVal.wasDelete)
-                    {
-                        self.deleteElement(elem.id);
-
-                        // Remove from current selection
-                        if(self.currSelect.indexOf(elem.id))
-                        {
-                            self.currSelect.splice(self.currSelect.indexOf(elem.id), 1);
-                        }
-
-                        if(self.currentHover == elem.id)
-                        {
-                            clearTimeout(elem.hoverTimer);
-                            self.removeHoverInfo(self.currentHover);
-                        }
-
-                        for(let i = 0; i < self.operationStack.length; i++)
-                        {
-                            if(self.operationStack[i].ids.indexOf(elem.id) != -1)
-                            {
-                                console.log('Element in this set.');
-                                if(self.operationStack[i].ids.length == 1)
-                                {
-                                    if(i <= self.operationPos)
-                                    {
-                                        self.operationPos--;
-                                    }
-                                    // Decrement i to account fot the removal of this item.
-                                    self.operationStack.splice(i--, 1);
-                                }
-                                else
-                                {
-                                    console.log('This should work.');
-                                    // Remove the deleted item from the selection.
-                                    self.operationStack[i].ids.splice(self.operationStack[i].ids.indexOf(elem.id), 1);
-
-                                    // Replace operation with one that will just select the remaining items.
-                                    let newOp: WhiteBoardOperation =
-                                    {
-                                        ids: self.operationStack[i].ids,
-                                        undos: [((elemIds) =>
-                                        {
-                                            return () => { self.selectGroup(elemIds); return null; };
-                                        })(self.operationStack[i].ids.slice())],
-                                        redos: [((elemIds) =>
-                                        {
-                                            return () => { self.selectGroup(elemIds); return null; };
-                                        })(self.operationStack[i].ids.slice())]
-                                    };
-
-                                    self.operationStack.splice(i, 1, newOp);
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    console.error('Received bad element message.');
-                }
-            }
-            else if(data.type && data.serverId)
-            {
-                let msg: UserUnknownElement = { type: data.type, id: data.serverId };
-                console.log('Unknown element. ID: ' + data.serverId);
-                self.socket.emit('UNKNOWN-ELEMENT', msg);
-            }
-        });
-        this.socket.on('ERROR', function(message: string)
-        {
-            console.log('SERVER: ' + message);
-            self.newAlert('SERVER ERROR', 'A server error has occured, some data in this session may be lost.');
-        });
-    }
-
     /***********************************************************************************************************************************************************
      *
      *
@@ -2117,60 +1398,51 @@ class WhiteBoardController
      *
      *
      **********************************************************************************************************************************************************/
-    modeChange = (newMode: string) : void =>
+    modeChange(newMode: string)
     {
         var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         var context  = whitElem.getContext('2d');
         context.clearRect(0, 0, whitElem.width, whitElem.height);
 
-        for(let i = 0; i < this.currSelect.length; i++)
-        {
-            let elem = this.getBoardElement(this.currSelect[i]);
+        let message = { type: ControllerMessageTypes.MODECHANGE, newMode: newMode };
 
-            let retVal = elem.handleDeselect();
-            this.setElementView(elem.id, retVal);
-        }
-
-        this.currSelect = [];
-        this.setMode(newMode);
+        this.worker.postMessage(message);
     }
 
-    changeEraseSize = (newSize: number) : void =>
+    changeEraseSize(newSize: number)
     {
-        let newView = Object.assign({}, this.viewState, { eraseSize: newSize });
-        this.updateView(newView);
+        this.setViewState({ eraseSize: newSize });
     }
 
-    elementMouseOver = (id: number, e: MouseEvent) : void =>
+    elementMouseOver(id: number, e: MouseEvent)
     {
-        let elem = this.getBoardElement(id);
-        if(this.currentHover == -1)
+        let eventCopy =
         {
-            this.currentHover = id;
-            elem.hoverTimer = setTimeout(this.infoMessageTimeout, 2000, id);
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         }
-        else
-        {
-            let prevElem = this.getBoardElement(this.currentHover);
-            clearTimeout(prevElem.hoverTimer);
-        }
+
+        let message = { type: ControllerMessageTypes.ELEMENTMOUSEOVER, id: id, e: eventCopy };
+        this.worker.postMessage(message);
     }
 
-    elementMouseOut = (id: number, e: MouseEvent) : void =>
+    elementMouseOut(id: number, e: MouseEvent)
     {
-        let elem = this.getBoardElement(id);
-
-        if(this.currentHover == id)
+        let eventCopy =
         {
-            clearTimeout(elem.hoverTimer);
-            this.removeHoverInfo(this.currentHover);
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         }
+
+        let message = { type: ControllerMessageTypes.ELEMENTMOUSEOUT, id: id, e: eventCopy };
+        this.worker.postMessage(message);
     }
 
-    elementMouseDown = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    elementMouseDown(id: number, e: MouseEvent, componenet?: number, subId?: number)
     {
+        this.mouseDownHandled = true;
+
         e.preventDefault();
-        let elem = this.getBoardElement(id);
         let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let elemRect = whitElem.getBoundingClientRect();
         let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2179,92 +1451,60 @@ class WhiteBoardController
         let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
         let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
 
-        if(this.currentHover == id)
+        let eventCopy =
         {
-            clearTimeout(elem.hoverTimer);
-            this.removeHoverInfo(this.currentHover);
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         }
 
-        if(this.viewState.mode == BoardModes.SELECT)
-        {
-            if(this.currSelect.length > 1 && elem.isSelected)
-            {
-                this.startMove(xPos, yPos);
-            }
-            else
-            {
-                let retVal = elem.handleMouseDown(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-
-                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
-                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if(retVal.newViewCentre)
-                {
-                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                this.handleInfoMessage(retVal.infoMessage);
-                this.handleAlertMessage(retVal.alertMessage);
-                this.setElementView(id, retVal.newView);
-            }
-            this.mouseDownHandled = true;
-        }
-
-        this.prevX = e.clientX;
-        this.prevY = e.clientY;
-
+        let message = { type: ControllerMessageTypes.ELEMENTMOUSEDOWN, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId };
+        this.worker.postMessage(message);
     }
 
-    elementMouseMove = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    elementMouseMove(id: number, e: MouseEvent, componenet?: number, subId?: number)
     {
-        let elem = this.getBoardElement(id);
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panX;
+
         if(this.viewState.mode == BoardModes.ERASE)
         {
             if(this.lMousePress)
             {
-                if(this.isHost || this.userId == elem.user)
-                {
-                    let retVal = elem.handleErase();
-                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                    this.deleteElement(id);
-
-                    if(this.currentHover == id)
-                    {
-                        clearTimeout(elem.hoverTimer);
-                        this.removeHoverInfo(this.currentHover);
-                    }
-                }
+                let message = { type: ControllerMessageTypes.ELEMENTERASE, id: id };
+                this.worker.postMessage(message);
             }
         }
-        else if(this.viewState.mode == BoardModes.SELECT && !this.groupMoving)
+        else if(this.viewState.mode == BoardModes.SELECT)
         {
-            let changeX = (e.clientX - this.prevX) * this.scaleF;
-            let changeY = (e.clientY - this.prevY) * this.scaleF;
-            let retVal = elem.handleMouseMove(e, changeX, changeY, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleMouseElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
+            if(e.buttons == 0)
             {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+                let eventCopy =
+                {
+                    altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                    buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+                };
 
-            this.prevX = e.clientX;
-            this.prevY = e.clientY;
+                let message =
+                {
+                    type: ControllerMessageTypes.ELEMENTMOUSEMOVE, id: id, e: eventCopy, mouseX: mouseX, mouseY: mouseY, componenet: componenet, subId: subId
+                };
+                this.worker.postMessage(message);
+
+                this.prevX = e.clientX;
+                this.prevY = e.clientY;
+            }
         }
     }
 
-    elementMouseUp = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    elementMouseUp(id: number, e: MouseEvent, componenet?: number, subId?: number)
     {
         if(this.viewState.mode == BoardModes.SELECT)
         {
-            let elem = this.getBoardElement(id);
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let elemRect = whitElem.getBoundingClientRect();
             let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2273,26 +1513,22 @@ class WhiteBoardController
             let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
             let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
 
-            let retVal = elem.handleMouseUp(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleMouseElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
+            let eventCopy =
             {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+
+            let message =
+            {
+                type: ControllerMessageTypes.ELEMENTMOUSEUP, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
         }
     }
 
-    elementMouseClick = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    elementMouseClick(id: number, e: MouseEvent, componenet?: number, subId?: number)
     {
-        let elem = this.getBoardElement(id);
-
         let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let elemRect = whitElem.getBoundingClientRect();
         let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2303,44 +1539,29 @@ class WhiteBoardController
 
         if(this.viewState.mode == BoardModes.ERASE)
         {
-            if(this.isHost || this.userId == elem.user)
-            {
-                let retVal = elem.handleErase();
-
-                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                this.deleteElement(id);
-
-                if(this.currentHover == id)
-                {
-                    clearTimeout(elem.hoverTimer);
-                    this.removeHoverInfo(this.currentHover);
-                }
-            }
+            let message = { type: ControllerMessageTypes.ELEMENTERASE, id: id };
+            this.worker.postMessage(message);
         }
-        else if(this.viewState.mode == BoardModes.SELECT && this.currSelect.length < 2)
+        else if(this.viewState.mode == BoardModes.SELECT)
         {
-            let retVal = elem.handleMouseClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleMouseElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
+            let eventCopy =
             {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+
+            let message =
+            {
+                type: ControllerMessageTypes.ELEMENTMOUSECLICK, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
         }
     }
 
-    elementMouseDoubleClick = (id: number, e: MouseEvent, componenet?: number, subId?: number) : void =>
+    elementMouseDoubleClick(id: number, e: MouseEvent, componenet?: number, subId?: number)
     {
         if(this.viewState.mode == BoardModes.SELECT)
         {
-            let elem = this.getBoardElement(id);
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let elemRect = whitElem.getBoundingClientRect();
             let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2349,26 +1570,23 @@ class WhiteBoardController
             let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
             let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
 
-            let retVal = elem.handleDoubleClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleMouseElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
+            let eventCopy =
             {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+
+            let message =
+            {
+                type: ControllerMessageTypes.ELEMENTMOUSEDBLCLICK, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
             e.stopPropagation();
         }
     }
 
-    elementTouchStart = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    elementTouchStart(id: number, e: TouchEvent, componenet?: number, subId?: number)
     {
-        let elem = this.getBoardElement(id);
         let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let elemRect = whitElem.getBoundingClientRect();
         let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2386,51 +1604,22 @@ class WhiteBoardController
             localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
         }
 
-        if(this.currSelect.length > 1 && elem.isSelected)
-        {
-            /* TODO: */
-            //this.startMove();
-            //this.touchStartHandled = true;
-        }
-        else
-        {
-            let retVal = elem.handleTouchStart(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleTouchElementSelect(e, elem, retVal.isSelected, retVal.cursor);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
-            {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
-            this.touchStartHandled = true;
-        }
+        let message = { type: ControllerMessageTypes.ELEMENTTOUCHSTART, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+        this.worker.postMessage(message);
 
         this.prevTouch = e.touches;
     }
 
-    elementTouchMove = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    elementTouchMove(id: number, e: TouchEvent, componenet?: number, subId?: number)
     {
         let touchMoves: Array<BoardTouch>;
 
         if(this.viewState.mode == BoardModes.ERASE)
         {
-            var elem = this.getBoardElement(id);
-
-            if(this.isHost || this.userId == elem.user)
-            {
-                let retVal = elem.handleErase();
-
-                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                this.deleteElement(id);
-            }
+            let message = { type: ControllerMessageTypes.ELEMENTERASE, id: id };
+            this.worker.postMessage(message);
         }
-        else if(this.viewState.mode == BoardModes.SELECT && !this.groupMoving)
+        else if(this.viewState.mode == BoardModes.SELECT)
         {
             for(let i = 0; i < e.touches.length; i++)
             {
@@ -2450,29 +1639,17 @@ class WhiteBoardController
                 }
             }
 
-            let retVal = elem.handleTouchMove(e, touchMoves, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleTouchElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
-            {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+            let message = { type: ControllerMessageTypes.ELEMENTTOUCHMOVE, id: id, e: e, touchMoves: touchMoves, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
 
             this.prevTouch = e.touches;
         }
     }
 
-    elementTouchEnd = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    elementTouchEnd(id: number, e: TouchEvent, componenet?: number, subId?: number)
     {
         if(this.viewState.mode == BoardModes.SELECT)
         {
-            let elem = this.getBoardElement(id);
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let elemRect = whitElem.getBoundingClientRect();
             let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2490,27 +1667,15 @@ class WhiteBoardController
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
             }
 
-            let retVal = elem.handleTouchEnd(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleTouchElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
-            {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+            let message = { type: ControllerMessageTypes.ELEMENTTOUCHEND, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
         }
     }
 
-    elementTouchCancel = (id: number, e: TouchEvent, componenet?: number, subId?: number) : void =>
+    elementTouchCancel(id: number, e: TouchEvent, componenet?: number, subId?: number)
     {
         if(this.viewState.mode == BoardModes.SELECT)
         {
-            let elem = this.getBoardElement(id);
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let elemRect = whitElem.getBoundingClientRect();
             let offsetY  = elemRect.top - document.body.scrollTop;
@@ -2528,49 +1693,44 @@ class WhiteBoardController
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
             }
 
-            let retVal = elem.handleTouchCancel(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-
-            this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-            this.handleElementMessages(id, elem.type, retVal.serverMessages);
-            this.handleTouchElementSelect(e, elem, retVal.isSelected);
-            this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-            if(retVal.newViewCentre)
-            {
-                this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-            }
-            this.handleInfoMessage(retVal.infoMessage);
-            this.handleAlertMessage(retVal.alertMessage);
-            this.setElementView(id, retVal.newView);
+            let message = { type: ControllerMessageTypes.ELEMENTTOUCHCANCEL, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
         }
     }
 
-    elementDragOver = (id: number, e: DragEvent, componenet?: number, subId?: number) : void =>
+    elementDragOver(id: number, e: DragEvent, componenet?: number, subId?: number)
     {
         /* TODO: */
 
         e.stopPropagation();
     }
 
-    elementDrop = (id: number, e: DragEvent, componenet?: number, subId?: number) : void =>
+    elementDrop(id: number, e: DragEvent, componenet?: number, subId?: number)
     {
         /* TODO: */
 
         e.stopPropagation();
     }
 
-    mouseDown = (e: MouseEvent) : void =>
+    mouseDown(e: MouseEvent)
     {
         e.preventDefault();
+
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+
         if(!this.lMousePress && !this.wMousePress && !this.rMousePress)
         {
             this.lMousePress = e.buttons & 1 ? true : false;
             this.rMousePress = e.buttons & 2 ? true : false;
             this.wMousePress = e.buttons & 4 ? true : false;
             this.isPoint = true;
-            let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-            let elemRect = whitElem.getBoundingClientRect();
-            let offsetY  = elemRect.top - document.body.scrollTop;
-            let offsetX  = elemRect.left - document.body.scrollLeft;
+
             whitElem.width = whitElem.clientWidth;
             whitElem.height = whitElem.clientHeight;
             this.prevX = e.clientX;
@@ -2587,7 +1747,12 @@ class WhiteBoardController
             if(this.viewState.alertElements.size == 0)
             {
                 this.blockAlert = true;
-                this.updateView(Object.assign({}, this.viewState, { blockAlert: true }));
+                this.setViewState({ blockAlert: true });
+            }
+
+            if(this.viewState.mode == BoardModes.SELECT && !this.mouseDownHandled && e.buttons == 1)
+            {
+                this.selectDrag = true;
             }
         }
 
@@ -2597,54 +1762,30 @@ class WhiteBoardController
         }
         else
         {
-            if(this.currSelect.length > 0)
+            let eventCopy =
             {
-                // Deselect currently selected items
-                for(let i = 0; i < this.currSelect.length; i++)
-                {
-                    this.deselectElement(this.currSelect[i]);
-                }
-                this.currSelect = [];
-            }
-            else
-            {
-                if(this.lMousePress && this.viewState.mode == BoardModes.SELECT)
-                {
-                    this.selectDrag = true;
-                }
-            }
-            if(this.currentHover != -1)
-            {
-                let elem = this.getBoardElement(this.currentHover);
-                if(elem.infoElement != -1)
-                {
-                    this.removeHoverInfo(this.currentHover);
-                }
-                clearTimeout(elem.hoverTimer);
-            }
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+
+            let message = { type: ControllerMessageTypes.MOUSEDOWN, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+            this.worker.postMessage(message);
         }
     }
 
-    mouseMove = (e: MouseEvent) : void =>
+    mouseMove(e: MouseEvent)
     {
-        if(this.currentHover != -1)
-        {
-            let elem = this.getBoardElement(this.currentHover);
-            if(elem.infoElement != -1)
-            {
-                this.removeHoverInfo(this.currentHover);
-            }
-            else
-            {
-                clearTimeout(elem.hoverTimer);
-                elem.hoverTimer = setTimeout(this.infoMessageTimeout, 2000, this.currentHover);
-            }
-        }
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let context = whitElem.getContext('2d');
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
 
         if(this.wMousePress)
         {
-            var whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-
             var newPanX = this.panX + (this.prevX - e.clientX) * this.scaleF;
             var newPanY = this.panY + (this.prevY - e.clientY) * this.scaleF;
 
@@ -2662,132 +1803,71 @@ class WhiteBoardController
 
             this.setViewBox(newPanX, newPanY, this.scaleF);
         }
-        else if(this.lMousePress)
+
+        let eventCopy =
         {
-            var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY  = elemRect.top - document.body.scrollTop;
-            var offsetX  = elemRect.left - document.body.scrollLeft;
-            var context  = whitElem.getContext('2d');
-            var newPoint: Point = {x: 0, y: 0};
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+
+        if(this.selectDrag)
+        {
+            let absX = Math.round(e.clientX - offsetX);
+            let absY = Math.round(e.clientY - offsetY);
+            let rectLeft;
+            let rectTop;
+            let rectWidth;
+            let rectHeight;
+
+            if(absX > this.downPoint.x)
+            {
+                rectLeft = this.downPoint.x;
+                rectWidth = absX - this.downPoint.x;
+            }
+            else
+            {
+                rectLeft = absX;
+                rectWidth = this.downPoint.x - absX;
+            }
+
+            if(absY > this.downPoint.y)
+            {
+                rectTop = this.downPoint.y;
+                rectHeight = absY - this.downPoint.y;
+            }
+            else
+            {
+                rectTop = absY;
+                rectHeight = this.downPoint.y - absY;
+            }
+
+            context.clearRect(0, 0, whitElem.width, whitElem.height);
+
+            context.setLineDash([5]);
+            context.strokeStyle = 'black';
+            context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
+        }
+
+        let message = { type: ControllerMessageTypes.MOUSEMOVE, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+        this.worker.postMessage(message);
+
+        if(e.buttons == 1 && this.viewState.mode != BoardModes.SELECT && this.viewState.mode != BoardModes.ERASE)
+        {
+            let newPoint: Point = {x: 0, y: 0};
 
             newPoint.x = Math.round(e.clientX - offsetX);
             newPoint.y = Math.round(e.clientY - offsetY);
 
             this.pointList.push(newPoint);
 
-            if(this.viewState.mode == BoardModes.SELECT)
+            if(this.selectCount == 0)
             {
-                if(this.groupMoving)
+                context.clearRect(0, 0, whitElem.width, whitElem.height);
+                let data: DrawData =
                 {
-                    var changeX = (e.clientX - this.prevX) * this.scaleF;
-                    var changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    this.moveGroup(changeX, changeY, new Date());
-
-                    this.prevX = e.clientX;
-                    this.prevY = e.clientY;
-                    this.groupMoved = true;
-                }
-                else if(this.selectDrag)
-                {
-                    let rectLeft;
-                    let rectTop;
-                    let rectWidth;
-                    let rectHeight;
-
-                    if(newPoint.x > this.downPoint.x)
-                    {
-                        rectLeft = this.downPoint.x;
-                        rectWidth = newPoint.x - this.downPoint.x;
-                    }
-                    else
-                    {
-                        rectLeft = newPoint.x;
-                        rectWidth = this.downPoint.x - newPoint.x;
-                    }
-
-                    if(newPoint.y > this.downPoint.y)
-                    {
-                        rectTop = this.downPoint.y;
-                        rectHeight = newPoint.y - this.downPoint.y;
-                    }
-                    else
-                    {
-                        rectTop = newPoint.y;
-                        rectHeight = this.downPoint.y - newPoint.y;
-                    }
-
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                    if(rectWidth > 0 && rectHeight > 0)
-                    {
-                        context.beginPath();
-                        context.strokeStyle = 'black';
-                        context.setLineDash([5]);
-                        context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
-                        context.stroke();
-                    }
-
-                    this.selectLeft = this.panX + rectLeft * this.scaleF;
-                    this.selectTop = this.panY + rectTop * this.scaleF;
-                    this.selectWidth = rectWidth * this.scaleF;
-                    this.selectHeight = rectHeight * this.scaleF;
-                }
-                else if(this.currSelect.length == 1)
-                {
-                    let elem = this.getBoardElement(this.currSelect[0]);
-
-                    let changeX = (e.clientX - this.prevX) * this.scaleF;
-                    let changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    let retVal = elem.handleBoardMouseMove(e, changeX, changeY, components.get(elem.type).pallete);
-
-                    this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if(retVal.newViewCentre)
-                    {
-                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    this.handleInfoMessage(retVal.infoMessage);
-                    this.handleAlertMessage(retVal.alertMessage);
-                    this.setElementView(elem.id, retVal.newView);
-                }
-            }
-            else if(!this.rMousePress && this.viewState.mode != BoardModes.ERASE)
-            {
-                if(this.currSelect.length == 0)
-                {
-                    context.clearRect(0, 0, whitElem.width, whitElem.height);
-                    let data: DrawData =
-                    {
-                        palleteState: components.get(this.viewState.mode).pallete, pointList: this.pointList
-                    };
-                    components.get(this.viewState.mode).DrawHandle(data, context);
-                }
-                else if(this.currSelect.length == 1)
-                {
-                    let elem = this.getBoardElement(this.currSelect[0]);
-
-                    let changeX = (e.clientX - this.prevX) * this.scaleF;
-                    let changeY = (e.clientY - this.prevY) * this.scaleF;
-
-                    let retVal = elem.handleBoardMouseMove(e, changeX, changeY, components.get(elem.type).pallete);
-
-                    this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if(retVal.newViewCentre)
-                    {
-                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    this.handleInfoMessage(retVal.infoMessage);
-                    this.handleAlertMessage(retVal.alertMessage);
-                    this.setElementView(elem.id, retVal.newView);
-                }
+                    palleteState: this.viewState.palleteState, pointList: this.pointList
+                };
+                components.get(this.viewState.mode).DrawHandle(data, context);
             }
         }
 
@@ -2795,176 +1875,59 @@ class WhiteBoardController
         this.prevY = e.clientY;
     }
 
-    mouseUp = (e: MouseEvent) : void =>
+    mouseUp(e: MouseEvent)
     {
         if(this.lMousePress && !this.wMousePress)
         {
             let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
             let context = whitElem.getContext('2d');
-            let rectLeft;
-            let rectTop;
-            let rectWidth;
-            let rectHeight;
             let elemRect = whitElem.getBoundingClientRect();
             let offsetY  = elemRect.top - document.body.scrollTop;
             let offsetX  = elemRect.left - document.body.scrollLeft;
-            let newPoint: Point = {x: 0, y: 0};
+
+            let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+            let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+
+            let downX = this.downPoint.x * this.scaleF + this.panX;
+            let downY = this.downPoint.y * this.scaleF + this.panY;
 
             context.clearRect(0, 0, whitElem.width, whitElem.height);
 
-            if(this.currSelect.length == 0)
+            let eventCopy =
             {
-                newPoint.x = Math.round(e.clientX - offsetX);
-                newPoint.y = Math.round(e.clientY - offsetY);
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
 
-
-                if(newPoint.x > this.downPoint.x)
-                {
-                    rectLeft = this.downPoint.x;
-                    rectWidth = newPoint.x - this.downPoint.x;
-                }
-                else
-                {
-                    rectLeft = newPoint.x;
-                    rectWidth = this.downPoint.x - newPoint.x;
-                }
-
-                if(newPoint.y > this.downPoint.y)
-                {
-                    rectTop = this.downPoint.y;
-                    rectHeight = newPoint.y - this.downPoint.y;
-                }
-                else
-                {
-                    rectTop = newPoint.y;
-                    rectHeight = this.downPoint.y - newPoint.y;
-                }
-
-                let x = rectLeft * this.scaleF + this.panX;
-                let y = rectTop * this.scaleF + this.panY;
-                let width = rectWidth * this.scaleF;
-                let height = rectHeight * this.scaleF;
-
-                if(this.viewState.mode == BoardModes.SELECT)
-                {
-                    if(this.selectDrag)
-                    {
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-                        // Cycle through board elements and select those within the rectangle
-                        this.boardElems.forEach((elem: BoardElement) =>
-                        {
-                            if(!elem.isDeleted && elem.isComplete && elem.x >= this.selectLeft && elem.y >= this.selectTop)
-                            {
-                                if(this.selectLeft + this.selectWidth >= elem.x + elem.width && this.selectTop + this.selectHeight >= elem.y + elem.height)
-                                {
-                                    this.currSelect.push(elem.id);
-                                    this.selectElement(elem.id);
-                                }
-                            }
-                        });
-                    }
-                }
-                else if(this.viewState.mode != BoardModes.ERASE)
-                {
-                    let self = this;
-                    let localId = this.boardElems.push(null) - 1;
-                    let callbacks: ElementCallbacks =
-                    {
-                        sendServerMsg: ((id: number, type: string) =>
-                        { return (msg: UserMessage) => { self.sendMessage(id, type, msg) }; })(localId, self.viewState.mode),
-                        createAlert: (header: string, message: string) => {},
-                        createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
-                        { return self.addInfoMessage(x, y, width, height, header, message); },
-                        removeInfo: (id: number) => { self.removeInfoMessage(id); },
-                        updateBoardView: ((id: number) =>
-                        { return (newView: ComponentViewState) => { self.setElementView(id, newView); }; })(localId),
-                        getAudioStream: () => { return self.getAudioStream(); },
-                        getVideoStream: () => { return self.getVideoStream(); }
-                    }
-
-                    let data: CreationData =
-                    {
-                        id: localId, userId: this.userId, callbacks: callbacks, x: x, y: y, width: width, height: height,
-                        pointList: this.pointList, scaleF: this.scaleF, panX: this.panX, panY: this.panY,
-                        palleteState: components.get(this.viewState.mode).pallete
-                    };
-                    let newElem: BoardElement = components.get(this.viewState.mode).Element.createElement(data);
-
-                    if(newElem)
-                    {
-                        let undoOp = ((elem) => { return elem.erase.bind(elem); })(newElem);
-                        let redoOp = ((elem) => { return elem.restore.bind(elem); })(newElem);
-                        this.boardElems[localId] = newElem;
-
-                        let viewState = newElem.getCurrentViewState();
-                        this.setElementView(localId, viewState);
-
-                        let payload: UserNewElementPayload = newElem.getNewMsg();
-                        let msg: UserNewElementMessage = { type: newElem.type, payload: payload };
-
-                        this.handleElementOperation(localId, undoOp, redoOp);
-                        this.sendNewElement(msg);
-                    }
-                    else
-                    {
-                        // Failed to create element, remove place holder.
-                        this.boardElems.splice(localId, 1);
-                    }
-                }
-            }
-            else if(this.currSelect.length == 1)
+            let message =
             {
-                let elem = this.getBoardElement(this.currSelect[0]);
+                type: ControllerMessageTypes.MOUSEUP, e: eventCopy, mouseX: mouseX, mouseY: mouseY, downX: downX, downY: downY,
+                mode: this.viewState.mode , scaleF: this.scaleF, panX: this.panX, panY: this.panY, pointList: this.pointList
+            };
 
-                let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
-                let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
-
-                let retVal = elem.handleBoardMouseUp(e, xPos, yPos, components.get(elem.type).pallete);
-
-                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if(retVal.newViewCentre)
-                {
-                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                this.handleInfoMessage(retVal.infoMessage);
-                this.handleAlertMessage(retVal.alertMessage);
-                this.setElementView(elem.id, retVal.newView);
-            }
-
-            if(this.groupMoved)
-            {
-                let xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
-                let yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
-
-                this.groupMoved = false;
-                this.endMove(xPos, yPos);
-            }
+            this.worker.postMessage(message);
         }
 
         if(this.blockAlert)
         {
             this.blockAlert = false;
-            this.updateView(Object.assign({}, this.viewState, { blockAlert: false }));
+            this.setViewState({ blockAlert: false });
         }
 
-        this.selectDrag = false;
         this.lMousePress = false;
         this.wMousePress = false;
         this.rMousePress = false;
         this.pointList = [];
+        this.selectDrag = false;
     }
 
-    touchStart = () : void =>
+    touchStart(e: TouchEvent)
     {
         this.touchPress = true;
         /* TODO: */
     }
 
-    touchMove = (e: TouchEvent) : void =>
+    touchMove(e: TouchEvent)
     {
         /* TODO: */
         if(this.touchPress)
@@ -2973,137 +1936,116 @@ class WhiteBoardController
         }
     }
 
-    touchEnd = () : void =>
+    touchEnd(e: TouchEvent)
     {
         /* TODO: */
         this.touchPress = false;
     }
 
-    touchCancel = () : void =>
+    touchCancel(e: TouchEvent)
     {
         /* TODO: */
     }
 
-    keyDown = (e: KeyboardEvent) : void =>
+    keyDown(e: KeyboardEvent)
     {
         if (e.keyCode === 8)
         {
-            if(this.currSelect.length == 1)
+            let eventCopy =
             {
-                e.preventDefault();
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                keyCode: e.keyCode, charCode: e.charCode
+            };
 
-                let elem = this.getBoardElement(this.currSelect[0]);
+            let message = { type: ControllerMessageTypes.KEYBOARDINPUT, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
+            this.worker.postMessage(message);
+            e.preventDefault();
+        }
+        else if(e.keyCode === 46)
+        {
+            let eventCopy =
+            {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                keyCode: e.keyCode, charCode: e.charCode
+            };
 
-                let retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
-
-                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if(retVal.newViewCentre)
-                {
-                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                this.handleInfoMessage(retVal.infoMessage);
-                this.handleAlertMessage(retVal.alertMessage);
-                this.setElementView(elem.id, retVal.newView);
-            }
+            let message = { type: ControllerMessageTypes.KEYBOARDINPUT, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
+            this.worker.postMessage(message);
+            e.preventDefault();
         }
     }
 
-    keyPress = (e: KeyboardEvent) : void =>
+    keyPress(e: KeyboardEvent)
     {
         let inputChar = e.key;
+        e.preventDefault();
+
+        let eventCopy =
+        {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            keyCode: e.keyCode, charCode: e.charCode
+        };
+
         if(e.ctrlKey)
         {
             if(inputChar == 'z')
             {
-                // If there is exactly one item selected treat it as being edited.
-                if(this.currSelect.length == 1 && this.getBoardElement(this.currSelect[0]).isEditing)
-                {
-                    this.undoItemEdit(this.currSelect[0]);
-                }
-                else
-                {
-                    this.undo();
-                }
+                let message = { type: ControllerMessageTypes.UNDO };
+                this.worker.postMessage(message);
             }
             else if(inputChar == 'y')
             {
-                // If there is exactly one item selected treat it as being edited.
-                if(this.currSelect.length == 1 && this.getBoardElement(this.currSelect[0]).isEditing)
-                {
-                    this.redoItemEdit(this.currSelect[0]);
-                }
-                else
-                {
-                    this.redo();
-                }
+                let message = { type: ControllerMessageTypes.REDO };
+                this.worker.postMessage(message);
             }
         }
         else
         {
-            if(this.currSelect.length == 1)
-            {
-                e.preventDefault();
-
-                let elem = this.getBoardElement(this.currSelect[0]);
-
-                let retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
-
-                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if(retVal.newViewCentre)
-                {
-                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                this.handleInfoMessage(retVal.infoMessage);
-                this.handleAlertMessage(retVal.alertMessage);
-                this.setElementView(elem.id, retVal.newView);
-            }
+            let message = { type: ControllerMessageTypes.KEYBOARDINPUT, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
+            this.worker.postMessage(message);
         }
     }
 
-    contextCopy = (e: MouseEvent) : void =>
+    contextCopy(e: MouseEvent)
     {
         document.execCommand("copy");
     }
 
-    contextCut = (e: MouseEvent) : void =>
+    contextCut(e: MouseEvent)
     {
         document.execCommand("cut");
     }
 
-    contextPaste = (e: MouseEvent) : void =>
+    contextPaste(e: MouseEvent)
     {
         document.execCommand("paste");
     }
 
-    onCopy = (e: ClipboardEvent) : void =>
+    onCopy(e: ClipboardEvent)
     {
         console.log('COPY EVENT');
         /* TODO: */
     }
 
-    onPaste = (e: ClipboardEvent) : void =>
+    onPaste(e: ClipboardEvent)
     {
         console.log('PASTE EVENT');
         /* TODO: */
     }
 
-    onCut = (e: ClipboardEvent) : void =>
+    onCut(e: ClipboardEvent)
     {
         console.log('CUT EVENT');
         /* TODO: */
     }
 
-    dragOver = (e: DragEvent) : void =>
+    dragOver(e: DragEvent)
     {
         /* TODO: Pass to elements as necessary. */
         e.preventDefault();
     }
 
-    drop = (e: DragEvent) : void =>
+    drop(e: DragEvent)
     {
 
         var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
@@ -3133,34 +2075,13 @@ class WhiteBoardController
         */
     }
 
-    palleteChange = (change: BoardPalleteChange) : void =>
+    palleteChange(change: BoardPalleteChange)
     {
-        let retVal: BoardPalleteViewState = components.get(this.viewState.mode).pallete.handleChange(change);
-        let cursor: ElementCursor = components.get(this.viewState.mode).pallete.getCursor();
-
-        this.cursor = cursor.cursor;
-        this.cursorURL = cursor.url;
-        this.cursorOffset = cursor.offset;
-
-        let newView = Object.assign({}, this.viewState,
-        {
-            palleteState: retVal, cursor: this.cursor, cursorURL: this.cursorURL, cursorOffset: this.cursorOffset
-        });
-
-        this.updateView(newView);
-
-        if(this.currSelect.length == 1)
-        {
-            let elem = this.getBoardElement(this.currSelect[0]);
-
-            if(elem.type == this.viewState.mode)
-            {
-                elem.handlePalleteChange(change);
-            }
-        }
+        let message = { type: ControllerMessageTypes.PALLETECHANGE, change: change, mode: this.viewState.mode };
+        this.worker.postMessage(message);
     }
 
-    windowResize = (e: DocumentEvent) : void =>
+    windowResize(e: DocumentEvent)
     {
         let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let whitCont = document.getElementById("whiteboard-container");
@@ -3173,12 +2094,12 @@ class WhiteBoardController
         this.setViewBox(this.panX, this.panY, this.scaleF);
     }
 
-    windowUnload = (e: DocumentEvent) : void =>
+    windowUnload(e: DocumentEvent)
     {
         this.socket.emit('LEAVE', null);
     }
 
-    mouseWheel = (e: WheelEvent) : void =>
+    mouseWheel(e: WheelEvent)
     {
         let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
         let elemRect = whitElem.getBoundingClientRect();
@@ -3247,9 +2168,7 @@ class WhiteBoardController
         this.setViewBox(newPanX, newPanY, newScale);
     }
 
-
-
-    clearAlert = () : void =>
+    clearAlert()
     {
         this.removeAlert();
     }

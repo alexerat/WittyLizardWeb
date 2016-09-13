@@ -24,10 +24,6 @@ interface WhiteBoardViewState
     viewHeight: number;
     viewScale: number;
     eraseSize: number;
-    itemMoving: boolean;
-    itemResizing: boolean;
-    resizeVert: boolean;
-    resizeHorz: boolean;
     cursor: string;
     cursorURL: Array<string>;
     cursorOffset: Point;
@@ -317,11 +313,6 @@ getInitialState: function()
         viewWidth: 0,
         viewHeight: 0,
         viewScale: 1,
-        itemMoving: false,
-        itemResizing: false,
-        resizeVert: false,
-        resizeHorz: false,
-        blockAlert: false,
         boardElements: Immutable.OrderedMap<number, ComponentViewState>(),
         infoElements: Immutable.List<InfoElement>(),
         alertElements: Immutable.List<AlertElement>(),

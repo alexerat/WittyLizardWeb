@@ -575,127 +575,89 @@ var BoardModes = {
     SELECT: 'SELECT',
     ERASE: 'ERASE'
 };
+var ElementMessageTypes = {
+    DELETE: 0,
+    RESTORE: 1,
+    MOVE: 2
+};
 var WorkerMessageTypes;
 (function (WorkerMessageTypes) {
-    WorkerMessageTypes[WorkerMessageTypes["START"] = 0] = "START";
-    WorkerMessageTypes[WorkerMessageTypes["SETSOCKET"] = 1] = "SETSOCKET";
-    WorkerMessageTypes[WorkerMessageTypes["UPDATEVIEW"] = 2] = "UPDATEVIEW";
-    WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 3] = "SETVBOX";
-    WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 4] = "AUDIOSTREAM";
-    WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 5] = "VIDEOSTREAM";
-    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 6] = "NEWVIEWCENTRE";
-    WorkerMessageTypes[WorkerMessageTypes["NEWELEMENT"] = 7] = "NEWELEMENT";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 8] = "ELEMENTVIEW";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 9] = "ELEMENTDELETE";
-    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 10] = "NEWALERT";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 11] = "REMOVEALERT";
-    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 12] = "NEWINFO";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 13] = "REMOVEINFO";
+    WorkerMessageTypes[WorkerMessageTypes["UPDATEVIEW"] = 0] = "UPDATEVIEW";
+    WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 1] = "SETVBOX";
+    WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 2] = "AUDIOSTREAM";
+    WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 3] = "VIDEOSTREAM";
+    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 4] = "NEWVIEWCENTRE";
+    WorkerMessageTypes[WorkerMessageTypes["SETSELECT"] = 5] = "SETSELECT";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTMESSAGE"] = 6] = "ELEMENTMESSAGE";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 7] = "ELEMENTVIEW";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 8] = "ELEMENTDELETE";
+    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 9] = "NEWALERT";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 10] = "REMOVEALERT";
+    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 11] = "NEWINFO";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 12] = "REMOVEINFO";
 })(WorkerMessageTypes || (WorkerMessageTypes = {}));
-var BoardElement = (function () {
-    function BoardElement(type, id, x, y, width, height, callbacks, serverId, updateTime) {
-        this.id = id;
-        this.type = type;
-        this.sendServerMsg = callbacks.sendServerMsg;
-        this.createAlert = callbacks.createAlert;
-        this.createInfo = callbacks.createInfo;
-        this.updateBoardView = callbacks.updateBoardView;
-        this.getAudioStream = callbacks.getAudioStream;
-        this.getVideoStream = callbacks.getVideoStream;
-        this.serverId = serverId;
-        this.opBuffer = [];
-        this.infoElement = -1;
-        this.isEditing = false;
-        this.isSelected = false;
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        if (updateTime) {
-            this.updateTime = updateTime;
-        }
-        else {
-            this.updateTime = new Date();
-        }
-    }
-    BoardElement.prototype.updateView = function (updatedParams) {
-        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
-        return this.currentViewState;
-    };
-    BoardElement.prototype.getCurrentViewState = function () {
-        return this.currentViewState;
-    };
-    BoardElement.prototype.remoteEdit = function () {
-        this.operationPos = 0;
-        this.operationStack = [];
-    };
-    BoardElement.prototype.getDefaultInputReturn = function () {
-        var retVal = {
-            newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: this.isSelected,
-            newViewCentre: null, infoMessage: null, alertMessage: null
-        };
-        return retVal;
-    };
-    BoardElement.prototype.checkForServerId = function (messages) {
-        if (!this.serverId) {
-            for (var i_1 = 0; i_1 < messages.length; i_1++) {
-                console.log('No serverId, adding message to buffer.');
-                this.opBuffer.push(messages[i_1]);
-            }
-            return [];
-        }
-        else {
-            return messages;
-        }
-    };
-    BoardElement.prototype.handleUndo = function () {
-        var retVal = null;
-        if (this.operationPos > 0) {
-            retVal = this.operationStack[--this.operationPos].undo();
-        }
-        return retVal;
-    };
-    BoardElement.prototype.handleRedo = function () {
-        var retVal = null;
-        if (this.operationPos < this.operationStack.length) {
-            retVal = this.operationStack[this.operationPos++].redo();
-        }
-        return retVal;
-    };
-    return BoardElement;
-}());
-var BoardPallete = (function () {
-    function BoardPallete() {
-    }
-    BoardPallete.prototype.updateView = function (updatedParams) {
-        this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
-        return this.currentViewState;
-    };
-    return BoardPallete;
-}());
+var ControllerMessageTypes;
+(function (ControllerMessageTypes) {
+    ControllerMessageTypes[ControllerMessageTypes["START"] = 0] = "START";
+    ControllerMessageTypes[ControllerMessageTypes["SETOPTIONS"] = 1] = "SETOPTIONS";
+    ControllerMessageTypes[ControllerMessageTypes["REGISTER"] = 2] = "REGISTER";
+    ControllerMessageTypes[ControllerMessageTypes["MODECHANGE"] = 3] = "MODECHANGE";
+    ControllerMessageTypes[ControllerMessageTypes["AUDIOSTREAM"] = 4] = "AUDIOSTREAM";
+    ControllerMessageTypes[ControllerMessageTypes["VIDEOSTREAM"] = 5] = "VIDEOSTREAM";
+    ControllerMessageTypes[ControllerMessageTypes["NEWELEMENT"] = 6] = "NEWELEMENT";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTID"] = 7] = "ELEMENTID";
+    ControllerMessageTypes[ControllerMessageTypes["BATCHMOVE"] = 8] = "BATCHMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["BATCHDELETE"] = 9] = "BATCHDELETE";
+    ControllerMessageTypes[ControllerMessageTypes["BATCHRESTORE"] = 10] = "BATCHRESTORE";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMESSAGE"] = 11] = "ELEMENTMESSAGE";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOVER"] = 12] = "ELEMENTMOUSEOVER";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOUT"] = 13] = "ELEMENTMOUSEOUT";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDOWN"] = 14] = "ELEMENTMOUSEDOWN";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTERASE"] = 15] = "ELEMENTERASE";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEMOVE"] = 16] = "ELEMENTMOUSEMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEUP"] = 17] = "ELEMENTMOUSEUP";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSECLICK"] = 18] = "ELEMENTMOUSECLICK";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDBLCLICK"] = 19] = "ELEMENTMOUSEDBLCLICK";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHSTART"] = 20] = "ELEMENTTOUCHSTART";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHMOVE"] = 21] = "ELEMENTTOUCHMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHEND"] = 22] = "ELEMENTTOUCHEND";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHCANCEL"] = 23] = "ELEMENTTOUCHCANCEL";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTDRAG"] = 24] = "ELEMENTDRAG";
+    ControllerMessageTypes[ControllerMessageTypes["ELEMENTDROP"] = 25] = "ELEMENTDROP";
+    ControllerMessageTypes[ControllerMessageTypes["MOUSEDOWN"] = 26] = "MOUSEDOWN";
+    ControllerMessageTypes[ControllerMessageTypes["MOUSEMOVE"] = 27] = "MOUSEMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["MOUSEUP"] = 28] = "MOUSEUP";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHSTART"] = 29] = "TOUCHSTART";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHMOVE"] = 30] = "TOUCHMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHEND"] = 31] = "TOUCHEND";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHCANCEL"] = 32] = "TOUCHCANCEL";
+    ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 33] = "KEYBOARDINPUT";
+    ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 34] = "UNDO";
+    ControllerMessageTypes[ControllerMessageTypes["REDO"] = 35] = "REDO";
+    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 36] = "PALLETECHANGE";
+    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 37] = "LEAVE";
+    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 38] = "ERROR";
+})(ControllerMessageTypes || (ControllerMessageTypes = {}));
 var components = Immutable.Map();
-var registerComponent = function (componentName, Element, ElementView, Pallete, PalleteView, ModeView, DrawHandle) {
-    var pallete = null;
-    if (Pallete) {
-        pallete = new Pallete();
-    }
+var registerComponentView = function (componentName, ElementView, PalleteView, ModeView, DrawHandle) {
+    console.log('Registering view for: ' + componentName);
     var newComp = {
-        componentName: componentName, Element: Element, ElementView: ElementView, pallete: pallete, PalleteView: PalleteView,
-        ModeView: ModeView, DrawHandle: DrawHandle
+        componentName: componentName, ElementView: ElementView, PalleteView: PalleteView, ModeView: ModeView, DrawHandle: DrawHandle
     };
     components = components.set(componentName, newComp);
 };
 var WhiteBoardController = (function () {
-    function WhiteBoardController(isHost, userId) {
+    function WhiteBoardController(isHost, userId, allEdit, userEdit, workerUrl, componentFiles) {
         var _this = this;
         this.isHost = false;
         this.userId = 0;
+        this.allowAllEdit = false;
+        this.allowUserEdit = true;
         this.socket = null;
         this.lMousePress = false;
         this.wMousePress = false;
         this.rMousePress = false;
         this.touchPress = false;
-        this.moving = false;
         this.scaleF = 1;
         this.panX = 0;
         this.panY = 0;
@@ -704,1372 +666,50 @@ var WhiteBoardController = (function () {
         this.isPoint = true;
         this.prevX = 0;
         this.prevY = 0;
-        this.groupStartX = 0;
-        this.groupStartY = 0;
-        this.mouseDownHandled = false;
-        this.touchStartHandled = false;
-        this.currentHover = -1;
-        this.blockAlert = false;
         this.selectDrag = false;
-        this.currSelect = [];
-        this.groupMoving = false;
-        this.groupMoved = false;
-        this.operationStack = [];
-        this.operationPos = 0;
+        this.mouseDownHandled = false;
+        this.blockAlert = false;
+        this.selectCount = 0;
         this.fileUploads = [];
         this.fileReaders = [];
-        this.elementDict = [];
-        this.boardElems = [];
-        this.infoElems = [];
-        this.textOutBuffer = [];
-        this.textInBuffer = [];
-        this.setView = function (view) {
-            var whitElem = document.getElementById('whiteBoard-input');
-            var whitCont = document.getElementById('whiteboard-container');
-            whitElem.style.width = whitCont.clientWidth + 'px';
-            whitElem.style.height = whitCont.clientHeight + 'px';
-            whitElem.width = whitElem.clientWidth;
-            whitElem.height = whitElem.clientHeight;
-            window.addEventListener('resize', _this.windowResize);
-            window.addEventListener('beforeunload', _this.windowUnload);
-            document.addEventListener('keypress', _this.keyPress);
-            document.addEventListener('keydown', _this.keyDown);
-            var newVBox = '0 0 ' + whitElem.width + ' ' + whitElem.height;
-            _this.viewState.viewBox = newVBox;
-            _this.viewState.viewWidth = whitElem.width;
-            _this.viewState.viewHeight = whitElem.height;
-            _this.viewState.viewScale = 1;
-            _this.view = view;
-            view.setState(_this.viewState);
-        };
-        this.updateView = function (viewState) {
-            _this.viewState = viewState;
-            _this.view.storeUpdate(_this.viewState);
-        };
-        this.setElementView = function (id, newView) {
-            if (newView == null) {
-                console.log("Issue tracked here.");
-            }
-            var newElemList = _this.viewState.boardElements.set(id, newView);
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.getAudioStream = function () {
-            return null;
-        };
-        this.getVideoStream = function () {
-            return null;
-        };
-        this.newAlert = function (type, message) {
-            var newMsg = { type: type, message: message };
-            var newElemList = _this.viewState.alertElements.push(newMsg);
-            _this.updateView(Object.assign({}, _this.viewState, { alertElements: newElemList }));
-        };
-        this.removeAlert = function () {
-            var newElemList = _this.viewState.alertElements.shift();
-            _this.updateView(Object.assign({}, _this.viewState, { alertElements: newElemList }));
-        };
-        this.deleteElement = function (id) {
-            var newElemList = _this.viewState.boardElements.filter(function (element) { return element.id !== id; });
-            _this.updateView(Object.assign({}, _this.viewState, { boardElements: newElemList }));
-        };
-        this.setMode = function (newMode) {
-            var palleteView = {};
-            var cursor = { cursor: 'auto', url: [], offset: { x: 0, y: 0 } };
-            if (newMode != BoardModes.SELECT && newMode != BoardModes.ERASE) {
-                palleteView = components.get(newMode).pallete.getCurrentViewState();
-                cursor = components.get(newMode).pallete.getCursor();
-            }
-            _this.cursor = cursor.cursor;
-            _this.cursorURL = cursor.url;
-            _this.cursorOffset = cursor.offset;
-            _this.updateView(Object.assign({}, _this.viewState, {
-                mode: newMode, palleteState: palleteView, cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset
-            }));
-        };
-        this.sendMessage = function (id, type, message) {
-            var serverId = _this.getBoardElement(id).serverId;
-            var msg = { id: serverId, type: type, payload: message };
-            console.log('Sending message: ' + JSON.stringify(msg));
-            _this.socket.emit('MSG-COMPONENT', msg);
-        };
-        this.selectGroup = function (ids) {
-            for (var i_2 = 0; i_2 < _this.currSelect.length; i_2++) {
-                var elem = _this.getBoardElement(_this.currSelect[i_2]);
-                if (elem.isDeleted) {
-                    console.log('Deselect is probably the issue.');
-                }
-                var newView = elem.handleDeselect();
-                _this.setElementView(elem.id, newView);
-            }
-            for (var i_3 = 0; i_3 < ids.length; i_3++) {
-                var elem = _this.getBoardElement(ids[i_3]);
-                if (!elem.isDeleted) {
-                    var newView = elem.handleSelect();
-                    _this.currSelect.push(elem.id);
-                    _this.setElementView(elem.id, newView);
-                }
-            }
-        };
-        this.handleElementOperation = function (id, undoOp, redoOp) {
-            if (undoOp && redoOp) {
-                _this.newOperation(id, undoOp, redoOp);
-            }
-            else if (undoOp || redoOp) {
-                console.error('Element provided either undo or redo operation. It must specify neither or both.');
-            }
-        };
-        this.handleElementMessages = function (id, type, messages) {
-            for (var i_4 = 0; i_4 < messages.length; i_4++) {
-                _this.sendMessage(id, type, messages[i_4]);
-            }
-        };
-        this.handleMouseElementSelect = function (e, elem, isSelected, cursor) {
-            if (isSelected) {
-                var alreadySelected = false;
-                for (var i_5 = 0; i_5 < _this.currSelect.length; i_5++) {
-                    if (_this.currSelect[i_5] == elem.id) {
-                        alreadySelected = true;
-                    }
-                }
-                if (!alreadySelected) {
-                    if (e.ctrlKey) {
-                        _this.currSelect.push(elem.id);
-                    }
-                    else {
-                        for (var i_6 = 0; i_6 < _this.currSelect.length; i_6++) {
-                            if (_this.currSelect[i_6] != elem.id) {
-                                var selElem = _this.getBoardElement(_this.currSelect[i_6]);
-                                var selElemView = selElem.handleDeselect();
-                                _this.setElementView(selElem.id, selElemView);
-                            }
-                        }
-                        _this.currSelect = [];
-                        _this.currSelect.push(elem.id);
-                    }
-                }
-                if (_this.currSelect.length == 1 && cursor) {
-                    if (_this.cursor != cursor.cursor || _this.cursorURL != cursor.url) {
-                        _this.cursor = cursor.cursor;
-                        _this.cursorURL = cursor.url;
-                        _this.cursorOffset = cursor.offset;
-                        _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
-                    }
-                }
-            }
-            else {
-                if (_this.currSelect.length == 1 && _this.currSelect[0] == elem.id) {
-                    _this.cursor = 'auto';
-                    _this.cursorURL = [];
-                    _this.cursorOffset = { x: 0, y: 0 };
-                    _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
-                    _this.currSelect = [];
-                }
-                else {
-                    for (var i_7 = 0; i_7 < _this.currSelect.length; i_7++) {
-                        if (_this.currSelect[i_7] == elem.id) {
-                            _this.currSelect.splice(i_7, 1);
-                        }
-                    }
-                }
-            }
-        };
-        this.handleTouchElementSelect = function (e, elem, isSelected, cursor) {
-            if (isSelected) {
-                if (e.ctrlKey) {
-                    var alreadySelected = false;
-                    for (var i_8 = 0; i_8 < _this.currSelect.length; i_8++) {
-                        if (_this.currSelect[i_8] == elem.id) {
-                            alreadySelected = true;
-                        }
-                    }
-                    if (!alreadySelected) {
-                        _this.currSelect.push(elem.id);
-                    }
-                }
-                else {
-                    for (var i_9 = 0; i_9 < _this.currSelect.length; i_9++) {
-                        if (_this.currSelect[i_9] != elem.id) {
-                            var selElem = _this.getBoardElement(_this.currSelect[i_9]);
-                            var selElemView = selElem.handleDeselect();
-                            _this.setElementView(selElem.id, selElemView);
-                        }
-                    }
-                    _this.currSelect = [];
-                    _this.currSelect.push(elem.id);
-                }
-                if (_this.currSelect.length == 1 && cursor) {
-                    _this.cursor = cursor.cursor;
-                    _this.cursorURL = cursor.url;
-                    _this.cursorOffset = cursor.offset;
-                    _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset }));
-                }
-            }
-            else {
-                for (var i_10 = 0; i_10 < _this.currSelect.length; i_10++) {
-                    if (_this.currSelect[i_10] == elem.id) {
-                        _this.currSelect.splice(i_10, 1);
-                    }
-                }
-            }
-        };
-        this.handleElementPalleteChanges = function (elem, changes) {
-            for (var j_1 = 0; j_1 < changes.length; j_1++) {
-                var change_1 = changes[j_1];
-                components.get(elem.type).pallete.handleChange(change_1);
-                for (var i_11 = 0; i_11 < _this.currSelect.length; i_11++) {
-                    var selElem = _this.getBoardElement(_this.currSelect[i_11]);
-                    if (selElem.id != elem.id && selElem.type == elem.type) {
-                        var retVal = selElem.handlePalleteChange(change_1);
-                        _this.handleElementMessages(selElem.id, selElem.type, retVal.serverMessages);
-                        _this.handleElementOperation(selElem.id, retVal.undoOp, retVal.redoOp);
-                        _this.setElementView(selElem.id, retVal.newView);
-                    }
-                }
-            }
-        };
-        this.handleElementNewViewCentre = function (x, y) {
-            var whitElem = document.getElementById('whiteBoard-input');
-            var whitCont = document.getElementById('whiteboard-container');
-            var clientWidth = whitCont.clientWidth;
-            var clientHeight = whitCont.clientHeight;
-            var xChange = x - (_this.panX + clientWidth * _this.scaleF * 0.5);
-            var yChange = y - (_this.panY + clientHeight * _this.scaleF * 0.5);
-            var newPanX = _this.panX + xChange;
-            var newPanY = _this.panY + yChange;
-            if (newPanX < 0) {
-                newPanX = 0;
-            }
-            if (newPanY < 0) {
-                newPanY = 0;
-            }
-            _this.setViewBox(newPanX, newPanY, _this.scaleF);
-        };
-        this.handleRemoteEdit = function (id) {
-            for (var i_12 = 0; i_12 < _this.operationStack.length; i_12++) {
-                if (_this.operationStack[i_12].ids.indexOf(id) != -1) {
-                    var newOp = {
-                        ids: _this.operationStack[i_12].ids,
-                        undos: [(function (elemIds) {
-                                return function () { _this.selectGroup(elemIds); return null; };
-                            })(_this.operationStack[i_12].ids)],
-                        redos: [(function (elemIds) {
-                                return function () { _this.selectGroup(elemIds); return null; };
-                            })(_this.operationStack[i_12].ids)]
-                    };
-                    _this.operationStack.splice(i_12, 1, newOp);
-                }
-            }
-        };
-        this.handleInfoMessage = function (data) {
-        };
-        this.handleAlertMessage = function (msg) {
-            if (msg) {
-                _this.newAlert(msg.header, msg.message);
-            }
-        };
-        this.startMove = function (startX, startY) {
-            _this.groupStartX = startX;
-            _this.groupStartY = startY;
-            _this.groupMoving = true;
-            _this.cursor = 'move';
-            _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor }));
-            for (var i_13 = 0; i_13 < _this.currSelect.length; i_13++) {
-                var elem = _this.getBoardElement(_this.currSelect[i_13]);
-                var retVal = elem.startMove();
-            }
-        };
-        this.moveGroup = function (x, y, editTime) {
-            for (var i_14 = 0; i_14 < _this.currSelect.length; i_14++) {
-                var elem = _this.getBoardElement(_this.currSelect[i_14]);
-                var elemView = elem.handleMove(x, y);
-                _this.setElementView(elem.id, elemView);
-            }
-        };
-        this.endMove = function (endX, endY) {
-            _this.groupMoving = false;
-            _this.cursor = 'auto';
-            _this.updateView(Object.assign({}, _this.viewState, { cursor: _this.cursor }));
-            var undoOpList = [];
-            var redoOpList = [];
-            for (var i_15 = 0; i_15 < _this.currSelect.length; i_15++) {
-                var elem = _this.getBoardElement(_this.currSelect[i_15]);
-                var retVal = elem.endMove();
-                var undoOp = (function (element, changeX, changeY) {
-                    return function () {
-                        element.handleMove(-changeX, -changeY);
-                        var ret = element.endMove();
-                        _this.handleElementMessages(element.id, element.type, ret.serverMessages);
-                        _this.setElementView(element.id, ret.newView);
-                    };
-                })(elem, endX - _this.groupStartX, endY - _this.groupStartY);
-                var redoOp = (function (element, changeX, changeY) {
-                    return function () {
-                        element.handleMove(changeX, changeY);
-                        var ret = element.endMove();
-                        _this.handleElementMessages(element.id, element.type, ret.serverMessages);
-                        _this.setElementView(element.id, ret.newView);
-                    };
-                })(elem, endX - _this.groupStartX, endY - _this.groupStartY);
-                _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                _this.setElementView(elem.id, retVal.newView);
-                undoOpList.push(undoOp);
-                redoOpList.push(redoOp);
-            }
-            _this.operationStack.splice(_this.operationPos, _this.operationStack.length - _this.operationPos);
-            var newOp = { ids: _this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
-            _this.operationStack[_this.operationPos++] = newOp;
-        };
-        this.selectElement = function (id) {
-            var elem = _this.getBoardElement(id);
-            if (!elem.isDeleted) {
-                var newElemView = elem.handleSelect();
-                _this.setElementView(id, newElemView);
-            }
-        };
-        this.deselectElement = function (id) {
-            var elem = _this.getBoardElement(id);
-            var newElemView = elem.handleDeselect();
-            _this.setElementView(elem.id, newElemView);
-        };
-        this.addInfoMessage = function (x, y, width, height, header, message) {
-            var newInfo = {
-                id: -1, x: x, y: y, width: width, height: height, header: header, message: message
-            };
-            var localId = _this.infoElems.length;
-            _this.infoElems[localId] = newInfo;
-            newInfo.id = localId;
-            var newInfoView = {
-                x: x, y: y, width: width, height: height, header: header, message: message
-            };
-            var newInfoList = _this.viewState.infoElements.push(newInfoView);
-            _this.updateView(Object.assign({}, _this.viewState, { infoElements: newInfoList }));
-            return localId;
-        };
-        this.removeInfoMessage = function (id) {
-            var newInfoList = _this.viewState.infoElements.delete(id);
-            _this.updateView(Object.assign({}, _this.viewState, { infoElements: newInfoList }));
-        };
-        this.setViewBox = function (panX, panY, scaleF) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var vBoxW = whitElem.clientWidth * scaleF;
-            var vBoxH = whitElem.clientHeight * scaleF;
-            _this.scaleF = scaleF;
-            _this.panX = panX;
-            _this.panY = panY;
-            var newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
-            _this.updateView(Object.assign({}, _this.viewState, {
-                viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF
-            }));
-        };
-        this.getBoardElement = function (id) {
-            if (_this.boardElems[id]) {
-                return _this.boardElems[id];
-            }
-            else {
-                throw 'Element does not exist';
-            }
-        };
-        this.getInfoMessage = function (id) {
-            return _this.infoElems[id];
-        };
-        this.undo = function () {
-            console.log('Undo, stack length. ' + _this.operationStack.length);
-            if (_this.operationPos > 0) {
-                var operation = _this.operationStack[--_this.operationPos];
-                for (var i_16 = 0; i_16 < operation.undos.length; i_16++) {
-                    var retVal = operation.undos[i_16]();
-                    if (retVal) {
-                        var elem = _this.getBoardElement(retVal.id);
-                        _this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
-                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                        _this.setElementView(retVal.id, retVal.newView);
-                        if (retVal.newViewCentre) {
-                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                        }
-                        if (retVal.wasDelete) {
-                            _this.deleteElement(elem.id);
-                        }
-                    }
-                }
-            }
-        };
-        this.redo = function () {
-            if (_this.operationPos < _this.operationStack.length) {
-                var operation = _this.operationStack[_this.operationPos++];
-                for (var i_17 = 0; i_17 < operation.redos.length; i_17++) {
-                    var retVal = operation.redos[i_17]();
-                    if (retVal) {
-                        var elem = _this.getBoardElement(retVal.id);
-                        _this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
-                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                        _this.setElementView(retVal.id, retVal.newView);
-                        if (retVal.newViewCentre) {
-                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                        }
-                        if (retVal.wasDelete) {
-                            _this.deleteElement(elem.id);
-                        }
-                    }
-                }
-            }
-        };
-        this.newOperation = function (itemId, undoOp, redoOp) {
-            _this.operationStack.splice(_this.operationPos, _this.operationStack.length - _this.operationPos);
-            var newOp = { ids: [itemId], undos: [undoOp], redos: [redoOp] };
-            _this.operationStack[_this.operationPos++] = newOp;
-        };
-        this.undoItemEdit = function (id) {
-            var elem = _this.getBoardElement(id);
-            if (!elem.isDeleted && elem.operationPos > 0) {
-                elem.operationStack[--elem.operationPos].undo();
-            }
-        };
-        this.redoItemEdit = function (id) {
-            var elem = _this.getBoardElement(id);
-            if (!elem.isDeleted && elem.operationPos < elem.operationStack.length) {
-                elem.operationStack[elem.operationPos++].redo();
-            }
-        };
-        this.addHoverInfo = function (id) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var elem = _this.getBoardElement(id);
-            var infoId = _this.addInfoMessage(_this.prevX - offsetX + 20, _this.prevY - offsetY, 200, 200, 'Test Message', 'User ID: ' + elem.user);
-            elem.infoElement = infoId;
-        };
-        this.removeHoverInfo = function (id) {
-            var elem = _this.getBoardElement(id);
-            elem.infoElement = -1;
-            _this.currentHover = -1;
-            _this.removeInfoMessage(elem.infoElement);
-        };
-        this.infoMessageTimeout = function (id, self) {
-            if (_this.lMousePress || _this.rMousePress || _this.wMousePress) {
-                var elem = _this.getBoardElement(id);
-                clearTimeout(elem.hoverTimer);
-                elem.hoverTimer = setTimeout(_this.infoMessageTimeout, 2000, id);
-            }
-            else {
-                _this.addHoverInfo(id);
-            }
-        };
-        this.compareUpdateTime = function (elem1, elem2) {
-            if (elem1.updateTime.getTime() > elem2.updateTime.getTime()) {
-                return 1;
-            }
-            else if (elem1.updateTime.getTime() < elem2.updateTime.getTime()) {
-                return -1;
-            }
-            else {
-                return 0;
-            }
-        };
-        this.sendNewElement = function (msg) {
-            _this.socket.emit('NEW-ELEMENT', msg);
-        };
-        this.setSocket = function (socket) {
-            var self = _this;
-            _this.socket = socket;
-            _this.socket.on('JOIN', function (data) {
-            });
-            _this.socket.on('NEW-ELEMENT', function (data) {
-                if (self.elementDict[data.serverId] == undefined || self.elementDict[data.serverId] == null) {
-                    var localId = self.boardElems.length;
-                    var callbacks = {
-                        sendServerMsg: (function (id, type) { return function (msg) { self.sendMessage(id, type, msg); }; })(localId, data.type),
-                        createAlert: function (header, message) { },
-                        createInfo: function (x, y, width, height, header, message) { return self.addInfoMessage(x, y, width, height, header, message); },
-                        removeInfo: function (id) { self.removeInfoMessage(id); },
-                        updateBoardView: (function (id) { return function (newView) { self.setElementView(id, newView); }; })(localId),
-                        getAudioStream: function () { return self.getAudioStream(); },
-                        getVideoStream: function () { return self.getVideoStream(); }
-                    };
-                    var creationArg = { id: localId, userId: data.userId, callbacks: callbacks, serverMsg: data.payload, serverId: data.serverId };
-                    self.boardElems[localId] = components.get(data.type).Element.createElement(creationArg);
-                    self.elementDict[data.serverId] = localId;
-                    self.setElementView(self.boardElems[localId].id, self.boardElems[localId].getCurrentViewState());
-                }
-            });
-            _this.socket.on('ELEMENT-ID', function (data) {
-                self.elementDict[data.serverId] = data.localId;
-                var elem = self.boardElems[data.localId];
-                var retVal = elem.setServerId(data.serverId);
-                self.handleElementMessages(elem.id, elem.type, retVal);
-            });
-            _this.socket.on('MSG-COMPONENT', function (data) {
-                if (self.elementDict[data.serverId] != undefined && self.elementDict[data.serverId] != null) {
-                    var elem = self.getBoardElement(self.elementDict[data.serverId]);
-                    if (elem.type == data.type) {
-                        var retVal = elem.handleServerMessage(data.payload);
-                        if (retVal.wasEdit) {
-                            self.handleRemoteEdit(elem.id);
-                        }
-                        self.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                        self.setElementView(elem.id, retVal.newView);
-                        self.handleInfoMessage(retVal.infoMessage);
-                        self.handleAlertMessage(retVal.alertMessage);
-                        if (retVal.wasDelete) {
-                            self.deleteElement(elem.id);
-                            if (self.currSelect.indexOf(elem.id)) {
-                                self.currSelect.splice(self.currSelect.indexOf(elem.id), 1);
-                            }
-                            if (self.currentHover == elem.id) {
-                                clearTimeout(elem.hoverTimer);
-                                self.removeHoverInfo(self.currentHover);
-                            }
-                            for (var i_18 = 0; i_18 < self.operationStack.length; i_18++) {
-                                if (self.operationStack[i_18].ids.indexOf(elem.id) != -1) {
-                                    console.log('Element in this set.');
-                                    if (self.operationStack[i_18].ids.length == 1) {
-                                        if (i_18 <= self.operationPos) {
-                                            self.operationPos--;
-                                        }
-                                        self.operationStack.splice(i_18--, 1);
-                                    }
-                                    else {
-                                        console.log('This should work.');
-                                        self.operationStack[i_18].ids.splice(self.operationStack[i_18].ids.indexOf(elem.id), 1);
-                                        var newOp = {
-                                            ids: self.operationStack[i_18].ids,
-                                            undos: [(function (elemIds) {
-                                                    return function () { self.selectGroup(elemIds); return null; };
-                                                })(self.operationStack[i_18].ids.slice())],
-                                            redos: [(function (elemIds) {
-                                                    return function () { self.selectGroup(elemIds); return null; };
-                                                })(self.operationStack[i_18].ids.slice())]
-                                        };
-                                        self.operationStack.splice(i_18, 1, newOp);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        console.error('Received bad element message.');
-                    }
-                }
-                else if (data.type && data.serverId) {
-                    var msg = { type: data.type, id: data.serverId };
-                    console.log('Unknown element. ID: ' + data.serverId);
-                    self.socket.emit('UNKNOWN-ELEMENT', msg);
-                }
-            });
-            _this.socket.on('ERROR', function (message) {
-                console.log('SERVER: ' + message);
-                self.newAlert('SERVER ERROR', 'A server error has occured, some data in this session may be lost.');
-            });
-        };
-        this.modeChange = function (newMode) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var context = whitElem.getContext('2d');
-            context.clearRect(0, 0, whitElem.width, whitElem.height);
-            for (var i_19 = 0; i_19 < _this.currSelect.length; i_19++) {
-                var elem = _this.getBoardElement(_this.currSelect[i_19]);
-                var retVal = elem.handleDeselect();
-                _this.setElementView(elem.id, retVal);
-            }
-            _this.currSelect = [];
-            _this.setMode(newMode);
-        };
-        this.changeEraseSize = function (newSize) {
-            var newView = Object.assign({}, _this.viewState, { eraseSize: newSize });
-            _this.updateView(newView);
-        };
-        this.elementMouseOver = function (id, e) {
-            var elem = _this.getBoardElement(id);
-            if (_this.currentHover == -1) {
-                _this.currentHover = id;
-                elem.hoverTimer = setTimeout(_this.infoMessageTimeout, 2000, id);
-            }
-            else {
-                var prevElem = _this.getBoardElement(_this.currentHover);
-                clearTimeout(prevElem.hoverTimer);
-            }
-        };
-        this.elementMouseOut = function (id, e) {
-            var elem = _this.getBoardElement(id);
-            if (_this.currentHover == id) {
-                clearTimeout(elem.hoverTimer);
-                _this.removeHoverInfo(_this.currentHover);
-            }
-        };
-        this.elementMouseDown = function (id, e, componenet, subId) {
-            e.preventDefault();
-            var elem = _this.getBoardElement(id);
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-            var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-            if (_this.currentHover == id) {
-                clearTimeout(elem.hoverTimer);
-                _this.removeHoverInfo(_this.currentHover);
-            }
-            if (_this.viewState.mode == BoardModes.SELECT) {
-                if (_this.currSelect.length > 1 && elem.isSelected) {
-                    _this.startMove(xPos, yPos);
-                }
-                else {
-                    var retVal = elem.handleMouseDown(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                    _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                    _this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
-                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if (retVal.newViewCentre) {
-                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    _this.handleInfoMessage(retVal.infoMessage);
-                    _this.handleAlertMessage(retVal.alertMessage);
-                    _this.setElementView(id, retVal.newView);
-                }
-                _this.mouseDownHandled = true;
-            }
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-        };
-        this.elementMouseMove = function (id, e, componenet, subId) {
-            var elem = _this.getBoardElement(id);
-            if (_this.viewState.mode == BoardModes.ERASE) {
-                if (_this.lMousePress) {
-                    if (_this.isHost || _this.userId == elem.user) {
-                        var retVal = elem.handleErase();
-                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                        _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                        _this.deleteElement(id);
-                        if (_this.currentHover == id) {
-                            clearTimeout(elem.hoverTimer);
-                            _this.removeHoverInfo(_this.currentHover);
-                        }
-                    }
-                }
-            }
-            else if (_this.viewState.mode == BoardModes.SELECT && !_this.groupMoving) {
-                var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                var retVal = elem.handleMouseMove(e, changeX, changeY, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-            }
-        };
-        this.elementMouseUp = function (id, e, componenet, subId) {
-            if (_this.viewState.mode == BoardModes.SELECT) {
-                var elem = _this.getBoardElement(id);
-                var whitElem_1 = document.getElementById("whiteBoard-input");
-                var elemRect_1 = whitElem_1.getBoundingClientRect();
-                var offsetY = elemRect_1.top - document.body.scrollTop;
-                var offsetX = elemRect_1.left - document.body.scrollLeft;
-                var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-                var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-                var retVal = elem.handleMouseUp(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-            }
-        };
-        this.elementMouseClick = function (id, e, componenet, subId) {
-            var elem = _this.getBoardElement(id);
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-            var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-            if (_this.viewState.mode == BoardModes.ERASE) {
-                if (_this.isHost || _this.userId == elem.user) {
-                    var retVal = elem.handleErase();
-                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                    _this.deleteElement(id);
-                    if (_this.currentHover == id) {
-                        clearTimeout(elem.hoverTimer);
-                        _this.removeHoverInfo(_this.currentHover);
-                    }
-                }
-            }
-            else if (_this.viewState.mode == BoardModes.SELECT && _this.currSelect.length < 2) {
-                var retVal = elem.handleMouseClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-            }
-        };
-        this.elementMouseDoubleClick = function (id, e, componenet, subId) {
-            if (_this.viewState.mode == BoardModes.SELECT) {
-                var elem = _this.getBoardElement(id);
-                var whitElem_2 = document.getElementById("whiteBoard-input");
-                var elemRect_2 = whitElem_2.getBoundingClientRect();
-                var offsetY = elemRect_2.top - document.body.scrollTop;
-                var offsetX = elemRect_2.left - document.body.scrollLeft;
-                var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-                var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-                var retVal = elem.handleDoubleClick(e, xPos - elem.x, yPos - elem.y, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-                e.stopPropagation();
-            }
-        };
-        this.elementTouchStart = function (id, e, componenet, subId) {
-            var elem = _this.getBoardElement(id);
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var localTouches;
-            for (var i_20 = 0; i_20 < e.touches.length; i_20++) {
-                var touch = e.touches.item(i_20);
-                var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
-                var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
-                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
-            }
-            if (_this.currSelect.length > 1 && elem.isSelected) {
-            }
-            else {
-                var retVal = elem.handleTouchStart(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleTouchElementSelect(e, elem, retVal.isSelected, retVal.cursor);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-                _this.touchStartHandled = true;
-            }
-            _this.prevTouch = e.touches;
-        };
-        this.elementTouchMove = function (id, e, componenet, subId) {
-            var touchMoves;
-            if (_this.viewState.mode == BoardModes.ERASE) {
-                var elem = _this.getBoardElement(id);
-                if (_this.isHost || _this.userId == elem.user) {
-                    var retVal = elem.handleErase();
-                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                    _this.deleteElement(id);
-                }
-            }
-            else if (_this.viewState.mode == BoardModes.SELECT && !_this.groupMoving) {
-                for (var i_21 = 0; i_21 < e.touches.length; i_21++) {
-                    var touch = e.touches.item(i_21);
-                    for (var j_2 = 0; j_2 < _this.prevTouch.length; j_2++) {
-                        if (_this.prevTouch[j_2].identifier == touch.identifier) {
-                            var xChange = (touch.clientX - _this.prevTouch[j_2].clientX) * _this.scaleF;
-                            var yChange = (touch.clientY - _this.prevTouch[j_2].clientY) * _this.scaleF;
-                            var touchChange = { x: xChange, y: yChange, identifer: touch.identifier };
-                            touchMoves.push(touchChange);
-                        }
-                    }
-                }
-                var retVal = elem.handleTouchMove(e, touchMoves, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-                _this.prevTouch = e.touches;
-            }
-        };
-        this.elementTouchEnd = function (id, e, componenet, subId) {
-            if (_this.viewState.mode == BoardModes.SELECT) {
-                var elem = _this.getBoardElement(id);
-                var whitElem_3 = document.getElementById("whiteBoard-input");
-                var elemRect_3 = whitElem_3.getBoundingClientRect();
-                var offsetY = elemRect_3.top - document.body.scrollTop;
-                var offsetX = elemRect_3.left - document.body.scrollLeft;
-                var localTouches = void 0;
-                for (var i_22 = 0; i_22 < e.touches.length; i_22++) {
-                    var touch = e.touches.item(i_22);
-                    var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
-                    var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
-                    localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
-                }
-                var retVal = elem.handleTouchEnd(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-            }
-        };
-        this.elementTouchCancel = function (id, e, componenet, subId) {
-            if (_this.viewState.mode == BoardModes.SELECT) {
-                var elem = _this.getBoardElement(id);
-                var whitElem_4 = document.getElementById("whiteBoard-input");
-                var elemRect_4 = whitElem_4.getBoundingClientRect();
-                var offsetY = elemRect_4.top - document.body.scrollTop;
-                var offsetX = elemRect_4.left - document.body.scrollLeft;
-                var localTouches = void 0;
-                for (var i_23 = 0; i_23 < e.touches.length; i_23++) {
-                    var touch = e.touches.item(i_23);
-                    var xPos = (touch.clientX - offsetX) * _this.scaleF + _this.panX;
-                    var yPos = (touch.clientY - offsetY) * _this.scaleF + _this.panY;
-                    localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
-                }
-                var retVal = elem.handleTouchCancel(e, localTouches, components.get(elem.type).pallete, componenet, subId);
-                _this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
-                _this.handleElementMessages(id, elem.type, retVal.serverMessages);
-                _this.handleTouchElementSelect(e, elem, retVal.isSelected);
-                _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                if (retVal.newViewCentre) {
-                    _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                }
-                _this.handleInfoMessage(retVal.infoMessage);
-                _this.handleAlertMessage(retVal.alertMessage);
-                _this.setElementView(id, retVal.newView);
-            }
-        };
-        this.elementDragOver = function (id, e, componenet, subId) {
-            e.stopPropagation();
-        };
-        this.elementDrop = function (id, e, componenet, subId) {
-            e.stopPropagation();
-        };
-        this.mouseDown = function (e) {
-            e.preventDefault();
-            if (!_this.lMousePress && !_this.wMousePress && !_this.rMousePress) {
-                _this.lMousePress = e.buttons & 1 ? true : false;
-                _this.rMousePress = e.buttons & 2 ? true : false;
-                _this.wMousePress = e.buttons & 4 ? true : false;
-                _this.isPoint = true;
-                var whitElem_5 = document.getElementById("whiteBoard-input");
-                var elemRect_5 = whitElem_5.getBoundingClientRect();
-                var offsetY = elemRect_5.top - document.body.scrollTop;
-                var offsetX = elemRect_5.left - document.body.scrollLeft;
-                whitElem_5.width = whitElem_5.clientWidth;
-                whitElem_5.height = whitElem_5.clientHeight;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                var newPoint = { x: 0, y: 0 };
-                _this.pointList = [];
-                newPoint.x = Math.round(e.clientX - offsetX);
-                newPoint.y = Math.round(e.clientY - offsetY);
-                _this.pointList[_this.pointList.length] = newPoint;
-                _this.downPoint = { x: Math.round(e.clientX - offsetX), y: Math.round(e.clientY - offsetY) };
-                if (_this.viewState.alertElements.size == 0) {
-                    _this.blockAlert = true;
-                    _this.updateView(Object.assign({}, _this.viewState, { blockAlert: true }));
-                }
-            }
-            if (_this.mouseDownHandled) {
-                _this.mouseDownHandled = false;
-            }
-            else {
-                if (_this.currSelect.length > 0) {
-                    for (var i_24 = 0; i_24 < _this.currSelect.length; i_24++) {
-                        _this.deselectElement(_this.currSelect[i_24]);
-                    }
-                    _this.currSelect = [];
-                }
-                else {
-                    if (_this.lMousePress && _this.viewState.mode == BoardModes.SELECT) {
-                        _this.selectDrag = true;
-                    }
-                }
-                if (_this.currentHover != -1) {
-                    var elem = _this.getBoardElement(_this.currentHover);
-                    if (elem.infoElement != -1) {
-                        _this.removeHoverInfo(_this.currentHover);
-                    }
-                    clearTimeout(elem.hoverTimer);
-                }
-            }
-        };
-        this.mouseMove = function (e) {
-            if (_this.currentHover != -1) {
-                var elem = _this.getBoardElement(_this.currentHover);
-                if (elem.infoElement != -1) {
-                    _this.removeHoverInfo(_this.currentHover);
-                }
-                else {
-                    clearTimeout(elem.hoverTimer);
-                    elem.hoverTimer = setTimeout(_this.infoMessageTimeout, 2000, _this.currentHover);
-                }
-            }
-            if (_this.wMousePress) {
-                var whitElem = document.getElementById("whiteBoard-input");
-                var newPanX = _this.panX + (_this.prevX - e.clientX) * _this.scaleF;
-                var newPanY = _this.panY + (_this.prevY - e.clientY) * _this.scaleF;
-                _this.prevX = e.clientX;
-                _this.prevY = e.clientY;
-                if (newPanX < 0) {
-                    newPanX = 0;
-                }
-                if (newPanY < 0) {
-                    newPanY = 0;
-                }
-                _this.setViewBox(newPanX, newPanY, _this.scaleF);
-            }
-            else if (_this.lMousePress) {
-                var whitElem = document.getElementById("whiteBoard-input");
-                var elemRect = whitElem.getBoundingClientRect();
-                var offsetY = elemRect.top - document.body.scrollTop;
-                var offsetX = elemRect.left - document.body.scrollLeft;
-                var context = whitElem.getContext('2d');
-                var newPoint = { x: 0, y: 0 };
-                newPoint.x = Math.round(e.clientX - offsetX);
-                newPoint.y = Math.round(e.clientY - offsetY);
-                _this.pointList.push(newPoint);
-                if (_this.viewState.mode == BoardModes.SELECT) {
-                    if (_this.groupMoving) {
-                        var changeX = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY = (e.clientY - _this.prevY) * _this.scaleF;
-                        _this.moveGroup(changeX, changeY, new Date());
-                        _this.prevX = e.clientX;
-                        _this.prevY = e.clientY;
-                        _this.groupMoved = true;
-                    }
-                    else if (_this.selectDrag) {
-                        var rectLeft = void 0;
-                        var rectTop = void 0;
-                        var rectWidth = void 0;
-                        var rectHeight = void 0;
-                        if (newPoint.x > _this.downPoint.x) {
-                            rectLeft = _this.downPoint.x;
-                            rectWidth = newPoint.x - _this.downPoint.x;
-                        }
-                        else {
-                            rectLeft = newPoint.x;
-                            rectWidth = _this.downPoint.x - newPoint.x;
-                        }
-                        if (newPoint.y > _this.downPoint.y) {
-                            rectTop = _this.downPoint.y;
-                            rectHeight = newPoint.y - _this.downPoint.y;
-                        }
-                        else {
-                            rectTop = newPoint.y;
-                            rectHeight = _this.downPoint.y - newPoint.y;
-                        }
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        if (rectWidth > 0 && rectHeight > 0) {
-                            context.beginPath();
-                            context.strokeStyle = 'black';
-                            context.setLineDash([5]);
-                            context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
-                            context.stroke();
-                        }
-                        _this.selectLeft = _this.panX + rectLeft * _this.scaleF;
-                        _this.selectTop = _this.panY + rectTop * _this.scaleF;
-                        _this.selectWidth = rectWidth * _this.scaleF;
-                        _this.selectHeight = rectHeight * _this.scaleF;
-                    }
-                    else if (_this.currSelect.length == 1) {
-                        var elem = _this.getBoardElement(_this.currSelect[0]);
-                        var changeX_1 = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY_1 = (e.clientY - _this.prevY) * _this.scaleF;
-                        var retVal = elem.handleBoardMouseMove(e, changeX_1, changeY_1, components.get(elem.type).pallete);
-                        _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                        _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                        if (retVal.newViewCentre) {
-                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                        }
-                        _this.handleInfoMessage(retVal.infoMessage);
-                        _this.handleAlertMessage(retVal.alertMessage);
-                        _this.setElementView(elem.id, retVal.newView);
-                    }
-                }
-                else if (!_this.rMousePress && _this.viewState.mode != BoardModes.ERASE) {
-                    if (_this.currSelect.length == 0) {
-                        context.clearRect(0, 0, whitElem.width, whitElem.height);
-                        var data = {
-                            palleteState: components.get(_this.viewState.mode).pallete, pointList: _this.pointList
-                        };
-                        components.get(_this.viewState.mode).DrawHandle(data, context);
-                    }
-                    else if (_this.currSelect.length == 1) {
-                        var elem = _this.getBoardElement(_this.currSelect[0]);
-                        var changeX_2 = (e.clientX - _this.prevX) * _this.scaleF;
-                        var changeY_2 = (e.clientY - _this.prevY) * _this.scaleF;
-                        var retVal = elem.handleBoardMouseMove(e, changeX_2, changeY_2, components.get(elem.type).pallete);
-                        _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                        _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                        _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                        _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                        if (retVal.newViewCentre) {
-                            _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                        }
-                        _this.handleInfoMessage(retVal.infoMessage);
-                        _this.handleAlertMessage(retVal.alertMessage);
-                        _this.setElementView(elem.id, retVal.newView);
-                    }
-                }
-            }
-            _this.prevX = e.clientX;
-            _this.prevY = e.clientY;
-        };
-        this.mouseUp = function (e) {
-            if (_this.lMousePress && !_this.wMousePress) {
-                var whitElem_6 = document.getElementById("whiteBoard-input");
-                var context = whitElem_6.getContext('2d');
-                var rectLeft = void 0;
-                var rectTop = void 0;
-                var rectWidth = void 0;
-                var rectHeight = void 0;
-                var elemRect_6 = whitElem_6.getBoundingClientRect();
-                var offsetY = elemRect_6.top - document.body.scrollTop;
-                var offsetX = elemRect_6.left - document.body.scrollLeft;
-                var newPoint = { x: 0, y: 0 };
-                context.clearRect(0, 0, whitElem_6.width, whitElem_6.height);
-                if (_this.currSelect.length == 0) {
-                    newPoint.x = Math.round(e.clientX - offsetX);
-                    newPoint.y = Math.round(e.clientY - offsetY);
-                    if (newPoint.x > _this.downPoint.x) {
-                        rectLeft = _this.downPoint.x;
-                        rectWidth = newPoint.x - _this.downPoint.x;
-                    }
-                    else {
-                        rectLeft = newPoint.x;
-                        rectWidth = _this.downPoint.x - newPoint.x;
-                    }
-                    if (newPoint.y > _this.downPoint.y) {
-                        rectTop = _this.downPoint.y;
-                        rectHeight = newPoint.y - _this.downPoint.y;
-                    }
-                    else {
-                        rectTop = newPoint.y;
-                        rectHeight = _this.downPoint.y - newPoint.y;
-                    }
-                    var x = rectLeft * _this.scaleF + _this.panX;
-                    var y = rectTop * _this.scaleF + _this.panY;
-                    var width = rectWidth * _this.scaleF;
-                    var height = rectHeight * _this.scaleF;
-                    if (_this.viewState.mode == BoardModes.SELECT) {
-                        if (_this.selectDrag) {
-                            context.clearRect(0, 0, whitElem_6.width, whitElem_6.height);
-                            _this.boardElems.forEach(function (elem) {
-                                if (!elem.isDeleted && elem.isComplete && elem.x >= _this.selectLeft && elem.y >= _this.selectTop) {
-                                    if (_this.selectLeft + _this.selectWidth >= elem.x + elem.width && _this.selectTop + _this.selectHeight >= elem.y + elem.height) {
-                                        _this.currSelect.push(elem.id);
-                                        _this.selectElement(elem.id);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    else if (_this.viewState.mode != BoardModes.ERASE) {
-                        var self_1 = _this;
-                        var localId = _this.boardElems.push(null) - 1;
-                        var callbacks = {
-                            sendServerMsg: (function (id, type) { return function (msg) { self_1.sendMessage(id, type, msg); }; })(localId, self_1.viewState.mode),
-                            createAlert: function (header, message) { },
-                            createInfo: function (x, y, width, height, header, message) { return self_1.addInfoMessage(x, y, width, height, header, message); },
-                            removeInfo: function (id) { self_1.removeInfoMessage(id); },
-                            updateBoardView: (function (id) { return function (newView) { self_1.setElementView(id, newView); }; })(localId),
-                            getAudioStream: function () { return self_1.getAudioStream(); },
-                            getVideoStream: function () { return self_1.getVideoStream(); }
-                        };
-                        var data = {
-                            id: localId, userId: _this.userId, callbacks: callbacks, x: x, y: y, width: width, height: height,
-                            pointList: _this.pointList, scaleF: _this.scaleF, panX: _this.panX, panY: _this.panY,
-                            palleteState: components.get(_this.viewState.mode).pallete
-                        };
-                        var newElem = components.get(_this.viewState.mode).Element.createElement(data);
-                        if (newElem) {
-                            var undoOp = (function (elem) { return elem.erase.bind(elem); })(newElem);
-                            var redoOp = (function (elem) { return elem.restore.bind(elem); })(newElem);
-                            _this.boardElems[localId] = newElem;
-                            var viewState = newElem.getCurrentViewState();
-                            _this.setElementView(localId, viewState);
-                            var payload = newElem.getNewMsg();
-                            var msg = { type: newElem.type, payload: payload };
-                            _this.handleElementOperation(localId, undoOp, redoOp);
-                            _this.sendNewElement(msg);
-                        }
-                        else {
-                            _this.boardElems.splice(localId, 1);
-                        }
-                    }
-                }
-                else if (_this.currSelect.length == 1) {
-                    var elem = _this.getBoardElement(_this.currSelect[0]);
-                    var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-                    var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-                    var retVal = elem.handleBoardMouseUp(e, xPos, yPos, components.get(elem.type).pallete);
-                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    _this.handleMouseElementSelect(e, elem, retVal.isSelected);
-                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if (retVal.newViewCentre) {
-                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    _this.handleInfoMessage(retVal.infoMessage);
-                    _this.handleAlertMessage(retVal.alertMessage);
-                    _this.setElementView(elem.id, retVal.newView);
-                }
-                if (_this.groupMoved) {
-                    var xPos = (e.clientX - offsetX) * _this.scaleF + _this.panX;
-                    var yPos = (e.clientY - offsetY) * _this.scaleF + _this.panY;
-                    _this.groupMoved = false;
-                    _this.endMove(xPos, yPos);
-                }
-            }
-            if (_this.blockAlert) {
-                _this.blockAlert = false;
-                _this.updateView(Object.assign({}, _this.viewState, { blockAlert: false }));
-            }
-            _this.selectDrag = false;
-            _this.lMousePress = false;
-            _this.wMousePress = false;
-            _this.rMousePress = false;
-            _this.pointList = [];
-        };
-        this.touchStart = function () {
-            _this.touchPress = true;
-        };
-        this.touchMove = function (e) {
-            if (_this.touchPress) {
-            }
-        };
-        this.touchEnd = function () {
-            _this.touchPress = false;
-        };
-        this.touchCancel = function () {
-        };
-        this.keyDown = function (e) {
-            if (e.keyCode === 8) {
-                if (_this.currSelect.length == 1) {
-                    e.preventDefault();
-                    var elem = _this.getBoardElement(_this.currSelect[0]);
-                    var retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
-                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if (retVal.newViewCentre) {
-                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    _this.handleInfoMessage(retVal.infoMessage);
-                    _this.handleAlertMessage(retVal.alertMessage);
-                    _this.setElementView(elem.id, retVal.newView);
-                }
-            }
-        };
-        this.keyPress = function (e) {
-            var inputChar = e.key;
-            if (e.ctrlKey) {
-                if (inputChar == 'z') {
-                    if (_this.currSelect.length == 1 && _this.getBoardElement(_this.currSelect[0]).isEditing) {
-                        _this.undoItemEdit(_this.currSelect[0]);
-                    }
-                    else {
-                        _this.undo();
-                    }
-                }
-                else if (inputChar == 'y') {
-                    if (_this.currSelect.length == 1 && _this.getBoardElement(_this.currSelect[0]).isEditing) {
-                        _this.redoItemEdit(_this.currSelect[0]);
-                    }
-                    else {
-                        _this.redo();
-                    }
-                }
-            }
-            else {
-                if (_this.currSelect.length == 1) {
-                    e.preventDefault();
-                    var elem = _this.getBoardElement(_this.currSelect[0]);
-                    var retVal = elem.handleKeyPress(e, 'Backspace', components.get(elem.type).pallete);
-                    _this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
-                    _this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    _this.handleElementPalleteChanges(elem, retVal.palleteChanges);
-                    if (retVal.newViewCentre) {
-                        _this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
-                    }
-                    _this.handleInfoMessage(retVal.infoMessage);
-                    _this.handleAlertMessage(retVal.alertMessage);
-                    _this.setElementView(elem.id, retVal.newView);
-                }
-            }
-        };
-        this.contextCopy = function (e) {
-            document.execCommand("copy");
-        };
-        this.contextCut = function (e) {
-            document.execCommand("cut");
-        };
-        this.contextPaste = function (e) {
-            document.execCommand("paste");
-        };
-        this.onCopy = function (e) {
-            console.log('COPY EVENT');
-        };
-        this.onPaste = function (e) {
-            console.log('PASTE EVENT');
-        };
-        this.onCut = function (e) {
-            console.log('CUT EVENT');
-        };
-        this.dragOver = function (e) {
-            e.preventDefault();
-        };
-        this.drop = function (e) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var x = Math.round(e.clientX - offsetX);
-            var y = Math.round(e.clientY - offsetY);
-            e.preventDefault();
-        };
-        this.palleteChange = function (change) {
-            var retVal = components.get(_this.viewState.mode).pallete.handleChange(change);
-            var cursor = components.get(_this.viewState.mode).pallete.getCursor();
-            _this.cursor = cursor.cursor;
-            _this.cursorURL = cursor.url;
-            _this.cursorOffset = cursor.offset;
-            var newView = Object.assign({}, _this.viewState, {
-                palleteState: retVal, cursor: _this.cursor, cursorURL: _this.cursorURL, cursorOffset: _this.cursorOffset
-            });
-            _this.updateView(newView);
-            if (_this.currSelect.length == 1) {
-                var elem = _this.getBoardElement(_this.currSelect[0]);
-                if (elem.type == _this.viewState.mode) {
-                    elem.handlePalleteChange(change);
-                }
-            }
-        };
-        this.windowResize = function (e) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var whitCont = document.getElementById("whiteboard-container");
-            whitElem.style.width = whitCont.clientWidth + "px";
-            whitElem.style.height = whitCont.clientHeight + "px";
-            whitElem.width = whitElem.clientWidth;
-            whitElem.height = whitElem.clientHeight;
-            _this.setViewBox(_this.panX, _this.panY, _this.scaleF);
-        };
-        this.windowUnload = function (e) {
-            _this.socket.emit('LEAVE', null);
-        };
-        this.mouseWheel = function (e) {
-            var whitElem = document.getElementById("whiteBoard-input");
-            var elemRect = whitElem.getBoundingClientRect();
-            var offsetY = elemRect.top - document.body.scrollTop;
-            var offsetX = elemRect.left - document.body.scrollLeft;
-            var newPanX = _this.panX;
-            var newPanY = _this.panY;
-            var newScale;
-            var move = true;
-            var prevScale = _this.scaleNum;
-            _this.scaleNum = _this.scaleNum - e.deltaY / 2;
-            if (_this.scaleNum < -5) {
-                if (prevScale == -5) {
-                    move = false;
-                }
-                _this.scaleNum = -5;
-            }
-            if (_this.scaleNum > 5) {
-                if (prevScale == 5) {
-                    move = false;
-                }
-                _this.scaleNum = 5;
-            }
-            var prevPoint = newScale = Math.pow(0.8, _this.scaleNum);
-            var vBoxW = whitElem.clientWidth * newScale;
-            var vBoxH = whitElem.clientHeight * newScale;
-            if (move) {
-                if (e.deltaY < 0) {
-                    newPanX = _this.panX + (_this.scaleF - newScale) * (e.clientX - offsetX);
-                    newPanY = _this.panY + (_this.scaleF - newScale) * (e.clientY - offsetY);
-                }
-                else {
-                    newPanX = _this.panX - (_this.scaleF - newScale) * (e.clientX - offsetX);
-                    newPanY = _this.panY - (_this.scaleF - newScale) * (e.clientY - offsetY);
-                }
-                if (newPanX < 0) {
-                    newPanX = 0;
-                }
-                if (newPanY < 0) {
-                    newPanY = 0;
-                }
-            }
-            _this.setViewBox(newPanX, newPanY, newScale);
-        };
-        this.clearAlert = function () {
-            _this.removeAlert();
-        };
         this.isHost = isHost;
         this.userId = userId;
+        this.allowAllEdit = allEdit;
+        this.allowUserEdit = userEdit;
         var dispatcher = {
-            elementMouseOver: this.elementMouseOver,
-            elementMouseOut: this.elementMouseOut,
-            elementMouseDown: this.elementMouseDown,
-            elementMouseMove: this.elementMouseMove,
-            elementMouseUp: this.elementMouseUp,
-            elementMouseClick: this.elementMouseClick,
-            elementMouseDoubleClick: this.elementMouseDoubleClick,
-            elementTouchStart: this.elementTouchStart,
-            elementTouchMove: this.elementTouchMove,
-            elementTouchEnd: this.elementTouchEnd,
-            elementTouchCancel: this.elementTouchCancel,
-            elementDragOver: this.elementDragOver,
-            elementDrop: this.elementDrop,
-            clearAlert: this.clearAlert,
-            modeChange: this.modeChange,
-            palleteChange: this.palleteChange,
-            changeEraseSize: this.changeEraseSize,
-            mouseWheel: this.mouseWheel,
-            mouseDown: this.mouseDown,
-            mouseMove: this.mouseMove,
-            mouseUp: this.mouseUp,
-            touchStart: this.touchStart,
-            touchMove: this.touchMove,
-            touchEnd: this.touchEnd,
-            touchCancel: this.touchCancel,
-            contextCopy: this.contextCopy,
-            contextCut: this.contextCut,
-            contextPaste: this.contextPaste,
-            onCopy: this.onCopy,
-            onPaste: this.onPaste,
-            onCut: this.onCut,
-            dragOver: this.dragOver,
-            drop: this.drop
+            elementMouseOver: this.elementMouseOver.bind(this),
+            elementMouseOut: this.elementMouseOut.bind(this),
+            elementMouseDown: this.elementMouseDown.bind(this),
+            elementMouseMove: this.elementMouseMove.bind(this),
+            elementMouseUp: this.elementMouseUp.bind(this),
+            elementMouseClick: this.elementMouseClick.bind(this),
+            elementMouseDoubleClick: this.elementMouseDoubleClick.bind(this),
+            elementTouchStart: this.elementTouchStart.bind(this),
+            elementTouchMove: this.elementTouchMove.bind(this),
+            elementTouchEnd: this.elementTouchEnd.bind(this),
+            elementTouchCancel: this.elementTouchCancel.bind(this),
+            elementDragOver: this.elementDragOver.bind(this),
+            elementDrop: this.elementDrop.bind(this),
+            clearAlert: this.clearAlert.bind(this),
+            modeChange: this.modeChange.bind(this),
+            palleteChange: this.palleteChange.bind(this),
+            changeEraseSize: this.changeEraseSize.bind(this),
+            mouseWheel: this.mouseWheel.bind(this),
+            mouseDown: this.mouseDown.bind(this),
+            mouseMove: this.mouseMove.bind(this),
+            mouseUp: this.mouseUp.bind(this),
+            touchStart: this.touchStart.bind(this),
+            touchMove: this.touchMove.bind(this),
+            touchEnd: this.touchEnd.bind(this),
+            touchCancel: this.touchCancel.bind(this),
+            contextCopy: this.contextCopy.bind(this),
+            contextCut: this.contextCut.bind(this),
+            contextPaste: this.contextPaste.bind(this),
+            onCopy: this.onCopy.bind(this),
+            onPaste: this.onPaste.bind(this),
+            onCut: this.onCut.bind(this),
+            dragOver: this.dragOver.bind(this),
+            drop: this.drop.bind(this)
         };
         this.viewState = {
             viewBox: '0 0 0 0',
@@ -2082,10 +722,6 @@ var WhiteBoardController = (function () {
             baseSize: 1.0,
             eraseSize: 1.0,
             blockAlert: false,
-            itemMoving: false,
-            itemResizing: false,
-            resizeHorz: false,
-            resizeVert: false,
             palleteState: {},
             boardElements: Immutable.OrderedMap(),
             infoElements: Immutable.List(),
@@ -2096,6 +732,728 @@ var WhiteBoardController = (function () {
             dispatcher: dispatcher,
             components: components
         };
+        var self = this;
+        this.worker = new Worker(workerUrl);
+        this.worker.onmessage = function (e) {
+            self.setSelectCount.bind(_this)(e.data.selectCount);
+            if (e.data.viewUpdate != undefined && e.data.viewUpdate != null) {
+                self.setViewState.bind(_this)(e.data.viewUpdate);
+            }
+            if (e.data.newViewBox != undefined && e.data.newViewBox != null) {
+                self.setViewBox.bind(_this)(e.data.newViewBox.panX, e.data.newViewBox.panY, e.data.newViewBox.scaleF);
+            }
+            if (e.data.newViewCentre != undefined && e.data.newViewCentre != null) {
+                self.handleElementNewViewCentre.bind(_this)(e.data.newViewCentre.x, e.data.newViewCentre.y);
+            }
+            if (e.data.elementViews.length > 0) {
+                self.setElementViews.bind(_this)(e.data.elementViews);
+            }
+            if (e.data.deleteElements.length > 0) {
+                self.deleteElements.bind(_this)(e.data.deleteElements);
+            }
+            for (var i_1 = 0; i_1 < e.data.alerts.length; i_1++) {
+                self.newAlert.bind(_this)(e.data.alerts[i_1]);
+            }
+            if (e.data.removeAlert) {
+                self.removeAlert.bind(_this)();
+            }
+            if (e.data.infoMessages.length > 0) {
+                self.addInfoMessages.bind(_this)(e.data.infoMessages);
+            }
+            if (e.data.removeInfos.length > 0) {
+                self.removeInfoMessages.bind(_this)(e.data.removeInfos);
+            }
+            for (var i_2 = 0; i_2 < e.data.elementMessages.length; i_2++) {
+                self.handleMessage.bind(_this)(e.data.elementMessages[i_2].type, e.data.elementMessages[i_2].message);
+            }
+            for (var i_3 = 0; i_3 < e.data.audioRequests.length; i_3++) {
+                self.getAudioStream.bind(_this)(e.data.audioRequests[i_3]);
+            }
+            for (var i_4 = 0; i_4 < e.data.videoRequests.length; i_4++) {
+                self.getVideoStream.bind(_this)(e.data.videoRequests[i_4]);
+            }
+            if (e.data.elementMoves.length > 0) {
+                console.log('Sending group move.');
+                var message_1 = { header: ElementMessageTypes.MOVE, payload: e.data.elementMoves };
+                var messageCont = { id: null, type: 'ANY', payload: message_1 };
+                self.handleMessage.bind(_this)('MSG-COMPONENT', messageCont);
+            }
+            if (e.data.elementDeletes.length > 0) {
+                var message_2 = { header: ElementMessageTypes.DELETE, payload: e.data.elementDeletes };
+                var messageCont = { id: null, type: 'ANY', payload: message_2 };
+                self.handleMessage.bind(_this)('MSG-COMPONENT', messageCont);
+            }
+            if (e.data.elementRestores.length > 0) {
+                var message_3 = { header: ElementMessageTypes.RESTORE, payload: e.data.elementRestores };
+                var messageCont = { id: null, type: 'ANY', payload: message_3 };
+                self.handleMessage.bind(_this)('MSG-COMPONENT', messageCont);
+            }
+        };
+        var message = { type: 0, componentFiles: componentFiles, allEdit: this.allowAllEdit, userEdit: this.allowUserEdit };
+        this.worker.postMessage(message);
     }
+    WhiteBoardController.prototype.setSocket = function (socket) {
+        this.socket = socket;
+        var self = this;
+        this.socket.on('JOIN', function (data) {
+        });
+        this.socket.on('OPTIONS', function (data) {
+        });
+        this.socket.on('NEW-ELEMENT', function (data) {
+            var message = { type: 6, data: data };
+            self.worker.postMessage(message);
+        });
+        this.socket.on('ELEMENT-ID', function (data) {
+            var message = { type: 7, data: data };
+            self.worker.postMessage(message);
+        });
+        this.socket.on('MSG-COMPONENT', function (data) {
+            if (data.type == 'ANY') {
+                if (data.payload.header == ElementMessageTypes.MOVE) {
+                    var message = { type: 8, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+                else if (data.payload.header == ElementMessageTypes.DELETE) {
+                    var message = { type: 9, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+                else if (data.payload.header == ElementMessageTypes.RESTORE) {
+                    var message = { type: 10, data: data.payload.payload };
+                    self.worker.postMessage(message);
+                }
+            }
+            else {
+                var message = { type: 11, data: data };
+                self.worker.postMessage(message);
+            }
+        });
+        this.socket.on('ERROR', function (message) {
+            console.log('SERVER: ' + message);
+            var errMsg = { type: 38, error: message };
+            self.worker.postMessage(errMsg);
+        });
+    };
+    WhiteBoardController.prototype.handleMessage = function (type, message) {
+        this.socket.emit(type, message);
+    };
+    WhiteBoardController.prototype.setRoomOptions = function (allowAllEdit, allowUserEdit) {
+        this.allowAllEdit = allowAllEdit;
+        this.allowUserEdit = allowUserEdit;
+        var message = { type: 1, allowAllEdit: this.allowAllEdit, allowUserEdit: this.allowUserEdit };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.setView = function (view) {
+        var whitElem = document.getElementById('whiteBoard-input');
+        var whitCont = document.getElementById('whiteboard-container');
+        whitElem.style.width = whitCont.clientWidth + 'px';
+        whitElem.style.height = whitCont.clientHeight + 'px';
+        whitElem.width = whitElem.clientWidth;
+        whitElem.height = whitElem.clientHeight;
+        window.addEventListener('resize', this.windowResize.bind(this));
+        window.addEventListener('beforeunload', this.windowUnload.bind(this));
+        document.addEventListener('keypress', this.keyPress.bind(this));
+        document.addEventListener('keydown', this.keyDown.bind(this));
+        var newVBox = '0 0 ' + whitElem.width + ' ' + whitElem.height;
+        this.viewState.viewBox = newVBox;
+        this.viewState.viewWidth = whitElem.width;
+        this.viewState.viewHeight = whitElem.height;
+        this.viewState.viewScale = 1;
+        this.view = view;
+        view.setState(this.viewState);
+    };
+    WhiteBoardController.prototype.updateView = function (viewState) {
+        this.viewState = viewState;
+        this.view.storeUpdate(this.viewState);
+    };
+    WhiteBoardController.prototype.setViewState = function (newParams) {
+        this.updateView(Object.assign({}, this.viewState, newParams));
+    };
+    WhiteBoardController.prototype.setElementViews = function (upadates) {
+        var newElemList = this.viewState.boardElements;
+        for (var i_5 = 0; i_5 < upadates.length; i_5++) {
+            newElemList = newElemList.set(upadates[i_5].id, upadates[i_5].view);
+        }
+        this.setViewState({ boardElements: newElemList });
+    };
+    WhiteBoardController.prototype.setSelectCount = function (newCount) {
+        this.selectCount = newCount;
+    };
+    WhiteBoardController.prototype.getAudioStream = function (id) {
+        return null;
+    };
+    WhiteBoardController.prototype.getVideoStream = function (id) {
+        return null;
+    };
+    WhiteBoardController.prototype.newAlert = function (alertView) {
+        var newElemList = this.viewState.alertElements.push(alertView);
+        this.setViewState({ alertElements: newElemList });
+    };
+    WhiteBoardController.prototype.removeAlert = function () {
+        var newElemList = this.viewState.alertElements.shift();
+        this.setViewState({ alertElements: newElemList });
+    };
+    WhiteBoardController.prototype.deleteElements = function (ids) {
+        var newElemList = this.viewState.boardElements;
+        var _loop_1 = function(i_6) {
+            newElemList = newElemList.filter(function (element) { return element.id !== ids[i_6]; });
+        };
+        for (var i_6 = 0; i_6 < ids.length; i_6++) {
+            _loop_1(i_6);
+        }
+        this.setViewState({ boardElements: newElemList });
+    };
+    WhiteBoardController.prototype.handleElementNewViewCentre = function (x, y) {
+        var whitElem = document.getElementById('whiteBoard-input');
+        var whitCont = document.getElementById('whiteboard-container');
+        var clientWidth = whitCont.clientWidth;
+        var clientHeight = whitCont.clientHeight;
+        var xChange = x - (this.panX + clientWidth * this.scaleF * 0.5);
+        var yChange = y - (this.panY + clientHeight * this.scaleF * 0.5);
+        var newPanX = this.panX + xChange;
+        var newPanY = this.panY + yChange;
+        if (newPanX < 0) {
+            newPanX = 0;
+        }
+        if (newPanY < 0) {
+            newPanY = 0;
+        }
+        this.setViewBox(newPanX, newPanY, this.scaleF);
+    };
+    WhiteBoardController.prototype.addInfoMessages = function (newInfoViews) {
+        var newInfoList = this.viewState.infoElements;
+        for (var i_7 = 0; i_7 < newInfoViews.length; i_7++) {
+            newInfoList = this.viewState.infoElements.push(newInfoViews[i_7]);
+        }
+        this.setViewState({ infoElements: newInfoList });
+    };
+    WhiteBoardController.prototype.removeInfoMessages = function (ids) {
+        var newInfoList = this.viewState.infoElements;
+        for (var i_8 = 0; i_8 < ids.length; i_8++) {
+            newInfoList = this.viewState.infoElements.delete(ids[i_8]);
+        }
+        this.setViewState({ infoElements: newInfoList });
+    };
+    WhiteBoardController.prototype.setViewBox = function (panX, panY, scaleF) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var vBoxW = whitElem.clientWidth * scaleF;
+        var vBoxH = whitElem.clientHeight * scaleF;
+        this.scaleF = scaleF;
+        this.panX = panX;
+        this.panY = panY;
+        var newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
+        this.setViewState({ viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF });
+    };
+    WhiteBoardController.prototype.compareUpdateTime = function (elem1, elem2) {
+        if (elem1.updateTime.getTime() > elem2.updateTime.getTime()) {
+            return 1;
+        }
+        else if (elem1.updateTime.getTime() < elem2.updateTime.getTime()) {
+            return -1;
+        }
+        else {
+            return 0;
+        }
+    };
+    WhiteBoardController.prototype.modeChange = function (newMode) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var context = whitElem.getContext('2d');
+        context.clearRect(0, 0, whitElem.width, whitElem.height);
+        var message = { type: 3, newMode: newMode };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.changeEraseSize = function (newSize) {
+        this.setViewState({ eraseSize: newSize });
+    };
+    WhiteBoardController.prototype.elementMouseOver = function (id, e) {
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        var message = { type: 12, id: id, e: eventCopy };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.elementMouseOut = function (id, e) {
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        var message = { type: 13, id: id, e: eventCopy };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.elementMouseDown = function (id, e, componenet, subId) {
+        this.mouseDownHandled = true;
+        e.preventDefault();
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+        var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        var message = { type: 14, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.elementMouseMove = function (id, e, componenet, subId) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panX;
+        if (this.viewState.mode == BoardModes.ERASE) {
+            if (this.lMousePress) {
+                var message = { type: 15, id: id };
+                this.worker.postMessage(message);
+            }
+        }
+        else if (this.viewState.mode == BoardModes.SELECT) {
+            if (e.buttons == 0) {
+                var eventCopy = {
+                    altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                    buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+                };
+                var message = {
+                    type: 16, id: id, e: eventCopy, mouseX: mouseX, mouseY: mouseY, componenet: componenet, subId: subId
+                };
+                this.worker.postMessage(message);
+                this.prevX = e.clientX;
+                this.prevY = e.clientY;
+            }
+        }
+    };
+    WhiteBoardController.prototype.elementMouseUp = function (id, e, componenet, subId) {
+        if (this.viewState.mode == BoardModes.SELECT) {
+            var whitElem_1 = document.getElementById("whiteBoard-input");
+            var elemRect_1 = whitElem_1.getBoundingClientRect();
+            var offsetY = elemRect_1.top - document.body.scrollTop;
+            var offsetX = elemRect_1.left - document.body.scrollLeft;
+            var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+            var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+            var message = {
+                type: 17, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.elementMouseClick = function (id, e, componenet, subId) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+        var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+        if (this.viewState.mode == BoardModes.ERASE) {
+            var message = { type: 15, id: id };
+            this.worker.postMessage(message);
+        }
+        else if (this.viewState.mode == BoardModes.SELECT) {
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+            var message = {
+                type: 18, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.elementMouseDoubleClick = function (id, e, componenet, subId) {
+        if (this.viewState.mode == BoardModes.SELECT) {
+            var whitElem_2 = document.getElementById("whiteBoard-input");
+            var elemRect_2 = whitElem_2.getBoundingClientRect();
+            var offsetY = elemRect_2.top - document.body.scrollTop;
+            var offsetX = elemRect_2.left - document.body.scrollLeft;
+            var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
+            var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+            var message = {
+                type: 19, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+            };
+            this.worker.postMessage(message);
+            e.stopPropagation();
+        }
+    };
+    WhiteBoardController.prototype.elementTouchStart = function (id, e, componenet, subId) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var localTouches;
+        for (var i_9 = 0; i_9 < e.touches.length; i_9++) {
+            var touch = e.touches.item(i_9);
+            var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+            var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+            localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+        }
+        var message = { type: 20, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+        this.worker.postMessage(message);
+        this.prevTouch = e.touches;
+    };
+    WhiteBoardController.prototype.elementTouchMove = function (id, e, componenet, subId) {
+        var touchMoves;
+        if (this.viewState.mode == BoardModes.ERASE) {
+            var message = { type: 15, id: id };
+            this.worker.postMessage(message);
+        }
+        else if (this.viewState.mode == BoardModes.SELECT) {
+            for (var i_10 = 0; i_10 < e.touches.length; i_10++) {
+                var touch = e.touches.item(i_10);
+                for (var j_1 = 0; j_1 < this.prevTouch.length; j_1++) {
+                    if (this.prevTouch[j_1].identifier == touch.identifier) {
+                        var xChange = (touch.clientX - this.prevTouch[j_1].clientX) * this.scaleF;
+                        var yChange = (touch.clientY - this.prevTouch[j_1].clientY) * this.scaleF;
+                        var touchChange = { x: xChange, y: yChange, identifer: touch.identifier };
+                        touchMoves.push(touchChange);
+                    }
+                }
+            }
+            var message = { type: 21, id: id, e: e, touchMoves: touchMoves, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
+            this.prevTouch = e.touches;
+        }
+    };
+    WhiteBoardController.prototype.elementTouchEnd = function (id, e, componenet, subId) {
+        if (this.viewState.mode == BoardModes.SELECT) {
+            var whitElem_3 = document.getElementById("whiteBoard-input");
+            var elemRect_3 = whitElem_3.getBoundingClientRect();
+            var offsetY = elemRect_3.top - document.body.scrollTop;
+            var offsetX = elemRect_3.left - document.body.scrollLeft;
+            var localTouches = void 0;
+            for (var i_11 = 0; i_11 < e.touches.length; i_11++) {
+                var touch = e.touches.item(i_11);
+                var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+                var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+            }
+            var message = { type: 22, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.elementTouchCancel = function (id, e, componenet, subId) {
+        if (this.viewState.mode == BoardModes.SELECT) {
+            var whitElem_4 = document.getElementById("whiteBoard-input");
+            var elemRect_4 = whitElem_4.getBoundingClientRect();
+            var offsetY = elemRect_4.top - document.body.scrollTop;
+            var offsetX = elemRect_4.left - document.body.scrollLeft;
+            var localTouches = void 0;
+            for (var i_12 = 0; i_12 < e.touches.length; i_12++) {
+                var touch = e.touches.item(i_12);
+                var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
+                var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
+                localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
+            }
+            var message = { type: 23, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.elementDragOver = function (id, e, componenet, subId) {
+        e.stopPropagation();
+    };
+    WhiteBoardController.prototype.elementDrop = function (id, e, componenet, subId) {
+        e.stopPropagation();
+    };
+    WhiteBoardController.prototype.mouseDown = function (e) {
+        e.preventDefault();
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+        if (!this.lMousePress && !this.wMousePress && !this.rMousePress) {
+            this.lMousePress = e.buttons & 1 ? true : false;
+            this.rMousePress = e.buttons & 2 ? true : false;
+            this.wMousePress = e.buttons & 4 ? true : false;
+            this.isPoint = true;
+            whitElem.width = whitElem.clientWidth;
+            whitElem.height = whitElem.clientHeight;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            var newPoint = { x: 0, y: 0 };
+            this.pointList = [];
+            newPoint.x = Math.round(e.clientX - offsetX);
+            newPoint.y = Math.round(e.clientY - offsetY);
+            this.pointList[this.pointList.length] = newPoint;
+            this.downPoint = { x: Math.round(e.clientX - offsetX), y: Math.round(e.clientY - offsetY) };
+            if (this.viewState.alertElements.size == 0) {
+                this.blockAlert = true;
+                this.setViewState({ blockAlert: true });
+            }
+            if (this.viewState.mode == BoardModes.SELECT && !this.mouseDownHandled && e.buttons == 1) {
+                this.selectDrag = true;
+            }
+        }
+        if (this.mouseDownHandled) {
+            this.mouseDownHandled = false;
+        }
+        else {
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+            var message = { type: 26, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.mouseMove = function (e) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var context = whitElem.getContext('2d');
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+        if (this.wMousePress) {
+            var newPanX = this.panX + (this.prevX - e.clientX) * this.scaleF;
+            var newPanY = this.panY + (this.prevY - e.clientY) * this.scaleF;
+            this.prevX = e.clientX;
+            this.prevY = e.clientY;
+            if (newPanX < 0) {
+                newPanX = 0;
+            }
+            if (newPanY < 0) {
+                newPanY = 0;
+            }
+            this.setViewBox(newPanX, newPanY, this.scaleF);
+        }
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        if (this.selectDrag) {
+            var absX = Math.round(e.clientX - offsetX);
+            var absY = Math.round(e.clientY - offsetY);
+            var rectLeft = void 0;
+            var rectTop = void 0;
+            var rectWidth = void 0;
+            var rectHeight = void 0;
+            if (absX > this.downPoint.x) {
+                rectLeft = this.downPoint.x;
+                rectWidth = absX - this.downPoint.x;
+            }
+            else {
+                rectLeft = absX;
+                rectWidth = this.downPoint.x - absX;
+            }
+            if (absY > this.downPoint.y) {
+                rectTop = this.downPoint.y;
+                rectHeight = absY - this.downPoint.y;
+            }
+            else {
+                rectTop = absY;
+                rectHeight = this.downPoint.y - absY;
+            }
+            context.clearRect(0, 0, whitElem.width, whitElem.height);
+            context.setLineDash([5]);
+            context.strokeStyle = 'black';
+            context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
+        }
+        var message = { type: 27, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+        this.worker.postMessage(message);
+        if (e.buttons == 1 && this.viewState.mode != BoardModes.SELECT && this.viewState.mode != BoardModes.ERASE) {
+            var newPoint = { x: 0, y: 0 };
+            newPoint.x = Math.round(e.clientX - offsetX);
+            newPoint.y = Math.round(e.clientY - offsetY);
+            this.pointList.push(newPoint);
+            if (this.selectCount == 0) {
+                context.clearRect(0, 0, whitElem.width, whitElem.height);
+                var data = {
+                    palleteState: this.viewState.palleteState, pointList: this.pointList
+                };
+                components.get(this.viewState.mode).DrawHandle(data, context);
+            }
+        }
+        this.prevX = e.clientX;
+        this.prevY = e.clientY;
+    };
+    WhiteBoardController.prototype.mouseUp = function (e) {
+        if (this.lMousePress && !this.wMousePress) {
+            var whitElem_5 = document.getElementById("whiteBoard-input");
+            var context = whitElem_5.getContext('2d');
+            var elemRect_5 = whitElem_5.getBoundingClientRect();
+            var offsetY = elemRect_5.top - document.body.scrollTop;
+            var offsetX = elemRect_5.left - document.body.scrollLeft;
+            var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+            var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+            var downX = this.downPoint.x * this.scaleF + this.panX;
+            var downY = this.downPoint.y * this.scaleF + this.panY;
+            context.clearRect(0, 0, whitElem_5.width, whitElem_5.height);
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+            };
+            var message = {
+                type: 28, e: eventCopy, mouseX: mouseX, mouseY: mouseY, downX: downX, downY: downY,
+                mode: this.viewState.mode, scaleF: this.scaleF, panX: this.panX, panY: this.panY, pointList: this.pointList
+            };
+            this.worker.postMessage(message);
+        }
+        if (this.blockAlert) {
+            this.blockAlert = false;
+            this.setViewState({ blockAlert: false });
+        }
+        this.lMousePress = false;
+        this.wMousePress = false;
+        this.rMousePress = false;
+        this.pointList = [];
+        this.selectDrag = false;
+    };
+    WhiteBoardController.prototype.touchStart = function (e) {
+        this.touchPress = true;
+    };
+    WhiteBoardController.prototype.touchMove = function (e) {
+        if (this.touchPress) {
+        }
+    };
+    WhiteBoardController.prototype.touchEnd = function (e) {
+        this.touchPress = false;
+    };
+    WhiteBoardController.prototype.touchCancel = function (e) {
+    };
+    WhiteBoardController.prototype.keyDown = function (e) {
+        if (e.keyCode === 8) {
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                keyCode: e.keyCode, charCode: e.charCode
+            };
+            var message = { type: 33, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
+            this.worker.postMessage(message);
+            e.preventDefault();
+        }
+        else if (e.keyCode === 46) {
+            var eventCopy = {
+                altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+                keyCode: e.keyCode, charCode: e.charCode
+            };
+            var message = { type: 33, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
+            this.worker.postMessage(message);
+            e.preventDefault();
+        }
+    };
+    WhiteBoardController.prototype.keyPress = function (e) {
+        var inputChar = e.key;
+        e.preventDefault();
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            keyCode: e.keyCode, charCode: e.charCode
+        };
+        if (e.ctrlKey) {
+            if (inputChar == 'z') {
+                var message = { type: 34 };
+                this.worker.postMessage(message);
+            }
+            else if (inputChar == 'y') {
+                var message = { type: 35 };
+                this.worker.postMessage(message);
+            }
+        }
+        else {
+            var message = { type: 33, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
+            this.worker.postMessage(message);
+        }
+    };
+    WhiteBoardController.prototype.contextCopy = function (e) {
+        document.execCommand("copy");
+    };
+    WhiteBoardController.prototype.contextCut = function (e) {
+        document.execCommand("cut");
+    };
+    WhiteBoardController.prototype.contextPaste = function (e) {
+        document.execCommand("paste");
+    };
+    WhiteBoardController.prototype.onCopy = function (e) {
+        console.log('COPY EVENT');
+    };
+    WhiteBoardController.prototype.onPaste = function (e) {
+        console.log('PASTE EVENT');
+    };
+    WhiteBoardController.prototype.onCut = function (e) {
+        console.log('CUT EVENT');
+    };
+    WhiteBoardController.prototype.dragOver = function (e) {
+        e.preventDefault();
+    };
+    WhiteBoardController.prototype.drop = function (e) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var x = Math.round(e.clientX - offsetX);
+        var y = Math.round(e.clientY - offsetY);
+        e.preventDefault();
+    };
+    WhiteBoardController.prototype.palleteChange = function (change) {
+        var message = { type: 36, change: change, mode: this.viewState.mode };
+        this.worker.postMessage(message);
+    };
+    WhiteBoardController.prototype.windowResize = function (e) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var whitCont = document.getElementById("whiteboard-container");
+        whitElem.style.width = whitCont.clientWidth + "px";
+        whitElem.style.height = whitCont.clientHeight + "px";
+        whitElem.width = whitElem.clientWidth;
+        whitElem.height = whitElem.clientHeight;
+        this.setViewBox(this.panX, this.panY, this.scaleF);
+    };
+    WhiteBoardController.prototype.windowUnload = function (e) {
+        this.socket.emit('LEAVE', null);
+    };
+    WhiteBoardController.prototype.mouseWheel = function (e) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var newPanX = this.panX;
+        var newPanY = this.panY;
+        var newScale;
+        var move = true;
+        var prevScale = this.scaleNum;
+        this.scaleNum = this.scaleNum - e.deltaY / 2;
+        if (this.scaleNum < -5) {
+            if (prevScale == -5) {
+                move = false;
+            }
+            this.scaleNum = -5;
+        }
+        if (this.scaleNum > 5) {
+            if (prevScale == 5) {
+                move = false;
+            }
+            this.scaleNum = 5;
+        }
+        var prevPoint = newScale = Math.pow(0.8, this.scaleNum);
+        var vBoxW = whitElem.clientWidth * newScale;
+        var vBoxH = whitElem.clientHeight * newScale;
+        if (move) {
+            if (e.deltaY < 0) {
+                newPanX = this.panX + (this.scaleF - newScale) * (e.clientX - offsetX);
+                newPanY = this.panY + (this.scaleF - newScale) * (e.clientY - offsetY);
+            }
+            else {
+                newPanX = this.panX - (this.scaleF - newScale) * (e.clientX - offsetX);
+                newPanY = this.panY - (this.scaleF - newScale) * (e.clientY - offsetY);
+            }
+            if (newPanX < 0) {
+                newPanX = 0;
+            }
+            if (newPanY < 0) {
+                newPanY = 0;
+            }
+        }
+        this.setViewBox(newPanX, newPanY, newScale);
+    };
+    WhiteBoardController.prototype.clearAlert = function () {
+        this.removeAlert();
+    };
     return WhiteBoardController;
 }());

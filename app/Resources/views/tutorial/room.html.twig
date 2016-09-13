@@ -15,15 +15,25 @@
     </div>
 
     <article>
+        <script> var componentFiles = []; </script>
+
         {% javascripts '@AppBundle/Resources/public/js/tutorial/MediaContainer.js'
                        '@AppBundle/Resources/public/js/tutorial/WhiteBoardController.js'
-                       '@AppBundle/Resources/public/js/tutorial/WhiteBoardView.js'
-                       '@AppBundle/Resources/public/js/tutorial/Elements/FreeCurveElement.js'
-                       '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
+                       '@AppBundle/Resources/public/js/tutorial/WhiteBoardView.js' %}
             <script src="{{ asset_url }}"></script>
         {% endjavascripts %}
 
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/FreeCurveView.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/FreeCurveElement.js'
+                       '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
+            <script> componentFiles.push("{{ asset_url }}"); </script>
+        {% endjavascripts %}
+
         {% javascripts '@AppBundle/Resources/public/js/tutorial/WhiteBoardWorker.js' output='js/compiled/WhiteBoardWorker.js' %}
+            <script> var workerUrlGlobal = "{{ asset_url }}"; </script>
         {% endjavascripts %}
     </article>
 {% endblock %}
@@ -197,7 +207,8 @@
         {
             boardSocket.on('READY', function(userId)
             {
-                whiteBoardController = new WhiteBoardController("{{isHost}}", userId);
+                // TODO: Implement server options.
+                whiteBoardController = new WhiteBoardController("{{isHost}}", userId, false, true, workerUrlGlobal, componentFiles);
                 whiteBoardView = ReactDOM.render(React.createElement(WhiteBoardView, {controller: whiteBoardController}), document.getElementById('whiteboard-app'));
                 whiteBoardController.setView(whiteBoardView);
                 console.log('Received ready and emitted join room.');

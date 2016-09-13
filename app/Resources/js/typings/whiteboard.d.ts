@@ -31,7 +31,7 @@ interface BoardPalleteViewState {
 }
 interface BoardPalleteChange {
     type: number,
-    data: number
+    data: any
 }
 interface BoardElementParameters {
     id: number;
@@ -56,6 +56,9 @@ interface ElementInputReturn {
     undoOp: () => ElementUndoRedoReturn;
     redoOp: () => ElementUndoRedoReturn;
     serverMessages: Array<UserMessage>;
+    move: {x: number, y: number, message: UserMessage};
+    wasDelete: { message: UserMessage };
+    wasRestore: { message: UserMessage };
     palleteChanges: Array<BoardPalleteChange>;
     infoMessage: InfoMessageData;
     alertMessage: AlertMessageData;
@@ -75,15 +78,18 @@ interface ElementMessageReturn {
 }
 interface ElementUndoRedoReturn {
     id: number;
+    move: {x: number, y: number, message: UserMessage};
+    wasDelete: { message: UserMessage };
+    wasRestore: { message: UserMessage };
     newView:  ComponentViewState;
     serverMessages: Array<ServerMessage>;
     palleteChanges: Array<BoardPalleteChange>;
     newViewCentre: Point;
-    wasDelete?: boolean;
 }
 interface ElementMoveReturn {
     newView:  ComponentViewState;
     serverMessages: Array<UserMessage>;
+    move: {x: number, y: number, message: UserMessage};
 }
 interface ElementPalleteReturn {
     newView:  ComponentViewState;
@@ -106,7 +112,7 @@ interface DrawData {
     width?: number;
     height?: number;
     pointList?: Array<Point>;
-    palleteState?: BoardPallete;
+    palleteState?: BoardPalleteViewState;
 }
 interface CreationData {
     id: number;
@@ -137,6 +143,10 @@ interface ComponentViewState {
     mode: string;
     updateTime: Date;
     isSelected: boolean;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
 }
 interface ComponentDispatcher {
     mouseOver:   (e: MouseEvent, component?: number, subComp?: number) => void;
@@ -311,6 +321,12 @@ interface ServerMessage {
 interface ServerPayload {
 
 }
+
+interface ServerOptionsMessage {
+    allEdit: boolean;
+    userEdit: boolean;
+}
+
 interface ServerBoardJoinMessage {
     userId: number;
     colour: number;

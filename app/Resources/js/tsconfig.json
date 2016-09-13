@@ -3,6 +3,7 @@
         "./tutorial/WhiteBoardWorker.ts",
         "./tutorial/WhiteBoardView.ts",
         "./tutorial/Elements/FreeCurveElement.ts",
+        "./tutorial/Elements/FreeCurveView.ts",
         "./tutorial/Elements/WhiteBoardTextElement.ts",
         "./tutorial/TextWorker.ts",
         "./tutorial/fitcurves.ts",
