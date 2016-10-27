@@ -62,7 +62,7 @@ var FreeCurveView;
     var ElementView = (function (_super) {
         __extends(ElementView, _super);
         function ElementView() {
-            _super.apply(this, arguments);
+            return _super.apply(this, arguments) || this;
         }
         ElementView.prototype.shouldComponentUpdate = function (nextProps, nextState) {
             return this.props.state !== nextProps.state || this.props.mode != nextProps.mode;
@@ -189,7 +189,7 @@ var FreeCurveView;
     var ModeView = (function (_super) {
         __extends(ModeView, _super);
         function ModeView() {
-            _super.apply(this, arguments);
+            return _super.apply(this, arguments) || this;
         }
         ModeView.prototype.render = function () {
             var _this = this;
@@ -211,7 +211,7 @@ var FreeCurveView;
     var PalleteView = (function (_super) {
         __extends(PalleteView, _super);
         function PalleteView() {
-            _super.apply(this, arguments);
+            return _super.apply(this, arguments) || this;
         }
         PalleteView.prototype.render = function () {
             var state = this.props.state;
@@ -293,8 +293,9 @@ var FreeCurveView;
     var CustomContextView = (function (_super) {
         __extends(CustomContextView, _super);
         function CustomContextView() {
-            _super.apply(this, arguments);
-            this.propTypes = {};
+            var _this = _super.apply(this, arguments) || this;
+            _this.propTypes = {};
+            return _this;
         }
         CustomContextView.prototype.render = function () {
             var state = this.props.state;

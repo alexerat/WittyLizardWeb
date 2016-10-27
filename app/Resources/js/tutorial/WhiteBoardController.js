@@ -627,16 +627,17 @@ var ControllerMessageTypes;
     ControllerMessageTypes[ControllerMessageTypes["MOUSEDOWN"] = 26] = "MOUSEDOWN";
     ControllerMessageTypes[ControllerMessageTypes["MOUSEMOVE"] = 27] = "MOUSEMOVE";
     ControllerMessageTypes[ControllerMessageTypes["MOUSEUP"] = 28] = "MOUSEUP";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHSTART"] = 29] = "TOUCHSTART";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHMOVE"] = 30] = "TOUCHMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHEND"] = 31] = "TOUCHEND";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHCANCEL"] = 32] = "TOUCHCANCEL";
-    ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 33] = "KEYBOARDINPUT";
-    ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 34] = "UNDO";
-    ControllerMessageTypes[ControllerMessageTypes["REDO"] = 35] = "REDO";
-    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 36] = "PALLETECHANGE";
-    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 37] = "LEAVE";
-    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 38] = "ERROR";
+    ControllerMessageTypes[ControllerMessageTypes["MOUSECLICK"] = 29] = "MOUSECLICK";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHSTART"] = 30] = "TOUCHSTART";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHMOVE"] = 31] = "TOUCHMOVE";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHEND"] = 32] = "TOUCHEND";
+    ControllerMessageTypes[ControllerMessageTypes["TOUCHCANCEL"] = 33] = "TOUCHCANCEL";
+    ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 34] = "KEYBOARDINPUT";
+    ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 35] = "UNDO";
+    ControllerMessageTypes[ControllerMessageTypes["REDO"] = 36] = "REDO";
+    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 37] = "PALLETECHANGE";
+    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 38] = "LEAVE";
+    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 39] = "ERROR";
 })(ControllerMessageTypes || (ControllerMessageTypes = {}));
 var components = Immutable.Map();
 var registerComponentView = function (componentName, ElementView, PalleteView, ModeView, DrawHandle) {
@@ -645,6 +646,7 @@ var registerComponentView = function (componentName, ElementView, PalleteView, M
         componentName: componentName, ElementView: ElementView, PalleteView: PalleteView, ModeView: ModeView, DrawHandle: DrawHandle
     };
     components = components.set(componentName, newComp);
+    console.log('View Regisered.');
 };
 var WhiteBoardController = (function () {
     function WhiteBoardController(isHost, userId, allEdit, userEdit, workerUrl, componentFiles) {
@@ -698,6 +700,7 @@ var WhiteBoardController = (function () {
             mouseDown: this.mouseDown.bind(this),
             mouseMove: this.mouseMove.bind(this),
             mouseUp: this.mouseUp.bind(this),
+            mouseClick: this.mouseClick.bind(this),
             touchStart: this.touchStart.bind(this),
             touchMove: this.touchMove.bind(this),
             touchEnd: this.touchEnd.bind(this),
@@ -751,8 +754,8 @@ var WhiteBoardController = (function () {
             if (e.data.deleteElements.length > 0) {
                 self.deleteElements.bind(_this)(e.data.deleteElements);
             }
-            for (var i_1 = 0; i_1 < e.data.alerts.length; i_1++) {
-                self.newAlert.bind(_this)(e.data.alerts[i_1]);
+            for (var i = 0; i < e.data.alerts.length; i++) {
+                self.newAlert.bind(_this)(e.data.alerts[i]);
             }
             if (e.data.removeAlert) {
                 self.removeAlert.bind(_this)();
@@ -763,14 +766,14 @@ var WhiteBoardController = (function () {
             if (e.data.removeInfos.length > 0) {
                 self.removeInfoMessages.bind(_this)(e.data.removeInfos);
             }
-            for (var i_2 = 0; i_2 < e.data.elementMessages.length; i_2++) {
-                self.handleMessage.bind(_this)(e.data.elementMessages[i_2].type, e.data.elementMessages[i_2].message);
+            for (var i = 0; i < e.data.elementMessages.length; i++) {
+                self.handleMessage.bind(_this)(e.data.elementMessages[i].type, e.data.elementMessages[i].message);
             }
-            for (var i_3 = 0; i_3 < e.data.audioRequests.length; i_3++) {
-                self.getAudioStream.bind(_this)(e.data.audioRequests[i_3]);
+            for (var i = 0; i < e.data.audioRequests.length; i++) {
+                self.getAudioStream.bind(_this)(e.data.audioRequests[i]);
             }
-            for (var i_4 = 0; i_4 < e.data.videoRequests.length; i_4++) {
-                self.getVideoStream.bind(_this)(e.data.videoRequests[i_4]);
+            for (var i = 0; i < e.data.videoRequests.length; i++) {
+                self.getVideoStream.bind(_this)(e.data.videoRequests[i]);
             }
             if (e.data.elementMoves.length > 0) {
                 console.log('Sending group move.');
@@ -829,7 +832,7 @@ var WhiteBoardController = (function () {
         });
         this.socket.on('ERROR', function (message) {
             console.log('SERVER: ' + message);
-            var errMsg = { type: 38, error: message };
+            var errMsg = { type: 39, error: message };
             self.worker.postMessage(errMsg);
         });
     };
@@ -870,8 +873,8 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.setElementViews = function (upadates) {
         var newElemList = this.viewState.boardElements;
-        for (var i_5 = 0; i_5 < upadates.length; i_5++) {
-            newElemList = newElemList.set(upadates[i_5].id, upadates[i_5].view);
+        for (var i = 0; i < upadates.length; i++) {
+            newElemList = newElemList.set(upadates[i].id, upadates[i].view);
         }
         this.setViewState({ boardElements: newElemList });
     };
@@ -894,11 +897,11 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.deleteElements = function (ids) {
         var newElemList = this.viewState.boardElements;
-        var _loop_1 = function(i_6) {
-            newElemList = newElemList.filter(function (element) { return element.id !== ids[i_6]; });
+        var _loop_1 = function(i) {
+            newElemList = newElemList.filter(function (element) { return element.id !== ids[i]; });
         };
-        for (var i_6 = 0; i_6 < ids.length; i_6++) {
-            _loop_1(i_6);
+        for (var i = 0; i < ids.length; i++) {
+            _loop_1(i);
         }
         this.setViewState({ boardElements: newElemList });
     };
@@ -921,15 +924,15 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.addInfoMessages = function (newInfoViews) {
         var newInfoList = this.viewState.infoElements;
-        for (var i_7 = 0; i_7 < newInfoViews.length; i_7++) {
-            newInfoList = this.viewState.infoElements.push(newInfoViews[i_7]);
+        for (var i = 0; i < newInfoViews.length; i++) {
+            newInfoList = this.viewState.infoElements.push(newInfoViews[i]);
         }
         this.setViewState({ infoElements: newInfoList });
     };
     WhiteBoardController.prototype.removeInfoMessages = function (ids) {
         var newInfoList = this.viewState.infoElements;
-        for (var i_8 = 0; i_8 < ids.length; i_8++) {
-            newInfoList = this.viewState.infoElements.delete(ids[i_8]);
+        for (var i = 0; i < ids.length; i++) {
+            newInfoList = this.viewState.infoElements.delete(ids[i]);
         }
         this.setViewState({ infoElements: newInfoList });
     };
@@ -1026,10 +1029,10 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.elementMouseUp = function (id, e, componenet, subId) {
         if (this.viewState.mode == BoardModes.SELECT) {
-            var whitElem_1 = document.getElementById("whiteBoard-input");
-            var elemRect_1 = whitElem_1.getBoundingClientRect();
-            var offsetY = elemRect_1.top - document.body.scrollTop;
-            var offsetX = elemRect_1.left - document.body.scrollLeft;
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
             var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
             var eventCopy = {
@@ -1066,10 +1069,10 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.elementMouseDoubleClick = function (id, e, componenet, subId) {
         if (this.viewState.mode == BoardModes.SELECT) {
-            var whitElem_2 = document.getElementById("whiteBoard-input");
-            var elemRect_2 = whitElem_2.getBoundingClientRect();
-            var offsetY = elemRect_2.top - document.body.scrollTop;
-            var offsetX = elemRect_2.left - document.body.scrollLeft;
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
             var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
             var eventCopy = {
@@ -1089,8 +1092,8 @@ var WhiteBoardController = (function () {
         var offsetY = elemRect.top - document.body.scrollTop;
         var offsetX = elemRect.left - document.body.scrollLeft;
         var localTouches;
-        for (var i_9 = 0; i_9 < e.touches.length; i_9++) {
-            var touch = e.touches.item(i_9);
+        for (var i = 0; i < e.touches.length; i++) {
+            var touch = e.touches.item(i);
             var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
             var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
             localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
@@ -1106,12 +1109,12 @@ var WhiteBoardController = (function () {
             this.worker.postMessage(message);
         }
         else if (this.viewState.mode == BoardModes.SELECT) {
-            for (var i_10 = 0; i_10 < e.touches.length; i_10++) {
-                var touch = e.touches.item(i_10);
-                for (var j_1 = 0; j_1 < this.prevTouch.length; j_1++) {
-                    if (this.prevTouch[j_1].identifier == touch.identifier) {
-                        var xChange = (touch.clientX - this.prevTouch[j_1].clientX) * this.scaleF;
-                        var yChange = (touch.clientY - this.prevTouch[j_1].clientY) * this.scaleF;
+            for (var i = 0; i < e.touches.length; i++) {
+                var touch = e.touches.item(i);
+                for (var j = 0; j < this.prevTouch.length; j++) {
+                    if (this.prevTouch[j].identifier == touch.identifier) {
+                        var xChange = (touch.clientX - this.prevTouch[j].clientX) * this.scaleF;
+                        var yChange = (touch.clientY - this.prevTouch[j].clientY) * this.scaleF;
                         var touchChange = { x: xChange, y: yChange, identifer: touch.identifier };
                         touchMoves.push(touchChange);
                     }
@@ -1124,13 +1127,13 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.elementTouchEnd = function (id, e, componenet, subId) {
         if (this.viewState.mode == BoardModes.SELECT) {
-            var whitElem_3 = document.getElementById("whiteBoard-input");
-            var elemRect_3 = whitElem_3.getBoundingClientRect();
-            var offsetY = elemRect_3.top - document.body.scrollTop;
-            var offsetX = elemRect_3.left - document.body.scrollLeft;
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var localTouches = void 0;
-            for (var i_11 = 0; i_11 < e.touches.length; i_11++) {
-                var touch = e.touches.item(i_11);
+            for (var i = 0; i < e.touches.length; i++) {
+                var touch = e.touches.item(i);
                 var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
                 var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
@@ -1141,13 +1144,13 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.elementTouchCancel = function (id, e, componenet, subId) {
         if (this.viewState.mode == BoardModes.SELECT) {
-            var whitElem_4 = document.getElementById("whiteBoard-input");
-            var elemRect_4 = whitElem_4.getBoundingClientRect();
-            var offsetY = elemRect_4.top - document.body.scrollTop;
-            var offsetX = elemRect_4.left - document.body.scrollLeft;
+            var whitElem = document.getElementById("whiteBoard-input");
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var localTouches = void 0;
-            for (var i_12 = 0; i_12 < e.touches.length; i_12++) {
-                var touch = e.touches.item(i_12);
+            for (var i = 0; i < e.touches.length; i++) {
+                var touch = e.touches.item(i);
                 var xPos = (touch.clientX - offsetX) * this.scaleF + this.panX;
                 var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
@@ -1231,12 +1234,12 @@ var WhiteBoardController = (function () {
             buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         };
         if (this.selectDrag) {
-            var absX = Math.round(e.clientX - offsetX);
-            var absY = Math.round(e.clientY - offsetY);
             var rectLeft = void 0;
             var rectTop = void 0;
             var rectWidth = void 0;
             var rectHeight = void 0;
+            var absX = Math.round(e.clientX - offsetX);
+            var absY = Math.round(e.clientY - offsetY);
             if (absX > this.downPoint.x) {
                 rectLeft = this.downPoint.x;
                 rectWidth = absX - this.downPoint.x;
@@ -1264,11 +1267,33 @@ var WhiteBoardController = (function () {
             var newPoint = { x: 0, y: 0 };
             newPoint.x = Math.round(e.clientX - offsetX);
             newPoint.y = Math.round(e.clientY - offsetY);
+            var rectLeft = void 0;
+            var rectTop = void 0;
+            var rectWidth = void 0;
+            var rectHeight = void 0;
+            var absX = Math.round(e.clientX - offsetX);
+            var absY = Math.round(e.clientY - offsetY);
+            if (absX > this.downPoint.x) {
+                rectLeft = this.downPoint.x;
+                rectWidth = absX - this.downPoint.x;
+            }
+            else {
+                rectLeft = absX;
+                rectWidth = this.downPoint.x - absX;
+            }
+            if (absY > this.downPoint.y) {
+                rectTop = this.downPoint.y;
+                rectHeight = absY - this.downPoint.y;
+            }
+            else {
+                rectTop = absY;
+                rectHeight = this.downPoint.y - absY;
+            }
             this.pointList.push(newPoint);
             if (this.selectCount == 0) {
                 context.clearRect(0, 0, whitElem.width, whitElem.height);
                 var data = {
-                    palleteState: this.viewState.palleteState, pointList: this.pointList
+                    palleteState: this.viewState.palleteState, pointList: this.pointList, x: rectLeft, y: rectTop, width: rectWidth, height: rectHeight
                 };
                 components.get(this.viewState.mode).DrawHandle(data, context);
             }
@@ -1278,16 +1303,16 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.mouseUp = function (e) {
         if (this.lMousePress && !this.wMousePress) {
-            var whitElem_5 = document.getElementById("whiteBoard-input");
-            var context = whitElem_5.getContext('2d');
-            var elemRect_5 = whitElem_5.getBoundingClientRect();
-            var offsetY = elemRect_5.top - document.body.scrollTop;
-            var offsetX = elemRect_5.left - document.body.scrollLeft;
+            var whitElem = document.getElementById("whiteBoard-input");
+            var context = whitElem.getContext('2d');
+            var elemRect = whitElem.getBoundingClientRect();
+            var offsetY = elemRect.top - document.body.scrollTop;
+            var offsetX = elemRect.left - document.body.scrollLeft;
             var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
             var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
             var downX = this.downPoint.x * this.scaleF + this.panX;
             var downY = this.downPoint.y * this.scaleF + this.panY;
-            context.clearRect(0, 0, whitElem_5.width, whitElem_5.height);
+            context.clearRect(0, 0, whitElem.width, whitElem.height);
             var eventCopy = {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
@@ -1308,6 +1333,22 @@ var WhiteBoardController = (function () {
         this.pointList = [];
         this.selectDrag = false;
     };
+    WhiteBoardController.prototype.mouseClick = function (e) {
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        var message = {
+            type: 29, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode
+        };
+        this.worker.postMessage(message);
+    };
     WhiteBoardController.prototype.touchStart = function (e) {
         this.touchPress = true;
     };
@@ -1326,7 +1367,7 @@ var WhiteBoardController = (function () {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 keyCode: e.keyCode, charCode: e.charCode
             };
-            var message = { type: 33, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
+            var message = { type: 34, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
             this.worker.postMessage(message);
             e.preventDefault();
         }
@@ -1335,7 +1376,7 @@ var WhiteBoardController = (function () {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 keyCode: e.keyCode, charCode: e.charCode
             };
-            var message = { type: 33, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
+            var message = { type: 34, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
             this.worker.postMessage(message);
             e.preventDefault();
         }
@@ -1349,16 +1390,16 @@ var WhiteBoardController = (function () {
         };
         if (e.ctrlKey) {
             if (inputChar == 'z') {
-                var message = { type: 34 };
+                var message = { type: 35 };
                 this.worker.postMessage(message);
             }
             else if (inputChar == 'y') {
-                var message = { type: 35 };
+                var message = { type: 36 };
                 this.worker.postMessage(message);
             }
         }
         else {
-            var message = { type: 33, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
+            var message = { type: 34, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
             this.worker.postMessage(message);
         }
     };
@@ -1393,7 +1434,7 @@ var WhiteBoardController = (function () {
         e.preventDefault();
     };
     WhiteBoardController.prototype.palleteChange = function (change) {
-        var message = { type: 36, change: change, mode: this.viewState.mode };
+        var message = { type: 37, change: change, mode: this.viewState.mode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.windowResize = function (e) {

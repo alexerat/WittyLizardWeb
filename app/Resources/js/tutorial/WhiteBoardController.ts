@@ -794,6 +794,7 @@ interface WhiteBoardDispatcher
     mouseDown: (e: MouseEvent) => void;
     mouseMove: (e: MouseEvent) => void;
     mouseUp: (e: MouseEvent) => void;
+    mouseClick: (e: MouseEvent) => void;
 
     touchStart: (e: TouchEvent) => void;
     touchMove: (e: TouchEvent) => void;
@@ -880,6 +881,7 @@ const enum ControllerMessageTypes {
     MOUSEDOWN,
     MOUSEMOVE,
     MOUSEUP,
+    MOUSECLICK,
     TOUCHSTART,
     TOUCHMOVE,
     TOUCHEND,
@@ -910,6 +912,8 @@ let registerComponentView = (componentName: string, ElementView, PalleteView, Mo
         componentName: componentName, ElementView: ElementView, PalleteView: PalleteView, ModeView: ModeView, DrawHandle: DrawHandle
     };
     components = components.set(componentName, newComp);
+
+    console.log('View Regisered.');
 }
 
 /**************************************************************************************************************************************************************
@@ -996,6 +1000,7 @@ class WhiteBoardController
             mouseDown: this.mouseDown.bind(this),
             mouseMove: this.mouseMove.bind(this),
             mouseUp: this.mouseUp.bind(this),
+            mouseClick: this.mouseClick.bind(this),
 
             touchStart: this.touchStart.bind(this),
             touchMove: this.touchMove.bind(this),
@@ -1812,12 +1817,13 @@ class WhiteBoardController
 
         if(this.selectDrag)
         {
-            let absX = Math.round(e.clientX - offsetX);
-            let absY = Math.round(e.clientY - offsetY);
             let rectLeft;
             let rectTop;
             let rectWidth;
             let rectHeight;
+
+            let absX = Math.round(e.clientX - offsetX);
+            let absY = Math.round(e.clientY - offsetY);
 
             if(absX > this.downPoint.x)
             {
@@ -1858,6 +1864,36 @@ class WhiteBoardController
             newPoint.x = Math.round(e.clientX - offsetX);
             newPoint.y = Math.round(e.clientY - offsetY);
 
+            let rectLeft;
+            let rectTop;
+            let rectWidth;
+            let rectHeight;
+
+            let absX = Math.round(e.clientX - offsetX);
+            let absY = Math.round(e.clientY - offsetY);
+
+            if(absX > this.downPoint.x)
+            {
+                rectLeft = this.downPoint.x;
+                rectWidth = absX - this.downPoint.x;
+            }
+            else
+            {
+                rectLeft = absX;
+                rectWidth = this.downPoint.x - absX;
+            }
+
+            if(absY > this.downPoint.y)
+            {
+                rectTop = this.downPoint.y;
+                rectHeight = absY - this.downPoint.y;
+            }
+            else
+            {
+                rectTop = absY;
+                rectHeight = this.downPoint.y - absY;
+            }
+
             this.pointList.push(newPoint);
 
             if(this.selectCount == 0)
@@ -1865,7 +1901,7 @@ class WhiteBoardController
                 context.clearRect(0, 0, whitElem.width, whitElem.height);
                 let data: DrawData =
                 {
-                    palleteState: this.viewState.palleteState, pointList: this.pointList
+                    palleteState: this.viewState.palleteState, pointList: this.pointList, x: rectLeft, y: rectTop, width: rectWidth, height: rectHeight
                 };
                 components.get(this.viewState.mode).DrawHandle(data, context);
             }
@@ -1919,6 +1955,30 @@ class WhiteBoardController
         this.rMousePress = false;
         this.pointList = [];
         this.selectDrag = false;
+    }
+
+    mouseClick(e: MouseEvent)
+    {
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+
+        let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
+
+        let eventCopy =
+        {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+
+        let message =
+        {
+            type: ControllerMessageTypes.MOUSECLICK, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode
+        };
+
+        this.worker.postMessage(message);
     }
 
     touchStart(e: TouchEvent)

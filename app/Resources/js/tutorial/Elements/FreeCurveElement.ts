@@ -47,11 +47,19 @@ namespace FreeCurve {
 
     }
 
+    /**
+     * The set of possible types of pallete changes.
+     * Used in interfacing between component view and state.
+     */
     const enum PalleteChangeType {
         COLOUR,
         SIZE
     }
 
+    /**
+     * The set of possible colours for free curves.
+     * Used in interfacing between component view and state.
+     */
     const PalleteColour = {
         BLACK: 'black',
         BLUE: 'blue',
@@ -59,6 +67,10 @@ namespace FreeCurve {
         GREEN: 'green'
     }
 
+    /**
+     * The set of possible sizes for free curves.
+     * Used in interfacing between component view and state.
+     */
     const PalleteSize = {
         XSMALL: 2.0,
         SMALL: 5.0,
@@ -84,7 +96,7 @@ namespace FreeCurve {
     }
 
     /**
-     * Message types that can be sent ebtween the user and server.
+     * Message types that can be sent between the user and server.
      */
     const MessageTypes = {
         NEW: 0,
@@ -260,17 +272,14 @@ namespace FreeCurve {
         colour: string;
         size: number;
 
-        moveStartX: number = 0;
-        moveStartY: number = 0;
-
-
         pointBuffer: Array<Point> = [];
         pointInTimeout;
         numRecieved: number = 0;
         numPoints: number = 0;
 
         isMoving: boolean = false;
-        moveStart: Point;
+        moveStartX: number = 0;
+        moveStartY: number = 0;
         hasMoved: boolean = false;
         startTime: Date;
 
@@ -280,7 +289,7 @@ namespace FreeCurve {
         */
         public static createElement( data: CreationData )
         {
-            if(data.pointList)
+            if(data.pointList != null && data.pointList != undefined)
             {
                 let pallete : Pallete = data.palleteState as Pallete;
                 let colour: string;
@@ -354,13 +363,13 @@ namespace FreeCurve {
                     maxX = data.pointList[0].x * data.scaleF + data.panX + size;
                     minX = data.pointList[0].x * data.scaleF + data.panX - size;
 
-                    maxY = data.pointList[0].y * data.scaleF + data.panY + size;;
+                    maxY = data.pointList[0].y * data.scaleF + data.panY + size;
                     minY = data.pointList[0].y * data.scaleF + data.panY - size;
                 }
 
                 return new Element(data.id, data.userId, minX, minY, maxX - minX, maxY - minY, data.callbacks, curves.length, curves, colour, size);
             }
-            else if(data.serverMsg)
+            else if(data.serverId != null && data.serverId != undefined && data.serverMsg != null && data.serverMsg != undefined)
             {
                 let msg = data.serverMsg as ServerNewCurvePayload;
                 let pointArray = [];
@@ -387,7 +396,7 @@ namespace FreeCurve {
         public constructor(id: number, userId: number, x: number, y: number, width: number, height: number, callbacks: ElementCallbacks,
             numPoints: number, curveSet: Array<Point>, colour: string, size: number, serverId?: number, updateTime?: Date)
         {
-            super(MODENAME, id, x, y, width, height, callbacks, serverId, updateTime);
+            super(MODENAME, id, x, y, width, height, userId, callbacks, serverId, updateTime);
 
             this.numRecieved = 0;
 
@@ -446,7 +455,7 @@ namespace FreeCurve {
             }
             else if(this.curveSet.length > 1)
             {
-                var pathText = this.createCurveText();
+                let pathText = this.createCurveText();
                 newCurveView = {
                     mode: MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
                     updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
@@ -507,8 +516,6 @@ namespace FreeCurve {
 
             return messages;
         }
-
-
 
         /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
          *
@@ -818,17 +825,17 @@ namespace FreeCurve {
             return retVal;
         }
 
-        /**   Handle a mouse down event on the board, called when this element is selected.
+        /**   Handle a mouse down event on the board, called when this element is being edited (and as required mode is this mode).
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
-         *    @param {number} localX - The relative position of the event to this elemens x position.
-         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseDown(e: MouseEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardMouseDown(e: MouseEvent, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal: ElementInputStartReturn =
@@ -842,19 +849,22 @@ namespace FreeCurve {
             return retVal;
         }
 
-        /**   Handle a mouse move event on the board, called when this element is selected.
+        /**   Handle a mouse move event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
          *
          *    For Performance reasons avoid sending server messages here unless necessary, wait for mouseUp. Likewise for undo and redo ops, just leave null.
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
          *    @param {number} changeX - The change of the mouse x position, scaled to the SVG zoom.
          *    @param {number} changeY - The change of the mouse y position, scaled to the SVG zoom.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, palleteState: Pallete)
+        public handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -870,17 +880,18 @@ namespace FreeCurve {
             return retVal;
         }
 
-        /**   Handle a mouse up event on the board, called when this element is selected.
+        /**   Handle a mouse up event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
-         *    @param {number} localX - The relative position of the event to this elemens x position.
-         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseUp(e: MouseEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardMouseUp(e: MouseEvent, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1116,7 +1127,7 @@ namespace FreeCurve {
                             this.curveSet = this.pointBuffer;
                             if(this.curveSet.length > 1)
                             {
-                                var pathText = this.createCurveText();
+                                let pathText = this.createCurveText();
                                 newView = {
                                     mode: MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
                                     updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
@@ -1192,29 +1203,39 @@ namespace FreeCurve {
             return retVal;
         }
 
-        /**   Handle the selecting of this element that has not been induced by this elements input handles.
+        /**   Handle the selecting and starting of editing of this element that has not been induced by this elements input handles.
          *
-         *    @return {ComponentViewState} An object containing: the new view state
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleSelect()
+        public handleStartEdit()
         {
-            this.isSelected = true;
-            this.updateView({ isSelected: true });
+            let retVal: ElementInputReturn = this.getDefaultInputReturn();
+            let serverMsgs: Array<UserMessage> = [];
 
-            let retVal: ComponentViewState = this.currentViewState;
+            this.isSelected = true;
+            this.isEditing = true;
+            this.updateView({ isSelected: true, isEditing: true });
+
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
-        /**   Handle the deselect this element.
+        /**   Handle the deselect this element and ending of editing.
          *
-         *    @return {ComponentViewState} An object containing: the new view state
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleDeselect()
+        public handleEndEdit()
         {
-            this.isSelected = false;
-            this.updateView({ isSelected: false });
+            let retVal: ElementInputReturn = this.getDefaultInputReturn();
+            let serverMsgs: Array<UserMessage> = [];
 
-            let retVal: ComponentViewState = this.currentViewState;
+            this.isSelected = false;
+            this.isEditing = false;
+            this.updateView({ isSelected: false, isEditing: false });
+
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
@@ -1297,11 +1318,12 @@ namespace FreeCurve {
 
         /**   Handle a change in the pallete for this component. Passed when this element is selected.
          *
-         *    @param {BoardPalleteChange} palleteChange - The pallete change to be handled.
+         *    @param {BoardPallete} pallete - The pallete for this element after changes.
+         *    @param {BoardPalleteChange} change - The changes made to the pallete.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, messages to be sent to the comm server
          */
-        public handlePalleteChange(change: BoardPalleteChange)
+        public handlePalleteChange(pallete: BoardPallete, change: BoardPalleteChange)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1334,36 +1356,11 @@ namespace FreeCurve {
         // INTERNAL FUNCTIONS
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        /**
-         *
+        /** Handle a move operation and provide view and message updates.
+         * TODO: This should probably be in the BoardElement class definition. Problem is the message type.
+         * This is used to handle undo and redo operations.
          *
          */
-        private move(changeX: number, changeY: number, updateTime: Date)
-        {
-            this.x += changeX;
-            this.y += changeY;
-            this.updateTime = updateTime;
-
-            this.updateView({ x: this.x, y: this.y, updateTime: updateTime });
-        }
-
-        private createCurveText()
-        {
-            var param =     "M" + this.curveSet[0].x + "," + this.curveSet[0].y;
-            param = param +" C" + this.curveSet[1].x + "," + this.curveSet[1].y;
-            param = param + " " + this.curveSet[2].x + "," + this.curveSet[2].y;
-            param = param + " " + this.curveSet[3].x + "," + this.curveSet[3].y;
-
-            for(var i = 4; i + 2 < this.curveSet.length; i += 3)
-            {
-                param = param +" C" + this.curveSet[i + 0].x + "," + this.curveSet[i + 0].y;
-                param = param + " " + this.curveSet[i + 1].x + "," + this.curveSet[i + 1].y;
-                param = param + " " + this.curveSet[i + 2].x + "," + this.curveSet[i + 2].y;
-            }
-
-            return param;
-        }
-
         private moveOperation(changeX: number, changeY: number, updateTime: Date)
         {
             this.move(changeX, changeY, updateTime);
@@ -1378,6 +1375,27 @@ namespace FreeCurve {
             };
 
             return retVal;
+        }
+
+        /** Convert the list of points describing the Bezier curve into a string.
+         *
+         * This speeds up the rendering as this does not have to be recreated during the render pass.
+         */
+        private createCurveText()
+        {
+            let param =     "M" + this.curveSet[0].x + "," + this.curveSet[0].y;
+            param = param +" C" + this.curveSet[1].x + "," + this.curveSet[1].y;
+            param = param + " " + this.curveSet[2].x + "," + this.curveSet[2].y;
+            param = param + " " + this.curveSet[3].x + "," + this.curveSet[3].y;
+
+            for(let i = 4; i + 2 < this.curveSet.length; i += 3)
+            {
+                param = param +" C" + this.curveSet[i + 0].x + "," + this.curveSet[i + 0].y;
+                param = param + " " + this.curveSet[i + 1].x + "," + this.curveSet[i + 1].y;
+                param = param + " " + this.curveSet[i + 2].x + "," + this.curveSet[i + 2].y;
+            }
+
+            return param;
         }
     }
 }

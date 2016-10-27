@@ -5,6 +5,8 @@
     {% stylesheets '@AppBundle/Resources/public/css/tutorial/room.css' %}
         <link rel='stylesheet' href="{{ asset_url }}" />
     {% endstylesheets %}
+
+    <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Noto+Sans'>
 {% endblock %}
 
 {% block body %}
@@ -29,6 +31,16 @@
 
         {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/FreeCurveElement.js'
                        '@AppBundle/Resources/public/js/tutorial/fitcurves.js' %}
+            <script> componentFiles.push("{{ asset_url }}"); </script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/WhiteBoardTextView.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/WhiteBoardTextElement.js'
+                       '@AppBundle/Resources/public/js/buffer.js'
+                       '@AppBundle/Resources/public/js/fontkit.js' %}
             <script> componentFiles.push("{{ asset_url }}"); </script>
         {% endjavascripts %}
 

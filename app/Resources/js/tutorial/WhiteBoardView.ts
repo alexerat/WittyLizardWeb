@@ -202,11 +202,6 @@ render: function()
 
     let modeButtons = [];
 
-    state.components.forEach((component) =>
-    {
-        modeButtons.push(React.createElement(component.ModeView, { key: state.mode, mode: state.mode, dispatcher: dispatcher.modeChange }));
-    });
-
     let pallete = null;
     let eraseButt = React.createElement('button',
     {
@@ -283,7 +278,15 @@ render: function()
         pallete = React.createElement(state.components.get(state.mode).PalleteView, { state: state.palleteState, dispatcher: dispatcher.palleteChange });
     }
 
-    let modeCont = React.createElement('div', {className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup'}, selectButt, eraseButt, modeButtons);
+    modeButtons.push(selectButt);
+    modeButtons.push(eraseButt);
+
+    state.components.forEach((component) =>
+    {
+        modeButtons.push(React.createElement(component.ModeView, { key: component.componentName, mode: state.mode, dispatcher: dispatcher.modeChange }));
+    });
+
+    let modeCont = React.createElement('div', {className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup'}, modeButtons);
     return React.createElement('div', {className: 'large-1 small-2 columns', id: 'whiteboard-controler'}, modeCont, pallete);
 }});
 
@@ -345,6 +348,7 @@ getInitialState: function()
             mouseWheel:              (e: MouseEvent)              => {},
             mouseMove:               (e: MouseEvent)              => {},
             mouseUp:                 (e: MouseEvent)              => {},
+            mouseClick:              (e: MouseEvent)              => {},
             touchStart:              (e: TouchEvent)              => {},
             touchMove:               (e: TouchEvent)              => {},
             touchEnd:                (e: TouchEvent)              => {},
@@ -376,8 +380,9 @@ render: function()
     let whitElem = React.createElement('div',
     {
         className: "large-11 small-10 columns", id: "whiteboard-container", key: 'whiteboard', onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
-        onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onMouseLeave: dispatcher.mouseUp,
-        onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut, contextMenu: 'whiteboard-context'
+        onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onClick: dispatcher.mouseClick,
+        onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut,
+        contextMenu: 'whiteboard-context'
     }, outElem, inElem);
 
     let contElem = React.createElement(ControlComponent,

@@ -47,8 +47,8 @@ var SVGComponent = React.createClass({ displayName: 'SVGComponent',
         var cursorType;
         if (state.cursorURL.length > 0) {
             cursorType = 'url(' + state.cursorURL[0] + ') ' + state.cursorOffset.x + ' ' + state.cursorOffset.y;
-            for (var i_1 = 1; i_1 < state.cursorURL.length; i_1++) {
-                cursorType += ',url(' + state.cursorURL[i_1] + ') ' + state.cursorOffset.x + ' ' + state.cursorOffset.y;
+            for (var i = 1; i < state.cursorURL.length; i++) {
+                cursorType += ',url(' + state.cursorURL[i] + ') ' + state.cursorOffset.x + ' ' + state.cursorOffset.y;
             }
             cursorType += ',auto';
         }
@@ -111,9 +111,6 @@ var ControlComponent = React.createClass({ displayName: 'ControlComponent',
         var state = this.props.state;
         var dispatcher = this.props.dispatcher;
         var modeButtons = [];
-        state.components.forEach(function (component) {
-            modeButtons.push(React.createElement(component.ModeView, { key: state.mode, mode: state.mode, dispatcher: dispatcher.modeChange }));
-        });
         var pallete = null;
         var eraseButt = React.createElement('button', {
             className: 'button mode-button', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); },
@@ -167,7 +164,12 @@ var ControlComponent = React.createClass({ displayName: 'ControlComponent',
         else if (state.mode != '') {
             pallete = React.createElement(state.components.get(state.mode).PalleteView, { state: state.palleteState, dispatcher: dispatcher.palleteChange });
         }
-        var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, selectButt, eraseButt, modeButtons);
+        modeButtons.push(selectButt);
+        modeButtons.push(eraseButt);
+        state.components.forEach(function (component) {
+            modeButtons.push(React.createElement(component.ModeView, { key: component.componentName, mode: state.mode, dispatcher: dispatcher.modeChange }));
+        });
+        var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, modeButtons);
         return React.createElement('div', { className: 'large-1 small-2 columns', id: 'whiteboard-controler' }, modeCont, pallete);
     } });
 var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
@@ -218,6 +220,7 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
                 mouseWheel: function (e) { },
                 mouseMove: function (e) { },
                 mouseUp: function (e) { },
+                mouseClick: function (e) { },
                 touchStart: function (e) { },
                 touchMove: function (e) { },
                 touchEnd: function (e) { },
@@ -240,8 +243,9 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
         });
         var whitElem = React.createElement('div', {
             className: "large-11 small-10 columns", id: "whiteboard-container", key: 'whiteboard', onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
-            onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onMouseLeave: dispatcher.mouseUp,
-            onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut, contextMenu: 'whiteboard-context'
+            onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onClick: dispatcher.mouseClick,
+            onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut,
+            contextMenu: 'whiteboard-context'
         }, outElem, inElem);
         var contElem = React.createElement(ControlComponent, {
             className: "controlPanel", id: "whiteboard-controller", key: 'controlPanel',
@@ -250,10 +254,10 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
         });
         var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context', key: 'context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }), React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
         var infoElems = [];
-        for (var i_2 = 0; i_2 < state.infoElements.size; i_2++) {
-            var info = state.infoElements.get(i_2);
+        for (var i = 0; i < state.infoElements.size; i++) {
+            var info = state.infoElements.get(i);
             var elemStyle = { position: 'absolute', zIndex: 10, left: info.x, top: info.y, width: info.width, height: info.height };
-            var infoElem = React.createElement('div', { key: i_2, className: 'callout secondary', style: elemStyle }, React.createElement('h5', null, info.header), React.createElement('p', null, info.message));
+            var infoElem = React.createElement('div', { key: i, className: 'callout secondary', style: elemStyle }, React.createElement('h5', null, info.header), React.createElement('p', null, info.message));
             infoElems.push(infoElem);
         }
         if (state.alertElements.size > 0 && !state.blockAlert) {

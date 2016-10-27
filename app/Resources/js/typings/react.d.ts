@@ -276,7 +276,7 @@ declare namespace React {
         preventDefault(): void;
         stopPropagation(): void;
         target: EventTarget;
-        timeStamp: Date;
+        timeStamp: number;
         type: string;
     }
 
@@ -329,6 +329,33 @@ declare namespace React {
         screenX: number;
         screenY: number;
         shiftKey: boolean;
+        detail: number;
+
+        // Added to remove errors in converting to plain MouseEvent
+        AT_TARGET: number;
+        BUBBLING_PHASE: number;
+        CAPTURING_PHASE: number;
+        fromElement: Element;
+        toElement: Element;
+        layerX: number;
+        layerY: number;
+        movementX: number;
+        movementY: number;
+        offsetX: number;
+        offsetY: number;
+        which: number;
+        x: number;
+        y: number;
+        view: Window;
+        cancelBubble: boolean;
+        returnValue: boolean;
+        srcElement: Element;
+        initMouseEvent: (typeArg: string, canBubbleArg: boolean, cancelableArg: boolean, viewArg: Window, detailArg: number, screenXArg: number,
+            screenYArg: number, clientXArg: number, clientYArg: number, ctrlKeyArg: boolean, altKeyArg: boolean, shiftKeyArg: boolean,
+            metaKeyArg: boolean, buttonArg: number, relatedTargetArg: EventTarget) => void;
+        initUIEvent: (typeArg: string, canBubbleArg: boolean, cancelableArg: boolean, viewArg: Window, detailArg: number) => void;
+        initEvent: (eventTypeArg: string, canBubbleArg: boolean, cancelableArg: boolean) => void;
+        stopImmediatePropagation: () => void;
     }
 
     interface TouchEvent extends SyntheticEvent {

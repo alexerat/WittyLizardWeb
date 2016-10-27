@@ -74,4 +74,6 @@ assetic:
     debug:          '%kernel.debug%'
     use_controller: '%kernel.debug%'
     filters:
+        uglifyjs2:
+            bin: /usr/bin/uglifyjs
         cssrewrite: ~

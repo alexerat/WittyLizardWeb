@@ -107,12 +107,12 @@ interface HoverMessage {
     message: string;
 }
 interface DrawData {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    pointList?: Array<Point>;
-    palleteState?: BoardPalleteViewState;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    pointList: Array<Point>;
+    palleteState: BoardPalleteViewState;
 }
 interface CreationData {
     id: number;
@@ -209,96 +209,11 @@ interface InfoMessage {
 }
 
 
-interface CursorElement extends Point {
-    height: number;
-}
-interface CursorSelection extends CursorElement {
-    width: number;
-}
-interface Style {
-    weight: string;
-    decoration: string;
-    style: string;
-    colour: string;
-}
-interface TextStyle extends Style {
-    start: number;
-    end: number;
-    text: string;
-    num: number;
-}
-interface TextNode {
-    lineNum: number;
-    x: number;
-    y: number;
-    styles: Array<StyleNode>;
-    dx: number;
-    dy: number;
-    start: number;
-    end: number;
-    endCursor: boolean;
-    justified: boolean;
-    text: string;
-}
-interface StyleNode {
-    key: number;
-    text: string;
-    colour: string;
-    dx: number;
-    locStart: number;
-    decoration: string;
-    weight: string;
-    style: string;
-    startPos: number;
-}
-interface WhiteBoardText extends BoardElement {
-    editLock: number;
-    styles: Array<TextStyle>;
-    text: string;
-    justified: boolean;
-    textNodes: Array<TextNode>;
-    cursor: CursorElement;
-    cursorElems: Array<CursorSelection>;
-    dist: Array<number>;
-    editCount: number;
-    size: number;
-    waiting: boolean;
-}
+
 interface Highlight extends BoardElement {
     colour: number;
 }
-interface TextInBufferElement {
-    x: number;
-    y: number;
-    size: number;
-    user: number;
-    editLock: number;
-    width: number;
-    height: number;
-    justified: boolean;
-    styles: Array<TextStyle>;
-    editBuffer: Array<Array<TextInNodeElement>>;
-}
-interface TextOutBufferElement {
-    id: number;
-    editCount: number;
-    x: number;
-    y: number;
-    size: number;
-    width: number;
-    height: number;
-    justified: boolean;
-    styles: Array<TextStyle>;
-    editBuffer: Array<TextInNodeElement>;
-    lastSent: number;
-}
-interface TextOutNode extends TextStyle {
-    editId: number;
-}
-interface TextInNodeElement {
-    num_nodes: number;
-    nodes: Array<TextOutNode>;
-}
+
 
 
 /***************************************************************************************************************************************************************
@@ -343,64 +258,8 @@ interface ServerMoveElementMessage extends ServeBaseMessage {
     y: number;
     editTime: Date;
 }
-interface ServerNewTextboxMessage extends ServeBaseMessage {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    justified: boolean;
-    editCount: number;
-    userId: number;
-    size: number;
-    editLock: number;
-    editTime: Date;
-}
-interface ServerStyleNodeMessage extends ServeBaseMessage {
-    userId: number;
-    editId: number;
-    weight: string;
-    decoration: string;
-    style: string;
-    colour: string;
-    start: number;
-    end: number;
-    text: string;
-    num: number;
-}
-interface ServerMissedTextMessage extends ServeBaseMessage {
-    editId: number;
-}
-interface ServerResizeTextMessage extends ServeBaseMessage {
-    width: number;
-    height: number;
-    editTime: Date;
-}
-interface ServerJustifyTextMessage extends ServeBaseMessage {
-    newState: boolean;
-}
-interface ServerEditTextMessage extends ServeBaseMessage {
-    userId: number;
-    editId: number;
-    num_nodes: number;
-    editTime: Date;
-}
-interface ServerEditIdMessage extends ServerMessage {
-    editId: number;
-    bufferId: number;
-    localId: number;
-}
-interface ServerLockIdMessage extends ServeBaseMessage {
 
-}
-interface ServerLockTextMessage extends ServeBaseMessage {
-    userId: number;
-}
-interface ServerReleaseTextMessage extends ServeBaseMessage {
 
-}
-interface ServerRefusedTextMessage extends ServeBaseMessage {
-
-}
 interface ServerHighLightMessage extends ServerMessage {
     x: number;
     y: number;
@@ -451,46 +310,7 @@ interface UserMoveElementMessage extends UserMessagePayload {
     y: number;
 }
 
-interface UserNewTextMessage extends UserMessage {
-    localId: number;
-    size: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    justified: boolean;
-}
-interface UserEditTextMessage extends UserMessagePayload {
-    localId: number;
-    bufferId: number;
-    num_nodes: number;
-}
-interface UserStyleNodeMessage extends UserMessagePayload {
-    editId: number;
-    num: number;
-    start: number;
-    end: number;
-    text: string;
-    weight: string;
-    style: string;
-    decoration: string;
-    colour: string;
-}
-interface UserJustifyTextMessage extends UserMessagePayload {
-    newState: boolean;
-}
-interface UserLockTextMessage extends UserMessagePayload {
-}
-interface UserReleaseTextMessage extends UserMessagePayload {
-    serverId: number;
-}
-interface UserResizeTextMessage extends UserMessagePayload {
-    width: number;
-    height: number;
-}
-interface UserMissingTextMessage extends UserMessagePayload {
-    seq_num: number;
-}
+
 interface UserHighLightMessage extends UserMessage {
     x: number;
     y: number;

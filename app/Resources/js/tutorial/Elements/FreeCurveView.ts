@@ -119,7 +119,7 @@ namespace FreeCurveView
     *
     * This is the class that will be used to render the element. It must return an SVG tag (which may have embedded tags).
     */
-    export class ElementView extends React.Component
+    export class ElementView extends React.Component<any, {}>
     {
         props: ComponentProp;
 
@@ -299,12 +299,12 @@ namespace FreeCurveView
         }
     }
 
-    /** Free Curve Whiteboard Mode View.
+    /** Whiteboard Mode View.
     *
     * This is the class that will be used to render the mode selection button for this component. Must return a button.
     *
     */
-    export class ModeView extends React.Component
+    export class ModeView extends React.Component<any, {}>
     {
         props: ModeProp;
 
@@ -332,13 +332,13 @@ namespace FreeCurveView
         }
     }
 
-    /** Free Curve Whiteboard Pallete View.
+    /** Whiteboard Pallete View.
     *
     * This is the class that will be used to render the pallete for this component.
     * This will be displayed when the mode for this component is selected.
     *
     */
-    export class PalleteView extends React.Component
+    export class PalleteView extends React.Component<any, {}>
     {
         props: PalleteProp;
 
@@ -453,14 +453,14 @@ namespace FreeCurveView
         }
     }
 
-    /** Free Curve Custom Context View.
+    /** Custom Context View.
     *
     * This is the class that will be used to render the additional context menu items for this component.
     * This will be displayed when the mode for this component is selected.
     *
     * Note: Copy, Cut and Paste have standard event handlers in dispatcher. If other context items are desired they must use the custom context event.
     */
-    export class CustomContextView extends React.Component
+    export class CustomContextView extends React.Component<any, {}>
     {
         propTypes = {};
 

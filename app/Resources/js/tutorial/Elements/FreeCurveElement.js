@@ -46,10 +46,11 @@ var FreeCurve;
     var Pallete = (function (_super) {
         __extends(Pallete, _super);
         function Pallete() {
-            _super.call(this);
-            this.baseSize = PalleteSize.SMALL;
-            this.colour = 'black';
-            this.currentViewState = { colour: PalleteColour.BLACK, size: PalleteSize.SMALL };
+            var _this = _super.call(this) || this;
+            _this.baseSize = PalleteSize.SMALL;
+            _this.colour = 'black';
+            _this.currentViewState = { colour: PalleteColour.BLACK, size: PalleteSize.SMALL };
+            return _this;
         }
         Pallete.prototype.getCurrentViewState = function () {
             return this.currentViewState;
@@ -115,28 +116,28 @@ var FreeCurve;
     var Element = (function (_super) {
         __extends(Element, _super);
         function Element(id, userId, x, y, width, height, callbacks, numPoints, curveSet, colour, size, serverId, updateTime) {
-            _super.call(this, FreeCurve.MODENAME, id, x, y, width, height, callbacks, serverId, updateTime);
-            this.moveStartX = 0;
-            this.moveStartY = 0;
-            this.pointBuffer = [];
-            this.numRecieved = 0;
-            this.numPoints = 0;
-            this.isMoving = false;
-            this.hasMoved = false;
-            this.numRecieved = 0;
+            var _this = _super.call(this, FreeCurve.MODENAME, id, x, y, width, height, userId, callbacks, serverId, updateTime) || this;
+            _this.pointBuffer = [];
+            _this.numRecieved = 0;
+            _this.numPoints = 0;
+            _this.isMoving = false;
+            _this.moveStartX = 0;
+            _this.moveStartY = 0;
+            _this.hasMoved = false;
+            _this.numRecieved = 0;
             if (serverId != null && serverId != undefined) {
-                for (var i_1 = 0; i_1 < numPoints; i_1++) {
-                    if (curveSet[i_1] != null && curveSet[i_1] != undefined) {
-                        this.pointBuffer[i_1] = curveSet[i_1];
-                        this.numRecieved++;
+                for (var i = 0; i < numPoints; i++) {
+                    if (curveSet[i] != null && curveSet[i] != undefined) {
+                        _this.pointBuffer[i] = curveSet[i];
+                        _this.numRecieved++;
                     }
                 }
-                if (this.numRecieved < numPoints) {
-                    var self_1 = this;
+                if (_this.numRecieved < numPoints) {
+                    var self_1 = _this;
                     self_1.pointInTimeout = setInterval(function () {
-                        for (var i_2 = 0; i_2 < self_1.numPoints; i_2++) {
-                            if (self_1.pointBuffer[i_2] == null || self_1.pointBuffer[i_2] == undefined) {
-                                var msg = { seq_num: i_2 };
+                        for (var i = 0; i < self_1.numPoints; i++) {
+                            if (self_1.pointBuffer[i] == null || self_1.pointBuffer[i] == undefined) {
+                                var msg = { seq_num: i };
                                 var msgCont = { header: MessageTypes.MISSINGPOINT, payload: msg };
                                 self_1.sendServerMsg(msgCont);
                             }
@@ -145,43 +146,44 @@ var FreeCurve;
                 }
             }
             else {
-                for (var i_3 = 0; i_3 < curveSet.length; i_3++) {
-                    this.pointBuffer[i_3] = curveSet[i_3];
-                    this.numRecieved++;
+                for (var i = 0; i < curveSet.length; i++) {
+                    _this.pointBuffer[i] = curveSet[i];
+                    _this.numRecieved++;
                 }
             }
-            this.numPoints = numPoints;
-            this.curveSet = curveSet;
-            this.colour = colour;
-            this.size = size;
-            this.isComplete = false;
+            _this.numPoints = numPoints;
+            _this.curveSet = curveSet;
+            _this.colour = colour;
+            _this.size = size;
+            _this.isComplete = false;
             var newCurveView;
-            if (this.numRecieved < this.numPoints) {
+            if (_this.numRecieved < _this.numPoints) {
                 console.log('Empty curve set.');
                 newCurveView = {
-                    mode: FreeCurve.MODENAME, type: 'empty', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, updateTime: this.updateTime,
-                    isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    mode: FreeCurve.MODENAME, type: 'empty', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, updateTime: _this.updateTime,
+                    isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
                 };
             }
-            else if (this.curveSet.length > 1) {
-                var pathText = this.createCurveText();
+            else if (_this.curveSet.length > 1) {
+                var pathText = _this.createCurveText();
                 newCurveView = {
-                    mode: FreeCurve.MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
-                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    mode: FreeCurve.MODENAME, type: 'path', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, param: pathText,
+                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
                 };
-                this.isComplete = true;
+                _this.isComplete = true;
             }
-            else if (this.curveSet.length == 1) {
+            else if (_this.curveSet.length == 1) {
                 newCurveView = {
-                    mode: FreeCurve.MODENAME, type: 'circle', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, point: this.curveSet[0],
-                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    mode: FreeCurve.MODENAME, type: 'circle', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, point: _this.curveSet[0],
+                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
                 };
-                this.isComplete = true;
+                _this.isComplete = true;
             }
-            this.currentViewState = newCurveView;
+            _this.currentViewState = newCurveView;
+            return _this;
         }
         Element.createElement = function (data) {
-            if (data.pointList) {
+            if (data.pointList != null && data.pointList != undefined) {
                 var pallete = data.palleteState;
                 var colour = void 0;
                 var size = void 0;
@@ -204,25 +206,25 @@ var FreeCurve;
                     reducedPoints = SmoothCurve(data.pointList);
                     reducedPoints = DeCluster(reducedPoints, 10);
                     console.log(JSON.stringify(data.pointList));
-                    for (var i_4 = 0; i_4 < reducedPoints.length; i_4++) {
-                        reducedPoints[i_4].x = reducedPoints[i_4].x * data.scaleF + data.panX;
-                        reducedPoints[i_4].y = reducedPoints[i_4].y * data.scaleF + data.panY;
-                        if (minX == null || reducedPoints[i_4].x < minX) {
-                            minX = reducedPoints[i_4].x;
+                    for (var i = 0; i < reducedPoints.length; i++) {
+                        reducedPoints[i].x = reducedPoints[i].x * data.scaleF + data.panX;
+                        reducedPoints[i].y = reducedPoints[i].y * data.scaleF + data.panY;
+                        if (minX == null || reducedPoints[i].x < minX) {
+                            minX = reducedPoints[i].x;
                         }
-                        if (maxX == null || reducedPoints[i_4].x > maxX) {
-                            maxX = reducedPoints[i_4].x;
+                        if (maxX == null || reducedPoints[i].x > maxX) {
+                            maxX = reducedPoints[i].x;
                         }
-                        if (minY == null || reducedPoints[i_4].y < minY) {
-                            minY = reducedPoints[i_4].y;
+                        if (minY == null || reducedPoints[i].y < minY) {
+                            minY = reducedPoints[i].y;
                         }
-                        if (maxY == null || reducedPoints[i_4].y > maxY) {
-                            maxY = reducedPoints[i_4].y;
+                        if (maxY == null || reducedPoints[i].y > maxY) {
+                            maxY = reducedPoints[i].y;
                         }
                     }
-                    for (var i_5 = 0; i_5 < reducedPoints.length; i_5++) {
-                        reducedPoints[i_5].x = reducedPoints[i_5].x - minX;
-                        reducedPoints[i_5].y = reducedPoints[i_5].y - minY;
+                    for (var i = 0; i < reducedPoints.length; i++) {
+                        reducedPoints[i].x = reducedPoints[i].x - minX;
+                        reducedPoints[i].y = reducedPoints[i].y - minY;
                     }
                     curves = FitCurve(reducedPoints, reducedPoints.length, 5);
                 }
@@ -232,16 +234,15 @@ var FreeCurve;
                     maxX = data.pointList[0].x * data.scaleF + data.panX + size;
                     minX = data.pointList[0].x * data.scaleF + data.panX - size;
                     maxY = data.pointList[0].y * data.scaleF + data.panY + size;
-                    ;
                     minY = data.pointList[0].y * data.scaleF + data.panY - size;
                 }
                 return new Element(data.id, data.userId, minX, minY, maxX - minX, maxY - minY, data.callbacks, curves.length, curves, colour, size);
             }
-            else if (data.serverMsg) {
+            else if (data.serverId != null && data.serverId != undefined && data.serverMsg != null && data.serverMsg != undefined) {
                 var msg = data.serverMsg;
                 var pointArray = [];
-                for (var i_6 = 0; i_6 < msg.points.length; i_6++) {
-                    pointArray[msg.points[i_6].seq_num] = { x: msg.points[i_6].x, y: msg.points[i_6].y };
+                for (var i = 0; i < msg.points.length; i++) {
+                    pointArray[msg.points[i].seq_num] = { x: msg.points[i].x, y: msg.points[i].y };
                 }
                 return new Element(data.id, data.userId, msg.x, msg.y, msg.width, msg.height, data.callbacks, msg.num_points, pointArray, msg.colour, msg.size, data.serverId);
             }
@@ -252,8 +253,8 @@ var FreeCurve;
         };
         Element.prototype.getNewMsg = function () {
             var pointMessages = [];
-            for (var i_7 = 0; i_7 < this.pointBuffer.length; i_7++) {
-                var pointCont = { seq_num: i_7, x: this.pointBuffer[i_7].x, y: this.pointBuffer[i_7].y };
+            for (var i = 0; i < this.pointBuffer.length; i++) {
+                var pointCont = { seq_num: i, x: this.pointBuffer[i].x, y: this.pointBuffer[i].y };
                 pointMessages.push(pointCont);
             }
             var msg = {
@@ -375,7 +376,7 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleBoardMouseDown = function (e, x, y, palleteState) {
+        Element.prototype.handleBoardMouseDown = function (e, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: false,
@@ -384,7 +385,7 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleBoardMouseMove = function (e, changeX, changeY, palleteState) {
+        Element.prototype.handleBoardMouseMove = function (e, changeX, changeY, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             if (this.isMoving) {
@@ -395,7 +396,7 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleBoardMouseUp = function (e, x, y, palleteState) {
+        Element.prototype.handleBoardMouseUp = function (e, mouseX, mouseY, palleteState) {
             var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
@@ -562,16 +563,22 @@ var FreeCurve;
             };
             return retVal;
         };
-        Element.prototype.handleSelect = function () {
+        Element.prototype.handleStartEdit = function () {
+            var retVal = this.getDefaultInputReturn();
+            var serverMsgs = [];
             this.isSelected = true;
-            this.updateView({ isSelected: true });
-            var retVal = this.currentViewState;
+            this.isEditing = true;
+            this.updateView({ isSelected: true, isEditing: true });
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleDeselect = function () {
+        Element.prototype.handleEndEdit = function () {
+            var retVal = this.getDefaultInputReturn();
+            var serverMsgs = [];
             this.isSelected = false;
-            this.updateView({ isSelected: false });
-            var retVal = this.currentViewState;
+            this.isEditing = false;
+            this.updateView({ isSelected: false, isEditing: false });
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
         Element.prototype.handleCopy = function (e, palleteState) {
@@ -598,7 +605,7 @@ var FreeCurve;
             var retVal = { header: '', message: '' };
             return retVal;
         };
-        Element.prototype.handlePalleteChange = function (change) {
+        Element.prototype.handlePalleteChange = function (pallete, change) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             retVal.serverMessages = this.checkForServerId(serverMsgs);
@@ -608,11 +615,15 @@ var FreeCurve;
         };
         Element.prototype.videoStream = function (stream) {
         };
-        Element.prototype.move = function (changeX, changeY, updateTime) {
-            this.x += changeX;
-            this.y += changeY;
-            this.updateTime = updateTime;
-            this.updateView({ x: this.x, y: this.y, updateTime: updateTime });
+        Element.prototype.moveOperation = function (changeX, changeY, updateTime) {
+            this.move(changeX, changeY, updateTime);
+            var msgPayload = { x: this.x, y: this.y };
+            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
+            var retVal = {
+                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
+                wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
+            };
+            return retVal;
         };
         Element.prototype.createCurveText = function () {
             var param = "M" + this.curveSet[0].x + "," + this.curveSet[0].y;
@@ -625,16 +636,6 @@ var FreeCurve;
                 param = param + " " + this.curveSet[i + 2].x + "," + this.curveSet[i + 2].y;
             }
             return param;
-        };
-        Element.prototype.moveOperation = function (changeX, changeY, updateTime) {
-            this.move(changeX, changeY, updateTime);
-            var msgPayload = { x: this.x, y: this.y };
-            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
-                wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
-            };
-            return retVal;
         };
         return Element;
     }(BoardElement));
