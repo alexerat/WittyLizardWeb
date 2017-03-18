@@ -113,7 +113,7 @@ class TutorialRoomController extends Controller
 
         $session = $this->get('session');
         $sessId = $session->getId();
-        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => false));
+        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => "FALSE"));
     }
 
     /**
@@ -315,7 +315,7 @@ class TutorialRoomController extends Controller
         // Return the tutorial room template for tutors.
         $session = $this->get('session');
         $sessId = $session->getId();
-        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => true));
+        return $this->render('tutorial/room.html.twig', array('roomToken' => $roomToken, 'serverToken' => $serverToken, 'sessionId' => $sessId, 'isHost' => "TRUE"));
     }
 
 

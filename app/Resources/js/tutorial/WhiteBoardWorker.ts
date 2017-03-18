@@ -1,21 +1,58 @@
 /// <reference path="../typings/lib.webworker.d.ts" />
 
+/**
+ * Message types that can be sent between the user and server.
+ */
+const BaseMessageTypes = {
+    DELETE: -1,
+    RESTORE: -2,
+    DROPPED: -3,
+    MOVE: -4,
+    RESIZE: -5,
+    LOCK: -6,
+    RELEASE: -7,
+    LOCKID: -8,
+    REFUSE: -9,
+    COMPLETE: -10
+};
+
+const MAXSIZE = 10485760;
+
+const UploadViewTypes = {
+    IMAGE: 'IMAGE',
+    VIDEO: 'VIDEO',
+    AUDIO: 'AUDIO',
+    FILE: 'FILE',
+    IFRAME: 'IFRAME'
+};
+
+interface WorkerClipboardItem extends ClipBoardItem
+{
+    elemId: number;
+}
+
+
 /** The base class for whiteboard elements.
   *
   * Whiteboard components will inherit this to produce addins that allow specific 'draw' functionality.
   * This is the portion that is run on the worker thread and not the UI thread. This definition is nat availible to the UI thread.
   */
 abstract class BoardElement {
-    serverId: number;
+
     readonly id: number;
+    readonly type: string;
+    readonly user: number;
+
+    idTimeout: any;
+
+    serverId: number;
     x: number;
     y: number;
     width: number;
     height: number;
-    user: number;
+
     updateTime: Date;
     isDeleted: boolean;
-    type: string;
     opBuffer: Array<UserMessage>;
     hoverTimer: number;
     infoElement: number;
@@ -24,6 +61,21 @@ abstract class BoardElement {
     isSelected: boolean;
     isComplete: boolean;
     isEditing: boolean;
+    gettingLock: boolean;
+    editLock: boolean;
+    lockedBy: number;
+
+    isMoving: boolean;
+    moveStartX: number;
+    moveStartY: number;
+    hasMoved: boolean;
+    startTime: Date;
+    isResizing: boolean = false;
+    resizeHorz: boolean = false;
+    resizeVert: boolean = false;
+    oldWidth: number;
+    oldHeight: number;
+    hasResized: boolean = false;
 
     currentViewState: ComponentViewState;
 
@@ -32,8 +84,10 @@ abstract class BoardElement {
     createAlert: (header: string, message: string) => void;
     createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) => void;
     updateBoardView: (newView: ComponentViewState) => void;
+    updatePallete: (changes: Array<BoardPalleteChange>) => void;
     getAudioStream: (id: number) => void;
     getVideoStream: (id: number) => void;
+    deleteElement: () => void;
 
     /** Constructor for the base board elements.
      *
@@ -60,18 +114,39 @@ abstract class BoardElement {
         this.createAlert = callbacks.createAlert;
         this.createInfo = callbacks.createInfo;
         this.updateBoardView = callbacks.updateBoardView;
+        this.updatePallete = callbacks.updatePallete;
         this.getAudioStream = callbacks.getAudioStream;
         this.getVideoStream = callbacks.getVideoStream;
+        this.deleteElement = callbacks.deleteElement;
         this.serverId = serverId;
         this.opBuffer = [];
+        this.operationStack = [];
+        this.operationPos = 0;
         this.infoElement = -1;
         this.isEditing = false;
         this.isSelected = false;
+        this.gettingLock = false;
+        this.editLock = false;
+        this.lockedBy = null;
 
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
+
+        this.isMoving = false;
+        this.moveStartX = 0;
+        this.moveStartY = 0;
+        this.hasMoved = false;
+        this.isResizing = false;
+        this.resizeHorz = false;
+        this.resizeVert = false;
+        this.hasResized = false;
+
+        if(serverId == null || serverId == undefined)
+        {
+            this.idTimeout = setTimeout(this.idFailed, 10000);
+        }
 
         if(updateTime)
         {
@@ -81,6 +156,29 @@ abstract class BoardElement {
         {
             this.updateTime = new Date();
         }
+    }
+
+    /**   Sets the serverId of this element and returns a list of server messages to send.
+     *
+     *    @param {number} id - The server ID for this element.
+     *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
+     */
+    public setServerId(id: number)
+    {
+        this.serverId = id;
+        clearTimeout(this.idTimeout);
+        return null;
+    }
+
+    private idFailed()
+    {
+        this.createAlert('CONNECTION ERROR', 'Unable to send data to server due to connection problems.');
+
+        let msg: UserMessage = { header: BaseMessageTypes.DELETE, payload: null };
+
+        this.sendServerMsg(msg);
+
+        this.deleteElement();
     }
 
     /** Update the view state of this object.
@@ -189,11 +287,7 @@ abstract class BoardElement {
         return retVal;
     }
 
-    /**
-     *
-     *
-     */
-    abstract setServerId(id: number): Array<UserMessage>;
+
 
     /**
      *
@@ -240,21 +334,186 @@ abstract class BoardElement {
         this.updateView({ x: this.x, y: this.y, updateTime: updateTime });
     }
 
+    /** Handle the basic resize behaviour.
+     *
+     *
+     */
+    protected resize(width: number, height: number, updateTime: Date)
+    {
+        this.updateTime = updateTime;
+
+        this.height = height;
+
+        this.updateView(
+        {
+            width: this.width, height: this.height
+        });
+    }
+
+    /** Handle a move operation and provide view and message updates.
+     * This is used to handle undo and redo operations.
+     *
+     */
+    protected moveOperation(changeX: number, changeY: number, updateTime: Date)
+    {
+        this.move(changeX, changeY, updateTime);
+
+        let msgPayload: UserMoveElementMessage = { x: this.x, y: this.y };
+        let serverMsg: UserMessage = { header: BaseMessageTypes.MOVE, payload: msgPayload };
+
+        let retVal: ElementUndoRedoReturn =
+        {
+            id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
+            wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
+        };
+
+        return retVal;
+    }
+
     /**
      *
      *
      */
-    abstract elementErase(): ElementUndoRedoReturn;
+    protected resizeOperation(width: number, height: number, updateTime: Date)
+    {
+        let serverMessages: Array<UserMessage> = [];
+
+        this.resize(width, height, updateTime);
+
+        let msgPayload: UserResizeElementMessage = { width: this.width, height: this.height };
+        let serverMsg: UserMessage = { header: BaseMessageTypes.RESIZE, payload: msgPayload };
+
+        serverMessages.push(serverMsg);
+
+        let retVal: ElementUndoRedoReturn =
+        {
+            id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
+            wasRestore: null, move: null
+        };
+
+        retVal.serverMessages = this.checkForServerId(serverMessages);
+        return retVal;
+    }
+
+    /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementUndoRedoReturn} The new view state of this element.
+     */
+    public elementErase()
+    {
+        let retMsgs: Array<UserMessage> = [];
+        let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
+
+        let message: UserMessage = { header: BaseMessageTypes.DELETE, payload: null };
+
+        this.erase();
+
+        let retVal: ElementUndoRedoReturn =
+        {
+            id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: { message: message },
+            wasRestore: null, move: null
+        };
+
+        let msg: UserMessage = { header: BaseMessageTypes.DELETE, payload: null };
+        retMsgs.push(msg);
+
+        retVal.serverMessages = this.checkForServerId(retMsgs);
+
+        return retVal;
+    }
+
+    /**   Sets this item as not deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementUndoRedoReturn} The new view state of this element.
+     */
+    public elementRestore()
+    {
+        let retMsgs: Array<UserMessage> = [];
+        let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
+
+        let message: UserMessage = { header: BaseMessageTypes.RESTORE, payload: null };
+
+        this.restore();
+
+        let retVal: ElementUndoRedoReturn =
+        {
+            id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
+            wasRestore: { message: message }, move: null
+        };
+
+        let msg: UserMessage = { header: BaseMessageTypes.RESTORE, payload: null };
+        retMsgs.push(msg);
+
+        retVal.serverMessages = this.checkForServerId(retMsgs);
+        return retVal;
+    }
+
+    /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+     *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+     */
+    public handleErase()
+    {
+        let serverMsgs: Array<UserMessage> = [];
+        let retVal = this.getDefaultInputReturn();
+
+        let eraseRet = this.elementErase();
+
+        retVal.serverMessages = eraseRet.serverMessages;
+        retVal.newView = eraseRet.newView;
+
+        let undoOp = this.elementRestore;
+        let redoOp = this.elementErase;
+
+        retVal.undoOp = undoOp.bind(this);
+        retVal.redoOp = redoOp.bind(this);
+
+        return retVal;
+    }
+
     /**
      *
      *
      */
-    abstract elementRestore(): ElementUndoRedoReturn;
+    protected setEdit()
+    {
+        this.gettingLock = false;
+        this.isEditing = true;
+
+        this.updateView({ getLock: false, isEditing: true });
+    }
+
     /**
      *
      *
      */
-    abstract handleErase(): ElementInputReturn;
+    protected setLock(userId: number)
+    {
+        this.lockedBy = userId;
+        this.editLock = true;
+
+        this.updateView({ remLock: true });
+    }
+
+    /**
+     *
+     *
+     */
+    protected setUnLock()
+    {
+        this.lockedBy = null;
+        this.editLock = false;
+
+        this.updateView({ remLock: false });
+    }
+
 
     /**
      *
@@ -300,12 +559,101 @@ abstract class BoardElement {
     abstract handleBoardTouchEnd(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
     abstract handleBoardTouchCancel(e: TouchEvent, touches: Array<Point>, palleteState: BoardPallete): ElementInputReturn;
     abstract handleKeyPress(e: KeyboardEvent, input: string, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleCopy(e: ClipboardEvent, palleteState: BoardPallete): void;
-    abstract handlePaste(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
-    abstract handleCut(e: ClipboardEvent, palleteState: BoardPallete): ElementInputReturn;
+    abstract handlePaste(localX: number, localY: number, data: ClipboardEventData, palleteState: BoardPallete): ElementInputReturn;
+    abstract handleCut(): ElementInputReturn;
     abstract handleCustomContext(item: number, palleteState: BoardPallete): ElementInputReturn;
 
-    abstract handleServerMessage(message): ElementMessageReturn;
+    abstract handleElementServerMessage(message): ElementMessageReturn;
+
+    abstract getClipboardSVG(): string;
+    abstract getClipboardData(): Array<ClipBoardItem>;
+
+    /**   Handle a messages sent from the server to this element.
+     *
+     *    @param {} message - The server message that was sent.
+     *
+     *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
+     */
+    public handleServerMessage(message: ServerMessage)
+    {
+        let newView: ComponentViewState = this.currentViewState;
+        let retMsgs: Array<UserMessage> = [];
+        let alertMessage: AlertMessageData = null;
+        let infoMessage: InfoMessageData = null;
+        let wasEdit = false;
+        let wasDelete = false;
+
+        console.log("Recieved message: " + JSON.stringify(message));
+
+        switch(message.header)
+        {
+            case BaseMessageTypes.DROPPED:
+                alertMessage = { header: 'CONNECTION ERROR', message: 'Unable to send data to server due to connection problems.' };
+                wasDelete = true;
+                break;
+            case BaseMessageTypes.COMPLETE:
+                while(this.opBuffer.length > 0)
+                {
+                    let opMsg: UserMessage;
+                    let op = this.opBuffer.shift();
+                    opMsg = { header: op.header, payload: op.payload };
+                    retMsgs.push(opMsg);
+                }
+                break;
+            case BaseMessageTypes.MOVE:
+                let mvdata = message.payload as ServerMoveElementMessage;
+                this.move(mvdata.x - this.x, mvdata.y - this.y, mvdata.editTime);
+                this.updateTime = mvdata.editTime;
+                newView = this.currentViewState;
+                break;
+            case BaseMessageTypes.RESIZE:
+                let resizeData = message.payload as ServerResizeElementMessage;
+                this.resize(resizeData.width, resizeData.height, resizeData.editTime);
+                newView = this.currentViewState;
+                break;
+            case BaseMessageTypes.LOCK:
+                let lockData = message.payload as ServerLockElementMessage;
+                this.setLock(lockData.userId);
+                newView = this.currentViewState;
+                break;
+            case BaseMessageTypes.RELEASE:
+                this.setUnLock();
+                break;
+            case BaseMessageTypes.LOCKID:
+                if(this.gettingLock)
+                {
+                    this.setEdit();
+                }
+                else
+                {
+                    let releaseMsg: UserMessage = { header: BaseMessageTypes.RELEASE, payload: null };
+                    retMsgs.push(releaseMsg);
+                }
+                newView = this.currentViewState;
+                break;
+            case BaseMessageTypes.REFUSE:
+                alertMessage = { header: 'Unable To Edit Item', message: 'The current room settings do not allow the editing of this item.' };
+                break;
+            case BaseMessageTypes.DELETE:
+                wasDelete = true;
+                this.erase();
+                newView = this.currentViewState;
+                break;
+            case BaseMessageTypes.RESTORE:
+                this.restore();
+                newView = this.currentViewState;
+                break;
+
+            default:
+                return this.handleElementServerMessage(message);
+        }
+
+        let retVal: ElementMessageReturn =
+        {
+            newView: newView, serverMessages: retMsgs, wasEdit: wasEdit, wasDelete: wasDelete, alertMessage: alertMessage, infoMessage: infoMessage
+        };
+        return retVal;
+    }
 
     /**   Handle the selecting of this element that has not been induced by this elements input handles.
      *
@@ -316,7 +664,8 @@ abstract class BoardElement {
         this.isSelected = true;
         this.updateView({ isSelected: true });
 
-        let retVal: ComponentViewState = this.currentViewState;
+        let retVal = this.currentViewState;
+
         return retVal;
     }
 
@@ -461,6 +810,10 @@ namespace LocalAbstraction
         KEYBOARDINPUT,
         UNDO,
         REDO,
+        DRAG,
+        DROP,
+        PASTE,
+        CUT,
         PALLETECHANGE,
         LEAVE,
         ERROR
@@ -497,6 +850,8 @@ namespace LocalAbstraction
 
         touchStartHandled:  boolean = false;
 
+        dropToElement: boolean = false;
+
         operationStack: Array<WhiteBoardOperation> = [];
         operationPos:   number = 0;
 
@@ -521,6 +876,8 @@ namespace LocalAbstraction
         elementDeletes = [];
         elementRestores = [];
 
+        clipboardItems = [];
+
         /** Construct the whiteboard controller.
          *
          * This is a singleton within the application.
@@ -538,6 +895,8 @@ namespace LocalAbstraction
             this.allowAllEdit = allEdit;
             this.allowUserEdit = userEdit;
             this.controller = workerContext;
+
+            console.log('Room options: allowAllEdit: ' + allEdit + ', allowUserEdit: ' + userEdit + ', isHost: ' + isHost);
         }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -581,6 +940,49 @@ namespace LocalAbstraction
         {
             this.allowAllEdit = allowAllEdit;
             this.allowUserEdit = allowUserEdit;
+
+            console.log('Room options: allowAllEdit: ' + allowAllEdit + ', allowUserEdit: ' + allowUserEdit);
+        }
+
+        endCallback()
+        {
+            let clipData: Array<ClipBoardItem> = [];
+
+            if(controller.currSelect.length > 1)
+            {
+                // TODO: Parse svg items into single image and push to clipData.
+            }
+            else
+            {
+                for(let i = 0; i < controller.clipboardItems.length; i++)
+                {
+                    clipData.push({ format: controller.clipboardItems[i].format, data: controller.clipboardItems[i].data });
+                }
+            }
+
+            let message =
+            {
+                elementViews: controller.elementUpdateBuffer, elementMessages: controller.socketMessageBuffer, deleteElements: controller.deleteBuffer,
+                audioRequests: controller.audioRequests, videoRequests: controller.videoRequests, alerts: controller.alertBuffer,
+                infoMessages: controller.infoBuffer, removeAlert: controller.willRemoveAlert, removeInfos: controller.removeInfoBuffer,
+                selectCount: controller.currSelect.length, elementMoves: controller.elementMoves, elementDeletes: controller.elementDeletes,
+                elementRestores: controller.elementRestores, clipboardData: clipData
+            }
+
+            if(controller.viewUpdateBuffer != null)
+            {
+                Object.assign(message, {viewUpdate: controller.viewUpdateBuffer});
+            }
+            if(controller.newViewCentre != null)
+            {
+                Object.assign(message, {viewCentre: controller.newViewCentre});
+            }
+            if(controller.newViewBox != null)
+            {
+                Object.assign(message, {viewBox: controller.newViewBox});
+            }
+
+            postMessage(message);
         }
 
         sendMessage(type: string, message)
@@ -642,21 +1044,6 @@ namespace LocalAbstraction
             });
         }
 
-        drawRect()
-        {
-            /* TODO */
-        }
-
-        drawCurve()
-        {
-            /* TODO */
-        }
-
-        drawElement()
-        {
-            /* TODO */
-        }
-
         sendElementMessage(id: number, type: string, message: UserMessage)
         {
             let serverId = this.getBoardElement(id).serverId;
@@ -674,14 +1061,40 @@ namespace LocalAbstraction
                 this.setElementView(elem.id, newView);
             }
 
+            this.clipboardItems = [];
+
             for(let i = 0; i < ids.length; i++)
             {
                 let elem = this.getBoardElement(ids[i]);
                 if(!elem.isDeleted)
                 {
-                    let newView = elem.handleSelect();
+                    let retVal = elem.handleSelect();
                     this.currSelect.push(elem.id);
-                    this.setElementView(elem.id, newView);
+                    this.setElementView(elem.id, retVal);
+
+                    let svgItems = [];
+
+                    if(ids.length > 1)
+                    {
+                        let svgElem = elem.getClipboardSVG();
+
+                        if(svgElem != null)
+                        {
+                            this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: elem.id });
+                        }
+                    }
+                    else
+                    {
+                        let clipElems = elem.getClipboardData();
+
+                        if(clipElems != null)
+                        {
+                            for(let i = 0; i < clipElems.length; i++)
+                            {
+                                this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -722,9 +1135,28 @@ namespace LocalAbstraction
 
                 if(!alreadySelected)
                 {
-                    if(e.ctrlKey)
+                    if(e.ctrlKey && this.currSelect.length > 0)
                     {
+                        if(this.currSelect.length == 1)
+                        {
+                            this.clipboardItems = [];
+
+                            let svgElem = this.boardElems[this.currSelect[0]].getClipboardSVG();
+
+                            if(svgElem != null)
+                            {
+                                this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: this.boardElems[this.currSelect[0]].id });
+                            }
+                        }
+
                         this.currSelect.push(elem.id);
+
+                        let svgElem = elem.getClipboardSVG();
+
+                        if(svgElem != null)
+                        {
+                            this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: elem.id });
+                        }
                     }
                     else
                     {
@@ -738,6 +1170,18 @@ namespace LocalAbstraction
                             }
                         }
                         this.currSelect = [];
+                        this.clipboardItems = [];
+
+                        let clipElems = elem.getClipboardData();
+
+                        if(clipElems != null)
+                        {
+                            for(let i = 0; i < clipElems.length; i++)
+                            {
+                                this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                            }
+                        }
+
                         this.currSelect.push(elem.id);
                     }
                 }
@@ -771,20 +1215,27 @@ namespace LocalAbstraction
         {
             if(isSelected)
             {
-                if(e.ctrlKey)
+                if(e.ctrlKey && this.currSelect.length > 0)
                 {
-                    let alreadySelected = false;
-                    for(let i = 0; i < this.currSelect.length; i++)
+                    if(this.currSelect.length == 1)
                     {
-                        if(this.currSelect[i] == elem.id)
+                        this.clipboardItems = [];
+
+                        let svgElem = this.boardElems[this.currSelect[0]].getClipboardSVG();
+
+                        if(svgElem != null)
                         {
-                            alreadySelected = true;
+                            this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: this.boardElems[this.currSelect[0]].id });
                         }
                     }
 
-                    if(!alreadySelected)
+                    this.currSelect.push(elem.id);
+
+                    let svgElem = elem.getClipboardSVG();
+
+                    if(svgElem != null)
                     {
-                        this.currSelect.push(elem.id);
+                        this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: elem.id });
                     }
                 }
                 else
@@ -798,8 +1249,19 @@ namespace LocalAbstraction
                             this.setElementView(selElem.id, selElemView);
                         }
                     }
-
                     this.currSelect = [];
+                    this.clipboardItems = [];
+
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
+
                     this.currSelect.push(elem.id);
                 }
 
@@ -826,19 +1288,12 @@ namespace LocalAbstraction
             {
                 let change = changes[j];
                 this.components[elem.type].pallete.handleChange(change);
-
-                for(let i = 0; i < this.currSelect.length; i++)
-                {
-                    let selElem = this.getBoardElement(this.currSelect[i]);
-                    if(selElem.id != elem.id && selElem.type == elem.type)
-                    {
-                        let retVal = selElem.handlePalleteChange(this.components[elem.type].pallete, changes[j]);
-
-                        this.handleElementMessages(selElem.id, selElem.type, retVal.serverMessages);
-                        this.handleElementOperation(selElem.id, retVal.undoOp, retVal.redoOp);
-                        this.setElementView(selElem.id, retVal.newView);
-                    }
-                }
+            }
+            if(changes.length > 0)
+            {
+                let cursor: ElementCursor = this.components[elem.type].pallete.getCursor();
+                let state: BoardPalleteViewState = this.components[elem.type].pallete.getCurrentViewState();
+                this.updateView({ palleteState: state, cursor: cursor.cursor, cursorURL: cursor.url, cursorOffset: cursor.offset });
             }
         }
 
@@ -891,7 +1346,7 @@ namespace LocalAbstraction
             this.groupStartX = startX;
             this.groupStartY = startY;
             this.groupMoving = true;
-            this.updateView({ cursor: 'move' });
+            this.updateView({ cursor: 'move', cursorURL: [], cursorOffset: { x: 0, y: 0 } });
             for(let i = 0; i < this.currSelect.length; i++)
             {
                 let elem = this.getBoardElement(this.currSelect[i]);
@@ -914,7 +1369,7 @@ namespace LocalAbstraction
         endMove(endX: number, endY: number)
         {
             this.groupMoving = false;
-            this.updateView({ cursor: 'auto' });
+            this.updateView({ cursor: 'auto', cursorURL: [], cursorOffset: { x: 0, y: 0 } });
 
             let undoOpList = [];
             let redoOpList = [];
@@ -1008,8 +1463,43 @@ namespace LocalAbstraction
 
             if(!elem.isDeleted)
             {
-                let newElemView = elem.handleSelect();
-                this.setElementView(id, newElemView);
+                let retVal = elem.handleSelect();
+
+                if(this.currSelect.length > 1)
+                {
+                    if(this.currSelect.length == 2)
+                    {
+                        this.clipboardItems = [];
+
+                        let svgElem = this.boardElems[this.currSelect[0]].getClipboardSVG();
+
+                        if(svgElem != null)
+                        {
+                            this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: this.boardElems[this.currSelect[0]].id });
+                        }
+                    }
+
+                    let svgElem = elem.getClipboardSVG();
+
+                    if(svgElem != null)
+                    {
+                        this.clipboardItems.push({ format: 'image/svg+xml', data: svgElem, id: elem.id });
+                    }
+                }
+                else
+                {
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
+                }
+
+                this.setElementView(id, retVal);
             }
         }
 
@@ -1017,18 +1507,28 @@ namespace LocalAbstraction
         {
             let elem = this.getBoardElement(id);
             let newElemView = elem.handleDeselect();
+
+            for(let i = 0; i < this.clipboardItems.length; i++)
+            {
+                if(this.clipboardItems[i].elemId == id)
+                {
+                    this.clipboardItems.splice(i, 1);
+                    i--;
+                }
+            }
+
             this.setElementView(elem.id, newElemView);
         }
 
         startEditElement(id: number)
         {
-            /* TODO: Change board mode to this mode, check for current mode and store it. */
-
             this.currentEdit = id;
             let elem = this.getBoardElement(id);
 
             if(!elem.isDeleted)
             {
+                this.setMode(elem.type);
+
                 let retVal = elem.handleStartEdit();
 
                 this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
@@ -1077,7 +1577,7 @@ namespace LocalAbstraction
 
         endEditElement(id: number)
         {
-            /* TODO: store previous mode for elements selected for edit and revert back. */
+            this.setMode(BoardModes.SELECT);
 
             this.currentEdit = -1;
             let elem = this.getBoardElement(id);
@@ -1320,9 +1820,54 @@ namespace LocalAbstraction
             let elem = this.getBoardElement(id);
 
             // Undo item operation at current stack position
-            if(!elem.isDeleted && elem.operationPos > 0)
+            if(!elem.isDeleted)
             {
-                elem.operationStack[--elem.operationPos].undo();
+                let retVal: ElementUndoRedoReturn = elem.handleUndo();
+
+                if(retVal)
+                {
+                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                    if(elem.serverId != null && elem.serverId != undefined)
+                    {
+                        if(retVal.move)
+                        {
+                            this.elementMoves.push({ id: elem.serverId, x: retVal.move.x, y: retVal.move.y });
+                        }
+                        if(retVal.wasDelete)
+                        {
+                            this.elementDeletes.push(elem.serverId);
+                        }
+                        if(retVal.wasRestore)
+                        {
+                            this.elementRestores.push(elem.serverId);
+                        }
+                    }
+                    else
+                    {
+                        if(retVal.move)
+                        {
+                            elem.opBuffer.push(retVal.move.message);
+                        }
+                        if(retVal.wasDelete)
+                        {
+                            elem.opBuffer.push(retVal.wasDelete.message);
+                        }
+                        if(retVal.wasRestore)
+                        {
+                            elem.opBuffer.push(retVal.wasRestore.message);
+                        }
+                    }
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    this.setElementView(retVal.id, retVal.newView);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.deleteElement(elem.id);
+                    }
+                }
             }
         }
 
@@ -1331,9 +1876,54 @@ namespace LocalAbstraction
             let elem = this.getBoardElement(id);
 
             // Redo operation at current stack position
-            if(!elem.isDeleted && elem.operationPos < elem.operationStack.length)
+            if(!elem.isDeleted)
             {
-                elem.operationStack[elem.operationPos++].redo();
+                let retVal: ElementUndoRedoReturn = elem.handleRedo();
+
+                if(retVal)
+                {
+                    this.handleElementMessages(retVal.id, elem.type, retVal.serverMessages);
+                    if(elem.serverId != null && elem.serverId != undefined)
+                    {
+                        if(retVal.move)
+                        {
+                            this.elementMoves.push({ id: elem.serverId, x: retVal.move.x, y: retVal.move.y });
+                        }
+                        if(retVal.wasDelete)
+                        {
+                            this.elementDeletes.push(elem.serverId);
+                        }
+                        if(retVal.wasRestore)
+                        {
+                            this.elementRestores.push(elem.serverId);
+                        }
+                    }
+                    else
+                    {
+                        if(retVal.move)
+                        {
+                            elem.opBuffer.push(retVal.move.message);
+                        }
+                        if(retVal.wasDelete)
+                        {
+                            elem.opBuffer.push(retVal.wasDelete.message);
+                        }
+                        if(retVal.wasRestore)
+                        {
+                            elem.opBuffer.push(retVal.wasRestore.message);
+                        }
+                    }
+                    this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    this.setElementView(retVal.id, retVal.newView);
+                    if(retVal.newViewCentre)
+                    {
+                        this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.deleteElement(elem.id);
+                    }
+                }
             }
         }
 
@@ -1368,6 +1958,8 @@ namespace LocalAbstraction
         eraseElement(id: number)
         {
             let elem = this.getBoardElement(id);
+            console.log('Check for user match: ' + (this.userId == elem.user));
+            console.log('Elem user: ' + elem.user + ', this user: ' + this.userId);
             if(this.isHost || this.allowAllEdit || (this.userId == elem.user && this.allowUserEdit))
             {
                 let retVal = elem.handleErase();
@@ -1425,6 +2017,7 @@ namespace LocalAbstraction
          **********************************************************************************************************************************************************/
         newElement(data: ServerMessageContainer)
         {
+
             if(this.elementDict[data.serverId] == undefined || this.elementDict[data.serverId] == null)
             {
                 if(this.components[data.type])
@@ -1433,15 +2026,30 @@ namespace LocalAbstraction
                     let callbacks: ElementCallbacks =
                     {
                         sendServerMsg: ((id: number, type: string) =>
-                        { return (msg: UserMessage) => { this.sendElementMessage(id, type, msg) }; })(localId, data.type),
-                        createAlert: (header: string, message: string) => {},
+                        { return (msg: UserMessage) => { this.sendElementMessage(id, type, msg); this.endCallback(); }; })(localId, data.type),
+                        createAlert: (header: string, message: string) => { this.endCallback(); },
                         createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
-                        { return this.addInfoMessage(x, y, width, height, header, message); },
-                        removeInfo: (id: number) => { this.removeInfoMessage(id); },
+                        { let retVal = this.addInfoMessage(x, y, width, height, header, message); this.endCallback(); return retVal; },
+                        removeInfo: (id: number) => { this.removeInfoMessage(id); this.endCallback(); },
                         updateBoardView: ((id: number) =>
-                        { return (newView: ComponentViewState) => { this.setElementView(id, newView); }; })(localId),
+                        { return (newView: ComponentViewState) => { this.setElementView(id, newView); this.endCallback(); }; })(localId),
+                        updatePallete: ((type: string) => { return (changes: Array<BoardPalleteChange> ) =>
+                        {
+                            for(let j = 0; j < changes.length; j++)
+                            {
+                                let change = changes[j];
+                                this.components[type].pallete.handleChange(change);
+                            }
+
+                            let cursor: ElementCursor = this.components[type].pallete.getCursor();
+                            let state: BoardPalleteViewState = this.components[type].pallete.getCurrentViewState();
+                            this.updateView({ palleteState: state, cursor: cursor.cursor, cursorURL: cursor.url, cursorOffset: cursor.offset });
+
+                            this.endCallback();
+                        }})(data.type),
                         getAudioStream: () => { return this.getAudioStream(localId); },
-                        getVideoStream: () => { return this.getVideoStream(localId); }
+                        getVideoStream: () => { return this.getVideoStream(localId); },
+                        deleteElement: ((id: number) => { return (() => { this.deleteElement(id); this.endCallback(); }); })(localId)
                     }
                     let creationArg: CreationData = { id: localId, userId: data.userId, callbacks: callbacks, serverMsg: data.payload, serverId: data.serverId };
                     this.boardElems[localId] = this.components[data.type].Element.createElement(creationArg);
@@ -1501,77 +2109,70 @@ namespace LocalAbstraction
             if(this.elementDict[data.serverId] != undefined && this.elementDict[data.serverId] != null)
             {
                 let elem = this.getBoardElement(this.elementDict[data.serverId])
-                if(elem.type == data.type)
-                {
-                    let retVal = elem.handleServerMessage(data.payload);
+                let retVal = elem.handleServerMessage(data.payload);
 
-                    if(retVal.wasEdit)
+                if(retVal.wasEdit)
+                {
+                    this.handleRemoteEdit(elem.id);
+                }
+
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                this.setElementView(elem.id, retVal.newView);
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+
+                if(retVal.wasDelete)
+                {
+                    this.deleteElement(elem.id);
+
+                    // Remove from current selection
+                    if(this.currSelect.indexOf(elem.id))
                     {
-                        this.handleRemoteEdit(elem.id);
+                        this.currSelect.splice(this.currSelect.indexOf(elem.id), 1);
                     }
 
-                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
-                    this.setElementView(elem.id, retVal.newView);
-                    this.handleInfoMessage(retVal.infoMessage);
-                    this.handleAlertMessage(retVal.alertMessage);
-
-                    if(retVal.wasDelete)
+                    if(this.currentHover == elem.id)
                     {
-                        this.deleteElement(elem.id);
+                        clearTimeout(elem.hoverTimer);
+                        this.removeHoverInfo(this.currentHover);
+                    }
 
-                        // Remove from current selection
-                        if(this.currSelect.indexOf(elem.id))
+                    for(let i = 0; i < this.operationStack.length; i++)
+                    {
+                        if(this.operationStack[i].ids.indexOf(elem.id) != -1)
                         {
-                            this.currSelect.splice(this.currSelect.indexOf(elem.id), 1);
-                        }
-
-                        if(this.currentHover == elem.id)
-                        {
-                            clearTimeout(elem.hoverTimer);
-                            this.removeHoverInfo(this.currentHover);
-                        }
-
-                        for(let i = 0; i < this.operationStack.length; i++)
-                        {
-                            if(this.operationStack[i].ids.indexOf(elem.id) != -1)
+                            if(this.operationStack[i].ids.length == 1)
                             {
-                                if(this.operationStack[i].ids.length == 1)
+                                if(i <= this.operationPos)
                                 {
-                                    if(i <= this.operationPos)
-                                    {
-                                        this.operationPos--;
-                                    }
-                                    // Decrement i to account fot the removal of this item.
-                                    this.operationStack.splice(i--, 1);
+                                    this.operationPos--;
                                 }
-                                else
+                                // Decrement i to account fot the removal of this item.
+                                this.operationStack.splice(i--, 1);
+                            }
+                            else
+                            {
+                                // Remove the deleted item from the selection.
+                                this.operationStack[i].ids.splice(this.operationStack[i].ids.indexOf(elem.id), 1);
+
+                                // Replace operation with one that will just select the remaining items.
+                                let newOp: WhiteBoardOperation =
                                 {
-                                    // Remove the deleted item from the selection.
-                                    this.operationStack[i].ids.splice(this.operationStack[i].ids.indexOf(elem.id), 1);
-
-                                    // Replace operation with one that will just select the remaining items.
-                                    let newOp: WhiteBoardOperation =
+                                    ids: this.operationStack[i].ids,
+                                    undos: [((elemIds) =>
                                     {
-                                        ids: this.operationStack[i].ids,
-                                        undos: [((elemIds) =>
-                                        {
-                                            return () => { this.selectGroup(elemIds); return null; };
-                                        })(this.operationStack[i].ids.slice())],
-                                        redos: [((elemIds) =>
-                                        {
-                                            return () => { this.selectGroup(elemIds); return null; };
-                                        })(this.operationStack[i].ids.slice())]
-                                    };
+                                        return () => { this.selectGroup(elemIds); return null; };
+                                    })(this.operationStack[i].ids.slice())],
+                                    redos: [((elemIds) =>
+                                    {
+                                        return () => { this.selectGroup(elemIds); return null; };
+                                    })(this.operationStack[i].ids.slice())]
+                                };
 
-                                    this.operationStack.splice(i, 1, newOp);
-                                }
+                                this.operationStack.splice(i, 1, newOp);
                             }
                         }
                     }
-                }
-                else
-                {
-                    console.error('Received bad element message.');
                 }
             }
             else if(data.type && data.serverId)
@@ -1605,6 +2206,8 @@ namespace LocalAbstraction
             }
 
             this.currSelect = [];
+            this.clipboardItems = [];
+
             this.setMode(newMode);
         }
 
@@ -1649,6 +2252,7 @@ namespace LocalAbstraction
             let elem = this.getBoardElement(id);
             if(this.currSelect.length > 1 && elem.isSelected && e.buttons == 1)
             {
+                console.log('Started Move.');
                 this.startMove(mouseX, mouseY);
             }
             /* TODO: This is too strict for text, need to allow this to go through, but maybe with NOEDIT flag */
@@ -1688,8 +2292,8 @@ namespace LocalAbstraction
                         elem.opBuffer.push(retVal.wasRestore.message);
                     }
                 }
-                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
                 this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
                 if(retVal.newViewCentre)
                 {
                     this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -1750,8 +2354,8 @@ namespace LocalAbstraction
                             elem.opBuffer.push(retVal.wasRestore.message);
                         }
                     }
-                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
                     this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                    this.handleMouseElementSelect(e, elem, retVal.isSelected);
                     if(retVal.newViewCentre)
                     {
                         this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -1805,8 +2409,8 @@ namespace LocalAbstraction
                         elem.opBuffer.push(retVal.wasRestore.message);
                     }
                 }
-                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 if(retVal.newViewCentre)
                 {
                     this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -1868,6 +2472,18 @@ namespace LocalAbstraction
                     this.handleInfoMessage(retVal.infoMessage);
                     this.handleAlertMessage(retVal.alertMessage);
                     this.setElementView(id, retVal.newView);
+
+                    this.clipboardItems = [];
+
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
                 }
             }
             else
@@ -1886,6 +2502,7 @@ namespace LocalAbstraction
                         this.deselectElement(this.currSelect[i]);
                     }
                     this.currSelect = [];
+                    this.clipboardItems = [];
 
                     // Add this item to currently selected items.
                     this.currSelect.push(elem.id);
@@ -1947,6 +2564,18 @@ namespace LocalAbstraction
                     this.handleInfoMessage(retVal.infoMessage);
                     this.handleAlertMessage(retVal.alertMessage);
                     this.setElementView(id, retVal.newView);
+
+                    this.clipboardItems = [];
+
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
                 }
             }
             else
@@ -1959,6 +2588,7 @@ namespace LocalAbstraction
                         this.deselectElement(this.currSelect[i]);
                     }
                     this.currSelect = [];
+                    this.clipboardItems = [];
                 }
 
                 if(this.isHost || this.allowAllEdit || (this.allowUserEdit && elem.user == this.userId))
@@ -2225,7 +2855,7 @@ namespace LocalAbstraction
             /* TODO: */
         }
 
-        elementDrop(id: number, e: DragEvent, componenet?: number, subId?: number)
+        elementDrop(id: number, e: DragEvent, mouseX: number, mouseY: number, componenet?: number, subId?: number)
         {
             /* TODO: */
         }
@@ -2270,8 +2900,8 @@ namespace LocalAbstraction
                         elem.opBuffer.push(retVal.wasRestore.message);
                     }
                 }
-                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
                 this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected, retVal.cursor);
                 if(retVal.newViewCentre)
                 {
                     this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -2279,6 +2909,18 @@ namespace LocalAbstraction
                 this.handleInfoMessage(retVal.infoMessage);
                 this.handleAlertMessage(retVal.alertMessage);
                 this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
             else
             {
@@ -2290,6 +2932,7 @@ namespace LocalAbstraction
                         this.deselectElement(this.currSelect[i]);
                     }
                     this.currSelect = [];
+                    this.clipboardItems = [];
                 }
                 else
                 {
@@ -2379,8 +3022,8 @@ namespace LocalAbstraction
                                 elem.opBuffer.push(retVal.wasRestore.message);
                             }
                         }
-                        this.handleMouseElementSelect(e, elem, retVal.isSelected);
                         this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        this.handleMouseElementSelect(e, elem, retVal.isSelected);
                         if(retVal.newViewCentre)
                         {
                             this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -2388,15 +3031,18 @@ namespace LocalAbstraction
                         this.handleInfoMessage(retVal.infoMessage);
                         this.handleAlertMessage(retVal.alertMessage);
                         this.setElementView(elem.id, retVal.newView);
-                    }
-                }
-                else if(mode != BoardModes.ERASE)
-                {
-                    // This is a more strict check than for any current edits. It is slightly more future proof.
-                    if(this.currSelect.length == 0)
-                    {
-                        // Draw a new element of this type.
-                        this.drawElement();
+
+                        this.clipboardItems = [];
+
+                        let clipElems = elem.getClipboardData();
+
+                        if(clipElems != null)
+                        {
+                            for(let i = 0; i < clipElems.length; i++)
+                            {
+                                this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                            }
+                        }
                     }
                 }
             }
@@ -2439,8 +3085,8 @@ namespace LocalAbstraction
                         elem.opBuffer.push(retVal.wasRestore.message);
                     }
                 }
-                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 if(retVal.newViewCentre)
                 {
                     this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -2448,6 +3094,18 @@ namespace LocalAbstraction
                 this.handleInfoMessage(retVal.infoMessage);
                 this.handleAlertMessage(retVal.alertMessage);
                 this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
 
             this.prevX = mouseX;
@@ -2518,17 +3176,30 @@ namespace LocalAbstraction
                         let callbacks: ElementCallbacks =
                         {
                             sendServerMsg: ((id: number, type: string) =>
-                            { return (msg: UserMessage) => { self.sendElementMessage(id, type, msg) }; })(localId, mode),
-                            createAlert: (header: string, message: string) => {},
+                            { return (msg: UserMessage) => { this.sendElementMessage(id, type, msg); this.endCallback(); }; })(localId, mode),
+                            createAlert: (header: string, message: string) => { this.endCallback(); },
                             createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
-                            { return self.addInfoMessage(x, y, width, height, header, message); },
-                            removeInfo: (id: number) => { self.removeInfoMessage(id); },
+                            { let retVal = this.addInfoMessage(x, y, width, height, header, message); this.endCallback(); return retVal; },
+                            removeInfo: (id: number) => { self.removeInfoMessage(id); this.endCallback(); },
                             updateBoardView: ((id: number) =>
-                            { return (newView: ComponentViewState) => { self.setElementView(id, newView); }; })(localId),
+                            { return (newView: ComponentViewState) => { self.setElementView(id, newView); this.endCallback(); }; })(localId),
+                            updatePallete: ((type: string) => { return (changes: Array<BoardPalleteChange> ) =>
+                            {
+                                for(let j = 0; j < changes.length; j++)
+                                {
+                                    let change = changes[j];
+                                    this.components[type].pallete.handleChange(change);
+                                }
+                                let cursor: ElementCursor = this.components[type].pallete.getCursor();
+                                let state: BoardPalleteViewState = this.components[type].pallete.getCurrentViewState();
+                                this.updateView({ palleteState: state, cursor: cursor.cursor, cursorURL: cursor.url, cursorOffset: cursor.offset });
+                                this.endCallback();
+                            }})(mode),
                             getAudioStream: ((id: number) =>
                             { return () => { self.getAudioStream(id); }; })(localId),
                             getVideoStream: ((id: number) =>
-                            { return () => { self.getVideoStream(id); }; })(localId)
+                            { return () => { self.getVideoStream(id); }; })(localId),
+                            deleteElement: ((id: number) => { return (() => { this.deleteElement(id); this.endCallback(); }); })(localId)
                         }
 
                         let data: CreationData =
@@ -2563,6 +3234,40 @@ namespace LocalAbstraction
                                     this.deselectElement(this.currSelect[i]);
                                 }
                                 this.currSelect = [];
+                                this.clipboardItems = [];
+
+                                let clipElems = newElem.getClipboardData();
+
+                                if(clipElems != null)
+                                {
+                                    for(let i = 0; i < clipElems.length; i++)
+                                    {
+                                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: localId });
+                                    }
+                                }
+
+                                this.currSelect.push(localId);
+                            }
+                            else if(newElem.isSelected)
+                            {
+                                // Deselect currently selected items
+                                for(let i = 0; i < this.currSelect.length; i++)
+                                {
+                                    this.deselectElement(this.currSelect[i]);
+                                }
+                                this.currSelect = [];
+                                this.clipboardItems = [];
+
+                                let clipElems = newElem.getClipboardData();
+
+                                if(clipElems != null)
+                                {
+                                    for(let i = 0; i < clipElems.length; i++)
+                                    {
+                                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: localId });
+                                    }
+                                }
+
                                 this.currSelect.push(localId);
                             }
 
@@ -2585,6 +3290,8 @@ namespace LocalAbstraction
                     {
                         let elem = this.getBoardElement(this.currSelect[0]);
                         let retVal = elem.handleBoardMouseUp(e, mouseX, mouseY, this.components[elem.type].pallete);
+
+                        this.updateView({ cursor: 'auto', cursorURL: [], cursorOffset: { x: 0, y: 0 } });
 
                         this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
                         this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
@@ -2618,8 +3325,8 @@ namespace LocalAbstraction
                                 elem.opBuffer.push(retVal.wasRestore.message);
                             }
                         }
-                        this.handleMouseElementSelect(e, elem, retVal.isSelected);
                         this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                        this.handleMouseElementSelect(e, elem, retVal.isSelected);
                         if(retVal.newViewCentre)
                         {
                             this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -2627,6 +3334,9 @@ namespace LocalAbstraction
                         this.handleInfoMessage(retVal.infoMessage);
                         this.handleAlertMessage(retVal.alertMessage);
                         this.setElementView(elem.id, retVal.newView);
+
+
+
                     }
 
                     if(this.groupMoved)
@@ -2641,6 +3351,9 @@ namespace LocalAbstraction
             {
                 let elem = this.getBoardElement(this.currentEdit);
                 let retVal = elem.handleBoardMouseUp(e, mouseX, mouseY, this.components[elem.type].pallete);
+
+
+                this.updateView({ cursor: 'auto', cursorURL: [], cursorOffset: { x: 0, y: 0 } });
 
                 this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
                 this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
@@ -2674,8 +3387,8 @@ namespace LocalAbstraction
                         elem.opBuffer.push(retVal.wasRestore.message);
                     }
                 }
-                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                this.handleMouseElementSelect(e, elem, retVal.isSelected);
                 if(retVal.newViewCentre)
                 {
                     this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
@@ -2683,6 +3396,18 @@ namespace LocalAbstraction
                 this.handleInfoMessage(retVal.infoMessage);
                 this.handleAlertMessage(retVal.alertMessage);
                 this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
 
             this.selectDrag = false;
@@ -2693,9 +3418,22 @@ namespace LocalAbstraction
             // Stop editing when the board is double clicked.
             if(e.detail == 2)
             {
-                if(this.currentEdit)
+                if(this.currentEdit != -1)
                 {
+                    let elem = this.getBoardElement(this.currentEdit);
                     this.endEditElement(this.currentEdit);
+
+                    this.clipboardItems = [];
+
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
                 }
             }
         }
@@ -2725,7 +3463,20 @@ namespace LocalAbstraction
             // If there is an item being edited pass this as an internal undo.
             if(this.currentEdit != -1)
             {
+                let elem = this.getBoardElement(this.currentEdit);
                 this.undoItemEdit(this.currentEdit);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
             else
             {
@@ -2738,7 +3489,20 @@ namespace LocalAbstraction
             // If there is an item being edited pass this as an internal redo.
             if(this.currentEdit != -1)
             {
+                let elem = this.getBoardElement(this.currentEdit);
                 this.redoItemEdit(this.currentEdit);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
             else
             {
@@ -2793,6 +3557,18 @@ namespace LocalAbstraction
                 this.handleInfoMessage(retVal.infoMessage);
                 this.handleAlertMessage(retVal.alertMessage);
                 this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
             }
             else if(inputChar == 'Del')
             {
@@ -2849,69 +3625,531 @@ namespace LocalAbstraction
             }
         }
 
-
-        /* TODO: These should be on UI thread not worker. */
-
-        contextCopy(e: MouseEvent)
+        paste(mouseX: number, mouseY: number, data: ClipboardEventData, mode: string)
         {
-            document.execCommand("copy");
-        }
-
-        contextCut(e: MouseEvent)
-        {
-            document.execCommand("cut");
-        }
-
-        contextPaste(e: MouseEvent)
-        {
-            document.execCommand("paste");
-        }
-
-
-
-
-
-
-        onCopy(e: ClipboardEvent)
-        {
-            console.log('COPY EVENT');
-            /* TODO: Copy selected items, or get copy from single selected item. */
-        }
-
-        onPaste(e: ClipboardEvent)
-        {
-            console.log('PASTE EVENT');
+            console.log('PASTE EVENT WORKER');
             /* TODO: If we have an edit open, pass to that. Otherwise determing type and respond accordingly (maybe mode dependant). */
-        }
-
-        onCut(e: ClipboardEvent)
-        {
-            console.log('CUT EVENT');
-            /* TODO: A mix of copy and paste behaviour, requires the most care in handling (i.e. multi selects) */
-        }
-
-        dragOver(e: DragEvent)
-        {
-            /* TODO: Pass to elements as necessary. Note above items. */
-        }
-
-        drop(e: DragEvent)
-        {
-            /* TODO: Reimplement. Note above items.
-            if(e.dataTransfer.files.length  > 0)
+            if(this.currentEdit != -1)
             {
-                if(e.dataTransfer.files.length == 1)
+                let elem = this.getBoardElement(this.currSelect[0]);
+                let retVal = elem.handlePaste(mouseX - elem.x, mouseY - elem.y, data, this.components[elem.type].pallete);
+
+                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                if(elem.serverId != null && elem.serverId != undefined)
                 {
-                    var file: File = e.dataTransfer.files[0];
-                    this.placeLocalFile(x, y, this.scaleF, this.panX, this.panY, file);
+                    if(retVal.move)
+                    {
+                        this.elementMoves.push({ id: elem.serverId, x: retVal.move.x, y: retVal.move.y });
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.elementDeletes.push(elem.serverId);
+                    }
+                    if(retVal.wasRestore)
+                    {
+                        this.elementRestores.push(elem.serverId);
+                    }
+                }
+                else
+                {
+                    if(retVal.move)
+                    {
+                        elem.opBuffer.push(retVal.move.message);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        elem.opBuffer.push(retVal.wasDelete.message);
+                    }
+                    if(retVal.wasRestore)
+                    {
+                        elem.opBuffer.push(retVal.wasRestore.message);
+                    }
+                }
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
+                {
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
                 }
             }
             else
             {
-                var url: string = e.dataTransfer.getData('text/plain');
-                this.placeRemoteFile(x, y, this.scaleF, this.panX, this.panY, url);
+                if(data.isInternal)
+                {
+                    if(data.wasCut)
+                    {
+                        // TODO: Move and restore items in internal clipboard
+                    }
+                    else
+                    {
+                        // TODO: Clone items in internal clipbaord
+                    }
+                }
+                else
+                {
+                    // TODO: Add external pasted item.
+                }
+
+                let undoOpList = [];
+                let redoOpList = [];
+
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    let elem = this.getBoardElement(this.currSelect[i]);
+                    elem.erase();
+
+                    this.deleteBuffer.push(this.currSelect[i]);
+                    this.elementDeletes.push(elem.serverId);
+
+                    let undoOp = ((element) =>
+                    {
+                        return () =>
+                        {
+                            let retVal = element.elementRestore();
+
+                            if(element.serverId != null && element.serverId != undefined)
+                            {
+                                this.elementRestores.push(element.serverId);
+                            }
+
+                            this.setElementView(element.id, retVal.newView);
+                        };
+                    })(elem);
+                    let redoOp = ((element) =>
+                    {
+                        return () =>
+                        {
+                            let retVal = element.elementErase();
+
+                            if(element.serverId != null && element.serverId != undefined)
+                            {
+                                this.elementDeletes.push(element.serverId);
+                            }
+
+                            this.deleteBuffer.push(element.id);
+                        };
+                    })(elem);
+
+                    undoOpList.push(undoOp);
+                    redoOpList.push(redoOp);
+                }
+
+
+                // TODO: Insert new item.
+                if(mode == BoardModes.SELECT || mode == BoardModes.ERASE)
+                {
+                    // General handler.
+                }
+                else
+                {
+                    // Component specific handler.
+                }
+
+
+                // Remove redo operations ahead of current position
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+
+                // Add new operation to the stack
+                let newOp: WhiteBoardOperation = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
+                this.operationStack[this.operationPos++] = newOp;
+
             }
-            */
+        }
+
+        cut()
+        {
+            console.log('CUT EVENT WORKER');
+
+            if(this.currentEdit != -1)
+            {
+                let elem = this.getBoardElement(this.currSelect[0]);
+                let retVal = elem.handleCut();
+
+                this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                if(elem.serverId != null && elem.serverId != undefined)
+                {
+                    if(retVal.move)
+                    {
+                        this.elementMoves.push({ id: elem.serverId, x: retVal.move.x, y: retVal.move.y });
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        this.elementDeletes.push(elem.serverId);
+                    }
+                    if(retVal.wasRestore)
+                    {
+                        this.elementRestores.push(elem.serverId);
+                    }
+                }
+                else
+                {
+                    if(retVal.move)
+                    {
+                        elem.opBuffer.push(retVal.move.message);
+                    }
+                    if(retVal.wasDelete)
+                    {
+                        elem.opBuffer.push(retVal.wasDelete.message);
+                    }
+                    if(retVal.wasRestore)
+                    {
+                        elem.opBuffer.push(retVal.wasRestore.message);
+                    }
+                }
+                this.handleElementPalleteChanges(elem, retVal.palleteChanges);
+                if(retVal.newViewCentre)
+                {
+                    this.handleElementNewViewCentre(retVal.newViewCentre.x, retVal.newViewCentre.y);
+                }
+                this.handleInfoMessage(retVal.infoMessage);
+                this.handleAlertMessage(retVal.alertMessage);
+                this.setElementView(elem.id, retVal.newView);
+
+                this.clipboardItems = [];
+
+                let clipElems = elem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                    }
+                }
+            }
+            else
+            {
+                let undoOpList = [];
+                let redoOpList = [];
+
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    let elem = this.getBoardElement(this.currSelect[i]);
+                    elem.erase();
+
+                    this.deleteBuffer.push(this.currSelect[i]);
+                    this.elementDeletes.push(elem.serverId);
+
+                    let undoOp = ((element) =>
+                    {
+                        return () =>
+                        {
+                            let retVal = element.elementRestore();
+
+                            if(element.serverId != null && element.serverId != undefined)
+                            {
+                                this.elementRestores.push(element.serverId);
+                            }
+
+                            this.setElementView(element.id, retVal.newView);
+                        };
+                    })(elem);
+                    let redoOp = ((element) =>
+                    {
+                        return () =>
+                        {
+                            let retVal = element.elementErase();
+
+                            if(element.serverId != null && element.serverId != undefined)
+                            {
+                                this.elementDeletes.push(element.serverId);
+                            }
+
+                            this.deleteBuffer.push(element.id);
+                        };
+                    })(elem);
+
+                    undoOpList.push(undoOp);
+                    redoOpList.push(redoOp);
+                }
+
+                // Remove redo operations ahead of current position
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+
+                // Add new operation to the stack
+                let newOp: WhiteBoardOperation = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
+                this.operationStack[this.operationPos++] = newOp;
+            }
+        }
+
+        dragOver(e: DragEvent, mode: string)
+        {
+            /* TODO: Pass to elements as necessary. Note above items. */
+        }
+
+        drop(e: DragEvent, plainData: string, mouseX: number, mouseY: number, scaleF: number, mode: string)
+        {
+            /* TODO: Determine if this is necessary or if the element will automatically take the drop. */
+            if(!this.dropToElement)
+            {
+                if(this.components['UPLOAD'] == null || this.components['UPLOAD'] == undefined)
+                {
+                    console.log('UPLOAD COMPONENT NOT READY.');
+                    return;
+                }
+
+                if(e.dataTransfer.files.length  > 0)
+                {
+                    if(e.dataTransfer.files.length == 1)
+                    {
+                        let file: File = e.dataTransfer.files[0];
+                        this.placeLocalFile(mouseX, mouseY, scaleF, file);
+                    }
+                }
+                else
+                {
+                    let url: string = plainData;
+                    this.placeRemoteFile(mouseX, mouseY, scaleF, url);
+                }
+            }
+        }
+
+        addFile(x: number, y: number, width: number, height: number, fType: string, fSize: number, fDesc: string, fExt: string, file: File, url: string)
+        {
+            let localId = this.boardElems.push(null) - 1;
+
+            let callbacks: ElementCallbacks =
+            {
+                sendServerMsg: ((id: number, type: string) =>
+                { return (msg: UserMessage) => { this.sendElementMessage(id, type, msg); this.endCallback(); }; })(localId, 'UPLOAD'),
+                createAlert: (header: string, message: string) => { this.endCallback(); },
+                createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) =>
+                { let retVal = this.addInfoMessage(x, y, width, height, header, message); this.endCallback(); return retVal; },
+                removeInfo: (id: number) => { this.removeInfoMessage(id); this.endCallback(); },
+                updateBoardView: ((id: number) =>
+                { return (newView: ComponentViewState) => { this.setElementView(id, newView); }; })(localId),
+                updatePallete: ((type: string) => { return (changes: Array<BoardPalleteChange> ) =>
+                {
+                    for(let j = 0; j < changes.length; j++)
+                    {
+                        let change = changes[j];
+                        this.components[type].pallete.handleChange(change);
+                    }
+
+                    let cursor: ElementCursor = this.components[type].pallete.getCursor();
+                    let state: BoardPalleteViewState = this.components[type].pallete.getCurrentViewState();
+                    this.updateView({ palleteState: state, cursor: cursor.cursor, cursorURL: cursor.url, cursorOffset: cursor.offset });
+                    this.endCallback();
+                }})('UPLOAD'),
+                getAudioStream: () => { return this.getAudioStream(localId); },
+                getVideoStream: () => { return this.getVideoStream(localId); },
+                deleteElement: ((id: number) => { return (() => { this.deleteElement(id); this.endCallback(); }); })(localId)
+            }
+
+            let newElem: BoardElement;
+
+            if(url.match(/youtube/) || url.match(/youtu.be/))
+            {
+                console.log('Youtube content detected.');
+                let regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#\&\?]*).*/;
+                let match = url.match(regExp);
+
+                if(match&&match[7].length==11)
+                {
+                    url = 'https://www.youtube.com/embed/' + match[7];
+                }
+            }
+
+            if(fType == null)
+            {
+                // Unable to determine type, server will resolve and inform the type.
+                newElem = new this.components['UPLOAD'].Element(localId, this.userId, x, y, width, height, callbacks,
+                                                                    file, url, fType, fSize, fDesc, fExt, null);
+            }
+            else
+            {
+                let viewType = UploadViewTypes.FILE;
+
+                if(url != '')
+                {
+                    viewType = UploadViewTypes.IFRAME;
+                }
+
+                if(fSize <= MAXSIZE)
+                {
+                    if(fType.match(/image/))
+                    {
+                        viewType = UploadViewTypes.IMAGE;
+                    }
+                    else if(fType.match(/video/))
+                    {
+                        viewType = UploadViewTypes.VIDEO;
+                    }
+                    else if(fType.match(/audio/))
+                    {
+                        viewType = UploadViewTypes.AUDIO;
+                    }
+                }
+
+                newElem = new this.components['UPLOAD'].Element(localId, this.userId, x, y, width, height, callbacks,
+                                                                    file, url, fType, fSize, fDesc, fExt, viewType);
+            }
+
+            let undoOp = ((elem) => { return elem.elementErase.bind(elem); })(newElem);
+            let redoOp = ((elem) => { return elem.elementRestore.bind(elem); })(newElem);
+            this.boardElems[localId] = newElem;
+
+            let viewState = newElem.getCurrentViewState();
+            this.setElementView(localId, viewState);
+
+            let payload: UserNewElementPayload = newElem.getNewMsg();
+            let msg: UserNewElementMessage = { type: newElem.type, payload: payload };
+
+            if(newElem.isEditing)
+            {
+                this.currentEdit = localId;
+
+                // Deselect currently selected items
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    this.deselectElement(this.currSelect[i]);
+                }
+                this.currSelect = [];
+                this.clipboardItems = [];
+
+                let clipElems = newElem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: localId });
+                    }
+                }
+
+                this.currSelect.push(localId);
+            }
+            else if(newElem.isSelected)
+            {
+                // Deselect currently selected items
+                for(let i = 0; i < this.currSelect.length; i++)
+                {
+                    this.deselectElement(this.currSelect[i]);
+                }
+                this.currSelect = [];
+                this.clipboardItems = [];
+
+                let clipElems = newElem.getClipboardData();
+
+                if(clipElems != null)
+                {
+                    for(let i = 0; i < clipElems.length; i++)
+                    {
+                        this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: localId });
+                    }
+                }
+
+                this.currSelect.push(localId);
+            }
+
+            this.handleElementOperation(localId, undoOp, redoOp);
+            this.sendNewElement(msg);
+        }
+
+        placeLocalFile(mouseX: number, mouseY: number, scaleF: number, file: File)
+        {
+            console.log(mouseX);
+            console.log(scaleF);
+
+            let width = 200 * scaleF;
+            let height = 200 * scaleF;
+            let fExt = file.name.split('.').pop();
+
+            console.log('File type is: ' + file.type);
+
+            if(file.type.match(/octet-stream/))
+            {
+                this.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
+                return null;
+            }
+            else
+            {
+                let isImage = file.type.match(/image/);
+
+                if(!isImage)
+                {
+                    width = 150 * scaleF;
+                }
+
+                if(file.size < MAXSIZE)
+                {
+                    //let localId = this.addFile(x, y, width, height, this.userId, isImage, file.name, file.type, fType, 0, undefined, new Date());
+                    //this.sendLocalFile(x, y, width, height, file, localId);
+                    this.addFile(mouseX, mouseY, width, height, file.type, file.size, '', fExt, file, '');
+                }
+                else
+                {
+                    this.newAlert('FILE TOO LARGE', 'The file type you attempted to add is too large.');
+                    return null;
+                }
+            }
+        }
+
+        placeRemoteFile(mouseX: number, mouseY: number, scaleF: number, url: string)
+        {
+            console.log('Remote File Placed');
+            let width = 200 * scaleF;
+            let height = 200 * scaleF;
+
+
+            let fExt = url.split('.').pop();
+            let fDesc = '';
+
+            let self = this;
+
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function ()
+            {
+                console.log(request.status);
+                if (request.readyState === 4)
+                {
+                    let type = request.getResponseHeader('Content-Type');
+                    let size = parseInt(request.getResponseHeader('Content-Length'));
+
+                    if(type == null || type == undefined)
+                    {
+                        // Cross origin blocked request so let server work it out for us.
+                        self.addFile(mouseX, mouseY, width, height, null, null, '', fExt, null, url);
+                        return;
+                    }
+
+                    if(type.match(/octete-stream/))
+                    {
+                        self.newAlert('BAD FILETYPE', 'The file type you attempted to add is not allowed.');
+                        return;
+                    }
+
+                    let isImage = type.split('/')[0] == 'image' ? true : false;
+
+                    if(!isImage)
+                    {
+                        width = 150 * scaleF;
+                    }
+
+                    console.log('Size was: ' + size);
+
+                    self.addFile(mouseX, mouseY, width, height, type, size, '', fExt, null, url);
+                }
+            };
+
+            request.open('HEAD', url, true);
+            request.send(null);
         }
 
         palleteChange(change: BoardPalleteChange, mode: string)
@@ -2927,7 +4165,23 @@ namespace LocalAbstraction
 
                 if(elem.type == mode)
                 {
-                    elem.handlePalleteChange(this.components[mode].pallete, change);
+                    let retVal = elem.handlePalleteChange(this.components[mode].pallete, change);
+
+                    this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
+                    this.handleElementMessages(elem.id, elem.type, retVal.serverMessages);
+                    this.setElementView(elem.id, retVal.newView);
+
+                    this.clipboardItems = [];
+
+                    let clipElems = elem.getClipboardData();
+
+                    if(clipElems != null)
+                    {
+                        for(let i = 0; i < clipElems.length; i++)
+                        {
+                            this.clipboardItems.push({ format: clipElems[i].format, data: clipElems[i].data, id: elem.id });
+                        }
+                    }
                 }
             }
         }
@@ -2954,8 +4208,6 @@ namespace LocalAbstraction
             componentName: componentName, Element: Element, pallete: pallete
         };
 
-        console.log('Registering: ' + componentName);
-
         controller.components[componentName] = newComp;
     }
 
@@ -2967,12 +4219,10 @@ namespace LocalAbstraction
             switch(e.data.type)
             {
                 case ControllerMessageTypes.START:
-                    console.log('Starting controller.');
                     controller = new WhiteBoardWorker(e.data.isHost, e.data.userId, e.data.allEdit, e.data.userEdit, self);
 
                     for(let i = 0; i < e.data.componentFiles.length; i++)
                     {
-                        console.log('Attempting to register: ' + e.data.componentFiles[i]);
                         importScripts(e.data.componentFiles[i]);
                     }
                     break;
@@ -3046,7 +4296,7 @@ namespace LocalAbstraction
                     controller.elementDragOver(e.data.id, e.data.e, e.data.componenet, e.data.subId);
                     break;
                 case ControllerMessageTypes.ELEMENTDROP:
-                    controller.elementDrop(e.data.id, e.data.e, e.data.componenet, e.data.subId);
+                    controller.elementDrop(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
                 case ControllerMessageTypes.MOUSEDOWN:
                     controller.mouseDown(e.data.e, e.data.mouseX, e.data.mouseY, e.data.mode);
@@ -3082,6 +4332,18 @@ namespace LocalAbstraction
                 case ControllerMessageTypes.REDO:
                     controller.handleRedo();
                     break;
+                case ControllerMessageTypes.DRAG:
+                    controller.dragOver(e.data.e, e.data.mode);
+                    break;
+                case ControllerMessageTypes.DROP:
+                    controller.drop(e.data.e, e.data.plainData, e.data.mouseX, e.data.mouseY, e.data.scaleF, e.data.mode);
+                    break;
+                case ControllerMessageTypes.PASTE:
+                    controller.paste(e.data.mouseX, e.data.mouseY, e.data.data, e.data.mode);
+                    break;
+                case ControllerMessageTypes.CUT:
+                    controller.cut();
+                    break;
                 case ControllerMessageTypes.PALLETECHANGE:
                     controller.palleteChange(e.data.change, e.data.mode);
                     break;
@@ -3092,13 +4354,27 @@ namespace LocalAbstraction
                     console.error('ERROR: Recieved unrecognized worker message.');
             }
 
+            let clipData: Array<ClipBoardItem> = [];
+
+            if(controller.currSelect.length > 1)
+            {
+                // TODO: Parse svg items into single image and push to clipData.
+            }
+            else
+            {
+                for(let i = 0; i < controller.clipboardItems.length; i++)
+                {
+                    clipData.push({ format: controller.clipboardItems[i].format, data: controller.clipboardItems[i].data });
+                }
+            }
+
             let message =
             {
                 elementViews: controller.elementUpdateBuffer, elementMessages: controller.socketMessageBuffer, deleteElements: controller.deleteBuffer,
                 audioRequests: controller.audioRequests, videoRequests: controller.videoRequests, alerts: controller.alertBuffer,
                 infoMessages: controller.infoBuffer, removeAlert: controller.willRemoveAlert, removeInfos: controller.removeInfoBuffer,
                 selectCount: controller.currSelect.length, elementMoves: controller.elementMoves, elementDeletes: controller.elementDeletes,
-                elementRestores: controller.elementRestores
+                elementRestores: controller.elementRestores, clipboardData: clipData
             }
 
             if(controller.viewUpdateBuffer != null)

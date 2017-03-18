@@ -20,7 +20,6 @@ namespace FreeCurveView
         colour: string;
         size: number;
         type: string;
-        isMoving: boolean;
     }
 
     /**
@@ -42,14 +41,14 @@ namespace FreeCurveView
         BLUE: 'blue',
         RED: 'red',
         GREEN: 'green'
-    }
+    };
 
     const PalleteSize = {
         XSMALL: 2.0,
         SMALL: 5.0,
         MEDIUM: 10.0,
         LARGE: 20.0
-    }
+    };
 
     /**
      * A description of components within the view of an element.
@@ -58,7 +57,7 @@ namespace FreeCurveView
     const enum ViewComponents {
         View,
         Interaction
-    }
+    };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                                                                                                                        //
@@ -132,7 +131,7 @@ namespace FreeCurveView
          */
         shouldComponentUpdate(nextProps, nextState)
         {
-            return this.props.state !== nextProps.state || this.props.mode != nextProps.mode;
+            return this.props.state !== nextProps.state || this.props.mode !== nextProps.mode;
         }
 
         /** React render function
@@ -175,11 +174,11 @@ namespace FreeCurveView
                         {
                             key: 'interaction', cx: state.point.x, cy: state.point.y, r: state.size / 2 + (2.5 * viewScale), fill: state.colour, opacity: 0,
                             cursor: 'move',
-                            onMouseOver: (e) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e) =>
+                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseDown: (e: React.MouseEvent) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -197,10 +196,10 @@ namespace FreeCurveView
                         items.push(React.createElement('circle',
                         {
                             key: 'interaction', cx: state.point.x, cy: state.point.y, r: state.size / 2 + (eraseSize * viewScale), fill: state.colour, opacity: 0,
-                            onMouseOver: (e) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e) =>
+                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -243,11 +242,11 @@ namespace FreeCurveView
                         {
                             key: 'interaction', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size + (5 * viewScale),
                             strokeLinecap: 'round', opacity: 0, cursor: 'move', pointerEvents: 'stroke',
-                            onMouseOver: (e) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e) =>
+                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseDown: (e: React.MouseEvent) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -266,10 +265,10 @@ namespace FreeCurveView
                         {
                             key: 'interaction', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size + (eraseSize * viewScale),
                             strokeLinecap: 'round', opacity: 0, pointerEvents: 'stroke',
-                            onMouseOver: (e) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e) =>
+                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent) =>
                             {
                                 if(e.detail == 2)
                                 {

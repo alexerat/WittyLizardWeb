@@ -586,15 +586,17 @@ var WorkerMessageTypes;
     WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 1] = "SETVBOX";
     WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 2] = "AUDIOSTREAM";
     WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 3] = "VIDEOSTREAM";
-    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 4] = "NEWVIEWCENTRE";
-    WorkerMessageTypes[WorkerMessageTypes["SETSELECT"] = 5] = "SETSELECT";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTMESSAGE"] = 6] = "ELEMENTMESSAGE";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 7] = "ELEMENTVIEW";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 8] = "ELEMENTDELETE";
-    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 9] = "NEWALERT";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 10] = "REMOVEALERT";
-    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 11] = "NEWINFO";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 12] = "REMOVEINFO";
+    WorkerMessageTypes[WorkerMessageTypes["STOREITEM"] = 4] = "STOREITEM";
+    WorkerMessageTypes[WorkerMessageTypes["GETITEM"] = 5] = "GETITEM";
+    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 6] = "NEWVIEWCENTRE";
+    WorkerMessageTypes[WorkerMessageTypes["SETSELECT"] = 7] = "SETSELECT";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTMESSAGE"] = 8] = "ELEMENTMESSAGE";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 9] = "ELEMENTVIEW";
+    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 10] = "ELEMENTDELETE";
+    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 11] = "NEWALERT";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 12] = "REMOVEALERT";
+    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 13] = "NEWINFO";
+    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 14] = "REMOVEINFO";
 })(WorkerMessageTypes || (WorkerMessageTypes = {}));
 var ControllerMessageTypes;
 (function (ControllerMessageTypes) {
@@ -635,9 +637,13 @@ var ControllerMessageTypes;
     ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 34] = "KEYBOARDINPUT";
     ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 35] = "UNDO";
     ControllerMessageTypes[ControllerMessageTypes["REDO"] = 36] = "REDO";
-    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 37] = "PALLETECHANGE";
-    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 38] = "LEAVE";
-    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 39] = "ERROR";
+    ControllerMessageTypes[ControllerMessageTypes["DRAG"] = 37] = "DRAG";
+    ControllerMessageTypes[ControllerMessageTypes["DROP"] = 38] = "DROP";
+    ControllerMessageTypes[ControllerMessageTypes["PASTE"] = 39] = "PASTE";
+    ControllerMessageTypes[ControllerMessageTypes["CUT"] = 40] = "CUT";
+    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 41] = "PALLETECHANGE";
+    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 42] = "LEAVE";
+    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 43] = "ERROR";
 })(ControllerMessageTypes || (ControllerMessageTypes = {}));
 var components = Immutable.Map();
 var registerComponentView = function (componentName, ElementView, PalleteView, ModeView, DrawHandle) {
@@ -656,6 +662,7 @@ var WhiteBoardController = (function () {
         this.allowAllEdit = false;
         this.allowUserEdit = true;
         this.socket = null;
+        this.clipboardItems = [];
         this.lMousePress = false;
         this.wMousePress = false;
         this.rMousePress = false;
@@ -674,8 +681,13 @@ var WhiteBoardController = (function () {
         this.selectCount = 0;
         this.fileUploads = [];
         this.fileReaders = [];
+        document.body.addEventListener('mouseup', this.mouseUp, false);
+        document.addEventListener('copy', this.onCopy.bind(this));
+        document.addEventListener('paste', this.onPaste.bind(this));
+        document.addEventListener('cut', this.onCut.bind(this));
         this.isHost = isHost;
         this.userId = userId;
+        console.log('Controller userId: ' + userId);
         this.allowAllEdit = allEdit;
         this.allowUserEdit = userEdit;
         var dispatcher = {
@@ -739,6 +751,7 @@ var WhiteBoardController = (function () {
         this.worker = new Worker(workerUrl);
         this.worker.onmessage = function (e) {
             self.setSelectCount.bind(_this)(e.data.selectCount);
+            self.setClipboard.bind(_this)(e.data.clipboardData);
             if (e.data.viewUpdate != undefined && e.data.viewUpdate != null) {
                 self.setViewState.bind(_this)(e.data.viewUpdate);
             }
@@ -792,7 +805,10 @@ var WhiteBoardController = (function () {
                 self.handleMessage.bind(_this)('MSG-COMPONENT', messageCont);
             }
         };
-        var message = { type: 0, componentFiles: componentFiles, allEdit: this.allowAllEdit, userEdit: this.allowUserEdit };
+        var message = {
+            type: 0, userId: this.userId, isHost: this.isHost, componentFiles: componentFiles,
+            allEdit: this.allowAllEdit, userEdit: this.allowUserEdit
+        };
         this.worker.postMessage(message);
     }
     WhiteBoardController.prototype.setSocket = function (socket) {
@@ -811,7 +827,7 @@ var WhiteBoardController = (function () {
             self.worker.postMessage(message);
         });
         this.socket.on('MSG-COMPONENT', function (data) {
-            if (data.type == 'ANY') {
+            if (data.type == 'ANY' && data.serverId == null) {
                 if (data.payload.header == ElementMessageTypes.MOVE) {
                     var message = { type: 8, data: data.payload.payload };
                     self.worker.postMessage(message);
@@ -832,7 +848,7 @@ var WhiteBoardController = (function () {
         });
         this.socket.on('ERROR', function (message) {
             console.log('SERVER: ' + message);
-            var errMsg = { type: 39, error: message };
+            var errMsg = { type: 43, error: message };
             self.worker.postMessage(errMsg);
         });
     };
@@ -881,6 +897,9 @@ var WhiteBoardController = (function () {
     WhiteBoardController.prototype.setSelectCount = function (newCount) {
         this.selectCount = newCount;
     };
+    WhiteBoardController.prototype.setClipboard = function (clipBoardItems) {
+        this.clipboardItems = clipBoardItems;
+    };
     WhiteBoardController.prototype.getAudioStream = function (id) {
         return null;
     };
@@ -897,7 +916,7 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.deleteElements = function (ids) {
         var newElemList = this.viewState.boardElements;
-        var _loop_1 = function(i) {
+        var _loop_1 = function (i) {
             newElemList = newElemList.filter(function (element) { return element.id !== ids[i]; });
         };
         for (var i = 0; i < ids.length; i++) {
@@ -1383,24 +1402,39 @@ var WhiteBoardController = (function () {
     };
     WhiteBoardController.prototype.keyPress = function (e) {
         var inputChar = e.key;
-        e.preventDefault();
         var eventCopy = {
             altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
             keyCode: e.keyCode, charCode: e.charCode
         };
         if (e.ctrlKey) {
             if (inputChar == 'z') {
+                e.preventDefault();
                 var message = { type: 35 };
                 this.worker.postMessage(message);
+                return;
             }
             else if (inputChar == 'y') {
+                e.preventDefault();
                 var message = { type: 36 };
                 this.worker.postMessage(message);
+                return;
             }
+            else if (inputChar == 'c') {
+                return;
+            }
+            else if (inputChar == 'x') {
+                return;
+            }
+            else if (inputChar == 'v') {
+                return;
+            }
+            e.preventDefault();
         }
         else {
+            e.preventDefault();
             var message = { type: 34, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
             this.worker.postMessage(message);
+            return;
         }
     };
     WhiteBoardController.prototype.contextCopy = function (e) {
@@ -1410,16 +1444,78 @@ var WhiteBoardController = (function () {
         document.execCommand("cut");
     };
     WhiteBoardController.prototype.contextPaste = function (e) {
+        console.log('Should have execCommand.');
         document.execCommand("paste");
     };
     WhiteBoardController.prototype.onCopy = function (e) {
         console.log('COPY EVENT');
+        e.preventDefault();
+        e.clipboardData.clearData();
+        e.clipboardData.setData('flag/whiteboard', 'COPY');
+        for (var i = 0; i < this.clipboardItems.length; i++) {
+            e.clipboardData.setData(this.clipboardItems[i].format, this.clipboardItems[i].data);
+        }
     };
     WhiteBoardController.prototype.onPaste = function (e) {
         console.log('PASTE EVENT');
+        e.preventDefault();
+        var whitElem = document.getElementById("whiteBoard-input");
+        var elemRect = whitElem.getBoundingClientRect();
+        var offsetY = elemRect.top - document.body.scrollTop;
+        var offsetX = elemRect.left - document.body.scrollLeft;
+        var mouseX = Math.round(this.prevX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(this.prevY - offsetY) * this.scaleF + this.panY;
+        var fileList = e.clipboardData.files;
+        var url = e.clipboardData.getData("URL");
+        var urlList = e.clipboardData.getData("text/uri-list");
+        var text = e.clipboardData.getData("text/plain");
+        var htmlText = e.clipboardData.getData("text/html");
+        var csv = e.clipboardData.getData("text/csv");
+        var enriched = e.clipboardData.getData("text/enriched");
+        var xml = e.clipboardData.getData("text/xml");
+        var png = e.clipboardData.getData("image/png");
+        var jpg = e.clipboardData.getData("image/jpg");
+        var flag = e.clipboardData.getData("flag/whiteboard");
+        if (jpg == null || jpg == undefined) {
+            jpg = e.clipboardData.getData("image/jpeg");
+        }
+        var gif = e.clipboardData.getData("image/gif");
+        var svg = e.clipboardData.getData("image/svg+xml");
+        var img = null;
+        if (svg != null && svg != undefined) {
+            img = svg;
+        }
+        else if (gif != null && gif != undefined) {
+            img = gif;
+        }
+        else if (png != null && png != undefined) {
+            img = png;
+        }
+        else if (jpg != null && jpg != undefined) {
+            img = jpg;
+        }
+        var wasCut = false;
+        var isInternal = (flag != undefined) && (flag != null);
+        if (isInternal && flag == 'CUT') {
+            wasCut = true;
+        }
+        var data = {
+            files: fileList, url: url, urlList: urlList, plainText: text, htmlText: htmlText, enrichedText: enriched, csv: csv, xml: xml, image: img,
+            isInternal: isInternal, wasCut: wasCut
+        };
+        var message = { type: 39, mouseX: mouseX, mouseY: mouseY, data: data, mode: this.viewState.mode };
+        this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.onCut = function (e) {
         console.log('CUT EVENT');
+        e.preventDefault();
+        e.clipboardData.clearData();
+        e.clipboardData.setData('flag/whiteboard', 'CUT');
+        for (var i = 0; i < this.clipboardItems.length; i++) {
+            e.clipboardData.setData(this.clipboardItems[i].format, this.clipboardItems[i].data);
+        }
+        var message = { type: 40, mode: this.viewState.mode };
+        this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.dragOver = function (e) {
         e.preventDefault();
@@ -1429,12 +1525,29 @@ var WhiteBoardController = (function () {
         var elemRect = whitElem.getBoundingClientRect();
         var offsetY = elemRect.top - document.body.scrollTop;
         var offsetX = elemRect.left - document.body.scrollLeft;
-        var x = Math.round(e.clientX - offsetX);
-        var y = Math.round(e.clientY - offsetY);
+        var mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
         e.preventDefault();
+        var dataTransfer = e.dataTransfer;
+        var dataCopy = {
+            dropEffect: dataTransfer.dropEffect, effectAllowed: dataTransfer.effectAllowed, files: dataTransfer.files
+        };
+        var eventCopy = {
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail, dataTransfer: dataCopy,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+        var loc = document.createElement("a");
+        loc.href = e.dataTransfer.getData('text/plain');
+        console.log('Drop was: ' + e.dataTransfer.getData('text/plain'));
+        var path = loc.pathname;
+        var message = {
+            type: 38, e: eventCopy, mouseX: mouseX, mouseY: mouseY,
+            scaleF: this.scaleF, mode: this.viewState.mode, plainData: e.dataTransfer.getData('text/plain')
+        };
+        this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.palleteChange = function (change) {
-        var message = { type: 37, change: change, mode: this.viewState.mode };
+        var message = { type: 41, change: change, mode: this.viewState.mode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.windowResize = function (e) {

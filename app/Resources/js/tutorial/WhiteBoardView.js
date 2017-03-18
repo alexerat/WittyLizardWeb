@@ -98,7 +98,8 @@ var SVGComponent = React.createClass({ displayName: 'SVGComponent',
                 })(element.id),
             };
             displayElements.push(React.createElement(state.components.get(element.mode).ElementView, {
-                key: element.id, mode: state.mode, state: element, dispatcher: dispater, viewScale: state.viewScale, eraseSize: state.eraseSize
+                key: element.id, mode: state.mode, state: element, dispatcher: dispater, eraseSize: state.eraseSize, viewScale: state.viewScale,
+                viewX: state.viewX, viewY: state.viewY, viewWidth: state.viewWidth, viewHeight: state.viewHeight
             }));
         });
         return React.createElement('svg', {
@@ -230,6 +231,8 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
             }
         };
     },
+    componentDidMount: function () {
+    },
     storeUpdate: function (newState) {
         this.setState(newState);
     },
@@ -237,14 +240,13 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
         var state = this.state;
         var dispatcher = state.dispatcher;
         var inElem = React.createElement('canvas', { className: 'inputSpace', id: 'whiteBoard-input' });
-        document.body.addEventListener('mouseup', this.mouseUp, false);
         var outElem = React.createElement(SVGComponent, {
             className: "renderSpace", id: "whiteBoard-output", key: 'output', state: state
         });
         var whitElem = React.createElement('div', {
             className: "large-11 small-10 columns", id: "whiteboard-container", key: 'whiteboard', onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
             onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onClick: dispatcher.mouseClick,
-            onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut,
+            onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel,
             contextMenu: 'whiteboard-context'
         }, outElem, inElem);
         var contElem = React.createElement(ControlComponent, {
@@ -252,7 +254,7 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
             state: { mode: state.mode, components: state.components, palleteState: state.palleteState, eraseSize: state.eraseSize },
             dispatcher: { modeChange: dispatcher.modeChange, palleteChange: dispatcher.palleteChange, changeEraseSize: dispatcher.changeEraseSize }
         });
-        var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context', key: 'context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }), React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
+        var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context', key: 'context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }));
         var infoElems = [];
         for (var i = 0; i < state.infoElements.size; i++) {
             var info = state.infoElements.get(i);
@@ -262,7 +264,7 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
         }
         if (state.alertElements.size > 0 && !state.blockAlert) {
             var alertMsg = state.alertElements.first();
-            var alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: dispatcher.clearAlert }, React.createElement('h5', null, alertMsg.type), React.createElement('p', null, alertMsg.message));
+            var alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: function (e) { dispatcher.clearAlert(0); } }, React.createElement('h5', null, alertMsg.type), React.createElement('p', null, alertMsg.message));
             return (React.createElement("div", { className: "expanded row", id: "whiteboard-row" }, whitElem, contElem, alertElem, infoElems, contextMenu));
         }
         else {

@@ -1,9 +1,9 @@
-/** Template Whiteboard Component.
+/** Highlight Whiteboard Component.
 *
-* This allows the user to free draw curves that will be smoothed and rendered to SVG Beziers.
+* This allows the user to highlight areas for other users to see.
 *
 */
-namespace Template {
+namespace Highlight {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                                                                                                                        //
     //                                                                                                                                                        //
@@ -15,14 +15,15 @@ namespace Template {
     /**
      * The name of the mode associated with this component.
      */
-    export const MODENAME = 'TEMPLATE';
+    export const MODENAME = 'HIGHLIGHT';
+
 
     /**
      * A description of the view state for elements in this component.
      * This will be passed from the element controller to the view.
      */
     interface ViewState extends ComponentViewState {
-        colour: string;
+        colour: number;
     }
 
     /**
@@ -30,8 +31,6 @@ namespace Template {
      * This will be passed from the pallete controller to the view.
      */
     interface PalleteViewState extends BoardPalleteViewState {
-        colour: string;
-        size: number;
     }
 
     /**
@@ -55,9 +54,10 @@ namespace Template {
      * This is used to identify the source of user input from the element view.
      */
     const enum ViewComponents {
-        View,
-        Interaction
+        Highlight,
+        Marker
     }
+
 
     /**
      * A description of custom context items (other than copy, cut, paste).
@@ -67,507 +67,21 @@ namespace Template {
 
     }
 
-    const MessageTypes = {
-        POINT: 'POINT',
-        POINTMISSED: 'MISSED-POINT'
-    };
-
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                                                                                                                        //
-    //                                                                                                                                                        //
-    // VIEW                                                                                                                                                   //
-    //                                                                                                                                                        //
-    //                                                                                                                                                        //
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     /**
-     * A function that will draw to the canvas to give imidiet user feedback whilst the user provides input to create a new element.
-     *
-     * @param {CreationData} input The current user input to potentially use to create element.
-     * @param {CanvasRenderingContext2D} context The canvas context to be drawn to.
+     * Message types that can be sent between the user and server.
      */
-    let DrawHandle = (input: CreationData, context: CanvasRenderingContext2D) => {
-        context.clearRect(0, 0, whitElem.width, whitElem.height);
-
-        if(rectWidth > 0 && rectHeight > 0)
-        {
-            context.beginPath();
-            context.globalAlpha = 0.4;
-            context.fillStyle = 'yellow';
-            context.fillRect(rectLeft, rectTop, rectWidth, rectHeight);
-            context.stroke();
-            context.globalAlpha = 1.0;
-        }
+    const MessageTypes = {
     };
 
-    var SVGHighlight = React.createClass({displayName: 'SVGHighlight',
-    render: function()
-    {
-        return React.createElement('rect',
-        {
-            key: 'hightlight', x: this.props.x, y: this.props.y, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6),
-            width: this.props.width, height: this.props.height, opacity: 0.4
-        });
-    }});
-
-    var SVGHighlightTag = React.createClass({displayName: 'SVGHighlightTag',
-    render: function()
-    {
-        if(this.props.viewX + this.props.viewWidth < this.props.x + 0.5 * this.props.width)
-        {
-            // Highlight to the right of view
-            if(this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight below view
-                let points = [
-                    {x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + this.props.viewHeight},
-                    {x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + this.props.viewHeight - 14.14 * this.props.viewScale},
-                    {x: this.props.viewX + this.props.viewWidth - 49.50 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 63.64 * this.props.viewScale},
-                    {x: this.props.viewX + this.props.viewWidth - 63.64 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 49.50 * this.props.viewScale},
-                    {x: this.props.viewX + this.props.viewWidth - 14.14 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if(this.props.viewY < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight vertically within view
-                let yPosMid = this.props.y + 0.5 * this.props.height;
-                let xPosMid = this.props.viewX + this.props.viewWidth - 40 * this.props.viewScale;
-
-                console.log('Drawing right side, viewWidth is: ' + this.props.viewWidth);
-
-                let points = [
-                    {x: xPosMid + 40 * this.props.viewScale, y: yPosMid},
-                    {x: xPosMid + 30 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale},
-                    {x: xPosMid - 40 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale},
-                    {x: xPosMid - 40 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale},
-                    {x: xPosMid + 30 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else
-            {
-                // Highlight above view
-                let points = [
-                    {x: this.props.viewX + this.props.viewWidth, y: this.props.viewY},
-                    {x: this.props.viewX + this.props.viewWidth - 14.14 * this.props.viewScale, y: this.props.viewY},
-                    {x: this.props.viewX + this.props.viewWidth - 63.64 * this.props.viewScale, y: this.props.viewY + 49.50 * this.props.viewScale},
-                    {x: this.props.viewX + this.props.viewWidth - 49.50 * this.props.viewScale, y: this.props.viewY + 63.64 * this.props.viewScale},
-                    {x: this.props.viewX + this.props.viewWidth, y: this.props.viewY + 14.14 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-        else if(this.props.viewX < this.props.x + 0.5 * this.props.width)
-        {
-            // Highlight horizontally within view
-            let xPosMid = this.props.x - 0.5 * this.props.width;
-            if(this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight below view
-                let yPosMid = this.props.viewY + this.props.viewHeight - 40 * this.props.viewScale;
-
-                let points = [
-                    {x: xPosMid, y: yPosMid + 40 * this.props.viewScale},
-                    {x: xPosMid - 10 * this.props.viewScale, y: yPosMid + 30 * this.props.viewScale},
-                    {x: xPosMid - 10 * this.props.viewScale, y: yPosMid - 40 * this.props.viewScale},
-                    {x: xPosMid + 10 * this.props.viewScale, y: yPosMid - 40 * this.props.viewScale},
-                    {x: xPosMid + 10 * this.props.viewScale, y: yPosMid + 30 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if(this.props.viewY < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight vertically within view, no tag needed.
-                return null;
-            }
-            else
-            {
-                // Highlight above view
-                let yPosMid = this.props.viewY + 40 * this.props.viewScale;
-
-                let points = [
-                    {x: xPosMid, y: yPosMid - 40 * this.props.viewScale},
-                    {x: xPosMid - 10 * this.props.viewScale, y: yPosMid - 30 * this.props.viewScale},
-                    {x: xPosMid - 10 * this.props.viewScale, y: yPosMid + 40 * this.props.viewScale},
-                    {x: xPosMid + 10 * this.props.viewScale, y: yPosMid + 40 * this.props.viewScale},
-                    {x: xPosMid + 10 * this.props.viewScale, y: yPosMid - 30 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-        else
-        {
-            // Highlight to the left of view
-            if(this.props.viewY + this.props.viewHeight < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight below view
-                let points = [
-                    {x: this.props.viewX, y: this.props.viewY + this.props.viewHeight},
-                    {x: this.props.viewX, y: this.props.viewY + this.props.viewHeight - 14.14 * this.props.viewScale},
-                    {x: this.props.viewX + 49.50 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 63.64 * this.props.viewScale},
-                    {x: this.props.viewX + 63.64 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight - 49.50 * this.props.viewScale},
-                    {x: this.props.viewX + 14.14 * this.props.viewScale, y: this.props.viewY + this.props.viewHeight}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else if(this.props.viewY < this.props.y + 0.5 * this.props.height)
-            {
-                // Highlight vertically within view
-                let yPosMid = this.props.y + 0.5 * this.props.height;
-                let xPosMid = this.props.viewX + 40 * this.props.viewScale;
-
-                let points = [
-                    {x: xPosMid - 40 * this.props.viewScale, y: yPosMid},
-                    {x: xPosMid - 30 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale},
-                    {x: xPosMid + 40 * this.props.viewScale, y: yPosMid - 10 * this.props.viewScale},
-                    {x: xPosMid + 40 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale},
-                    {x: xPosMid - 30 * this.props.viewScale, y: yPosMid + 10 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-            else
-            {
-                // Highlight above view
-                let points = [
-                    {x: this.props.viewX, y: this.props.viewY},
-                    {x: this.props.viewX + 14.14 * this.props.viewScale, y: this.props.viewY},
-                    {x: this.props.viewX + 63.64 * this.props.viewScale, y: this.props.viewY + 49.50 * this.props.viewScale},
-                    {x: this.props.viewX + 49.50 * this.props.viewScale, y: this.props.viewY + 63.64 * this.props.viewScale},
-                    {x: this.props.viewX, y: this.props.viewY + 14.14 * this.props.viewScale}
-                ];
-
-                let pointStr = points[0].x + ',' + points[0].y + ' ' + points[1].x + ',' + points[1].y + ' ' + points[2].x + ',' + points[2].y + ' '
-                    + points[3].x + ',' + points[3].y + ' ' + points[4].x + ',' + points[4].y;
-
-                return React.createElement('polygon',
-                {
-                    key: 'hightlightTag', points: pointStr, fill: '#' + ('00000' + this.props.colour.toString(16)).substr(-6), onClick: this.props.mouseClick, pointerEvents: 'all',
-                });
-            }
-        }
-    }});
-
-
-    /** Template Whiteboard Element View.
-    *
-    * This is the class that will be used to render the element. It must return an SVG tag (which may have embedded tags).
-    */
-    export class ElementView extends React.Component
-    {
-        propTypes = {};
-        props: ComponentProp;
-
-        /** React render function
-         *
-         * @return React.DOMElement
-         */
-        render()
-        {
-            let state = this.props.state as ViewState;
-            let dispatcher = this.props.dispatcher;
-
-            let items = [];
-
-            if(state.type == 'circle')
-            {
-                if(state.mode == BoardModes.ERASE)
-                {
-                    items.push(React.createElement('circle',
-                    {
-                        key: 'delete', cx: state.point.x, cy: state.point.y, r: state.size * 3, fill: state.colour,
-                        onClick: dispatcher.mouseClick, opacity: 0
-                    }));
-                }
-                else if(state.mode == BoardModes.SELECT)
-                {
-                    items.push(React.createElement('circle',
-                    {
-                        key: 'move', cx: state.point.x, cy: state.point.y, r: state.size * 3, fill: state.colour,
-                        onMouseDown: dispatcher.mouseDown, opacity: 0, cursor: 'move'
-                    }));
-                }
-
-                items.push(React.createElement('circle',
-                {
-                    key: 'display', cx: state.point.x, cy: state.point.y, r: state.size, fill: state.colour, stroke: state.colour,
-                    onMouseMove: dispatcher.mouseMove
-                }));
-
-                return React.createElement('g', null, items);
-            }
-            else if(state.type == 'path')
-            {
-                if(state.mode == BoardModes.ERASE)
-                {
-                    items.push(React.createElement('path',
-                    {
-                        key: 'delete', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size * 3, strokeLinecap: 'round',
-                        onClick: dispatcher.mouseClick, opacity: 0, pointerEvents: 'stroke'
-                    }));
-                }
-                else if(state.mode == BoardModes.SELECT)
-                {
-                    items.push(React.createElement('path',
-                    {
-                        key: 'move', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size * 3, strokeLinecap: 'round',
-                        onMouseDown: dispatcher.mouseDown, opacity: 0, cursor: 'move', pointerEvents: 'stroke'
-                    }));
-                }
-
-                items.push(React.createElement('path',
-                {
-                    key: 'display', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size, strokeLinecap: 'round',
-                    onMouseMove: dispatcher.mouseMove
-                }));
-
-                return React.createElement('g', null, items);
-            }
-            else
-            {
-                console.error('ERROR: Unrecognized type for SVGBezier.');
-
-                return null;
-            }
-        }
+    interface UserNewHighlightMessage extends UserNewElementPayload {
     }
-
-    /** Template Whiteboard Mode View.
-    *
-    * This is the class that will be used to render the mode selection button for this component. Must return a button.
-    *
-    */
-    export class ModeView extends React.Component
-    {
-        propTypes = {};
-
-        props: ModeProp;
-
-        /** React render function
-         *
-         * @return React.DOMElement
-         */
-        render()
-        {
-            let highlightButt = React.createElement('button', {className: 'button mode-button', id: 'highlight-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher.modeChange(4)}, 'H');
-            if(state.mode == 4)
-            {
-                highlightButt = React.createElement('button', {className: 'button mode-button pressed-mode', id: 'highlight-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {} }, 'H');
-            }
-
-
-            if(this.props.mode == MODENAME)
-            {
-                return React.createElement('button',
-                {
-                    className: 'button mode-button pressed-mode', id: 'draw-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                }, 'D');
-            }
-            else
-            {
-                return React.createElement('button',
-                {
-                    className: 'button mode-button', id: 'draw-button', onKeyUp: function(e) { e.preventDefault(); },
-                    onClick: () => this.props.dispatcher(MODENAME)
-                }, 'D');
-            }
-        }
-    }
-
-    /** Template Whiteboard Pallete View.
-    *
-    * This is the class that will be used to render the pallete for this component.
-    * This will be displayed when the mode for this component is selected.
-    *
-    */
-    export class PalleteView extends React.Component
-    {
-        propTypes = {};
-
-        props: PalleteProp;
-
-        /** React render function
-         *
-         * @return React.DOMElement
-         */
-        render()
-        {
-            let state = this.props.state as PalleteViewState;
-            let dispatcher = this.props.dispatcher;
-
-            let blackButt = React.createElement('button',
-            {
-                className: 'button colour-button', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); },
-                onClick: () => dispatcher({operation: 'COLOUR', newState: 'black'})
-            });
-            let blueButt  = React.createElement('button',
-            {
-                className: 'button colour-button', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher('blue')
-            });
-            let redButt   = React.createElement('button',
-            {
-                className: 'button colour-button', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher('red')
-            });
-            let greenButt = React.createElement('button',
-            {
-                className: 'button colour-button', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher('green')
-            });
-
-            let smallButt = React.createElement('button',
-            {
-                className: 'button mode-button', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); },
-                onClick: () => dispatcher({operation: 'SIZE', newState: 0})
-            }, 'S');
-            let medButt   = React.createElement('button',
-            {
-                className: 'button mode-button', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); },
-                onClick: () => dispatcher({operation: 'SIZE', newState: 1})
-            }, 'M');
-            let largeButt = React.createElement('button',
-            {
-                className: 'button mode-button', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); },
-                onClick: () => dispatcher({operation: 'SIZE', newState: 2})
-            }, 'L');
-
-            if(state.colour == 'black')
-            {
-                blackButt = React.createElement('button',
-                {
-                    className: 'button colour-button pressed-colour', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                });
-            }
-            else if(state.colour == 'blue')
-            {
-                blueButt = React.createElement('button',
-                {
-                    className: 'button colour-button pressed-colour', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                });
-            }
-            else if(state.colour == 'red')
-            {
-                redButt = React.createElement('button',
-                {
-                    className: 'button colour-button pressed-colour', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                });
-            }
-            else if(state.colour == 'green')
-            {
-                greenButt = React.createElement('button',
-                {
-                    className: 'button colour-button pressed-colour', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                });
-            }
-
-            if(state.size == 0)
-            {
-                smallButt = React.createElement('button',
-                {
-                    className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                }, 'S');
-            }
-            else if(state.size == 1)
-            {
-                medButt = React.createElement('button',
-                {
-                    className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                }, 'M');
-            }
-            else if(state.size == 2)
-            {
-                largeButt = React.createElement('button',
-                {
-                    className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
-                }, 'L');
-            }
-
-            let colourCont = React.createElement('div',
-            {
-                className: 'whiteboard-controlgroup', id: 'whiteboard-colourgroup'
-            }, blackButt, blueButt, redButt, greenButt);
-
-            let sizeCont = React.createElement('div',
-            {
-                className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
-            }, smallButt, medButt, largeButt);
-
-            return React.createElement('div', null, colourCont, sizeCont);
-        }
-    }
-
-    /** Template Custom Context View.
-    *
-    * This is the class that will be used to render the additional context menu items for this component.
-    * This will be displayed when the mode for this component is selected.
-    *
-    * Note: Copy, Cut and Paste have standard event handlers in dispatcher. If other context items are desired they must use the custom context event.
-    */
-    export class CustomContextView extends React.Component
-    {
-        propTypes = {};
-
-        props: PalleteProp;
-
-        /** React render function
-         *
-         * @return React.DOMElement
-         */
-        render()
-        {
-            let state = this.props.state as PalleteViewState;
-            let dispatcher = this.props.dispatcher;
-
-            return null;
-        }
+    interface ServerNewHighlightMessage extends ServerMessage {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        userId: number;
+        colour: number;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -578,7 +92,7 @@ namespace Template {
     //                                                                                                                                                        //
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    /** Template Whiteboard Pallete.
+    /** Upload Whiteboard Pallete.
     *
     * This is the class that will be used to store the state and control the pallete for this component.
     *
@@ -591,13 +105,25 @@ namespace Template {
             // return palleteState
         }
 
-        public handleChange(changeMsg: BoardPalleteChange)
+        public getCurrentViewState()
         {
-            // return newPalleteView
+            return this.currentViewState;
+        }
+
+        public getCursor()
+        {
+            let cursorType: ElementCursor = { cursor: 'auto', url: [], offset: {x: 0, y: 0} };
+
+            return cursorType;
+        }
+
+        public handleChange(change: BoardPalleteChange)
+        {
+            return this.currentViewState;
         }
     }
 
-    /** Template Whiteboard Element.
+    /** Upload Whiteboard Element.
     *
     * This is the class that will be used to store the state and control elements of this component.
     *
@@ -605,14 +131,7 @@ namespace Template {
     export class Element extends BoardElement
     {
         // Element Specific Variables
-        curveSet: Array<Point>;
-        colour: string;
-        size: number;
-
-        pointInBuffer: Array<Point> = [];
-        pointInTimeout;
-        numRecieved = 0;
-        numPoints = 0;
+        colour: number;
 
         /**   Create the element from the creation data, return null if not valid.
         *
@@ -620,63 +139,49 @@ namespace Template {
         */
         public static createElement( data: CreationData )
         {
-            return null;
+            let width = data.width;
+            let height = data.height;
+
+
+            if(data.serverId != null && data.serverId != undefined)
+            {
+                console.log('Creating upload from message.');
+                let msg = data.serverMsg as ServerNewHighlightMessage;
+                console.log(msg);
+
+                return new Element(data.id, msg.userId, msg.x, msg.y, msg.width, msg.height, data.callbacks, msg.colour, false, data.serverId);
+            }
+            else
+            {
+                return new Element(data.id, data.userId, data.x, data.y, data.width, data.height, data.callbacks, 0xffff00, true);
+            }
         }
+
+
+
 
         /**   Create the element as per the supplied parameters.
         *
         *     @return Element The new element created as per the supplied parameters
         */
-        public constructor(id: number, userId: number, x: number, y: number, width: number, height: number, callbacks: ElementCallbacks,
-            numPoints: number, curveSet: Array<Point>, colour: string, size: number, serverId?: number, updateTime?: Date)
+        public constructor(id: number, userId: number, x: number, y: number, width: number, height: number, callbacks: ElementCallbacks, colour: number,
+                            isSelected: boolean, serverId?: number)
         {
-            super(MODENAME, id, x, y, width, height, callbacks, serverId, updateTime);
+            let future = new Date();
+            future.setFullYear(future.getFullYear() + 1);
 
-            this.numPoints = numPoints;
-            this.curveSet = curveSet;
-            this.colour = colour;
-            this.size = size;
-        }
+            super(MODENAME, id, x, y, width, height, userId, callbacks, serverId, future);
 
-        addHighlight = (x: number, y: number, width: number, height: number, userId: number, colour: number) : number =>
-        {
-            let d = new Date();
-            d.setDate(d.getDate() + 50);
+            this.isSelected = isSelected;
 
-            let newHighlight: Highlight =
-            {
-                type: 'highlight', id: -1, user: userId, isDeleted: false, serverId: -1, x: x, y: y, width: width, height: height, colour: colour,
-                opBuffer: [], hoverTimer: null, infoElement: null, updateTime: d
+            let newHighlightView: ViewState = {
+                mode: MODENAME, id: this.id, updateTime: future, isSelected: isSelected, x: this.x, y: this.y, width: this.width,
+                height: this.height, isEditing: false, isMoving: false, isResizing: false, remLock: false, getLock: false, colour: colour
             };
 
-            let localId = this.boardElems.length;
-            this.boardElems[localId] = newHighlight;
-            newHighlight.id = localId;
+            this.currentViewState = newHighlightView;
 
-            let newHighlightView : HighlightElement =
-            {
-                id: localId, x: x, y: y, width: width, height: height, type: 'highlight', colour: colour, updateTime: d, selected: false
-            };
-
-            let newElemList = this.viewState.boardElements.set(localId, newHighlightView);
-            this.updateView(Object.assign({}, this.viewState, { boardElements: newElemList}));
-
-            return localId;
-        }
-
-
-        placeHighlight = (mouseX: number, mouseY: number, scaleF: number, panX: number, panY: number, rectWidth: number, rectHeight: number) : void =>
-        {
-            let x = scaleF * mouseX + panX;
-            let y = scaleF * mouseY + panY;
-            let width = rectWidth * scaleF;
-            let height = rectHeight * scaleF;
-
-            let localId = this.addHighlight(x, y, width, height, this.userId, 0xffff00);
-
-            this.userHighlight = localId;
-
-            this.sendHighlight(x, y, width, height);
+            console.log(this);
         }
 
 
@@ -684,117 +189,70 @@ namespace Template {
         // EXPOSED FUNCTIONS
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        /**   Generate the view state for this element given the current state. This should not be favoured as it is a slower method to change view states.
-         *
-         *    @return {viewState} The view state of this element given it's current internal state
-         */
-        public getCurrentViewState()
-        {
-            let newCurveView: ViewState;
-            if(this.curveSet.length > 1)
-            {
-                var pathText = this.createCurveText();
-                newCurveView = {
-                    mode: MODENAME, type: 'path', id: this.id, size: this.size,
-                    colour: this.colour, param: pathText, updateTime: this.updateTime, isSelected: false
-                };
-            }
-            else
-            {
-                newCurveView = {
-                    mode: MODENAME, type: 'circle', id: this.id, size: this.size,
-                    colour: this.colour, point: this.curveSet[0], updateTime: this.updateTime, isSelected: false
-                };
-            }
-
-            return newCurveView;
-        }
-
         /**   Generate the message that would be sent to the server to generate this element.
          *
          *    This should be a single message, more messages can be sent once serverId is returned. (see setServerId)
          *
          *    @return {UserMessage} The message to generate this element.
          */
-        public getCreationMessage()
+        public getNewMsg()
         {
-            let msg: UserNewCurveMessage =
-            {
-                localId: this.id, colour: this.colour, num_points: this.curveSet.length, size: this.size,
-                x: this.x, y: this.y, width: this.width, height: this.height
-            };
+            let msg: UserNewHighlightMessage = { localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height, editLock: false };
 
-            let msgCont: UserMessage = { header: BoardMessageTypes.NEW, payload: msg }
+            return msg;
+        }
 
-            return msgCont;
+        /**   Generate the clipboard data that this element should produce when copied, either as a single selected item or whilst editing.
+         *
+         *    This should be a set of different clipboard data formats.
+         *
+         *    @return {Array<ClipBoardItem>} The clipboard items.
+         */
+        public getClipboardData()
+        {
+            return null;
+        }
+
+        /**   Generate the SVG string description of this objects display to be copied  when user copies multiple items.
+         *
+         *    This should be a string containing the svg description to display this item.
+         *
+         *    @return {string} The clipboard items.
+         */
+        public getClipboardSVG()
+        {
+            return null;
         }
 
         /**   Sets the serverId of this element and returns a list of server messages to send.
          *
-         *    @return Array<UserMessage> The set of messages to send to the communication server.
+         *    @param {number} id - The server ID for this element.
+         *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
          */
         public setServerId(id: number)
         {
-            this.serverId = id;
+            super.setServerId(id);
 
-            let messages: Array<UserMessage> = [];
-
-            // Send the points for this curve.
-            for(let i = 0; i < this.curveSet.length; i++)
-            {
-                let curve = this.curveSet[i];
-                let msg : UserNewPointMessage = { num: i, x: curve.x, y: curve.y};
-                let msgCont : UserMessage =  { header: MessageTypes.POINT, payload: msg };
-                messages.push(msgCont);
-            }
-
-            for(let i = 0; i < this.opBuffer.length; i++)
-            {
-                messages.push(this.opBuffer[i]);
-            }
-
-            return messages;
+            return [];
         }
 
-        /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+        /**   Handle the deselect this element.
+         *    In the case of highlights this will delete the highlight.
          *
-         *    Change only when sub-components require updating.
-         *
-         *    @return {ElementEraseReturn} The new view state of this element.
+         *    @return {ComponentViewState} An object containing: the new view state
          */
-        public erase()
+        public handleDeselect()
         {
-            let retMsgs: Array<UserMessage> = [];
-            let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            let retVal: ElementEraseReturn = { serverMessages: [], newViewCentre: centrePos };
+            let msg: UserMessage = { header: BaseMessageTypes.DELETE, payload: null };
 
-            let msg: UserMessage = { header: BoardMessageTypes.DELETE, payload: null };
-            retMsgs.push(msg);
+            this.sendServerMsg(msg);
+            this.deleteElement();
 
-            retVal.serverMessages = this.checkForServerId(retMsgs);
+            let retVal: ComponentViewState = this.currentViewState;
             return retVal;
         }
 
-        /**   Sets this item as not deleted and process any sub-components as required, returning the new view state.
-         *
-         *    Change only when sub-components require updating.
-         *
-         *    @return {ElementRestoreReturn} The new view state of this element.
-         */
-        public restore()
-        {
-            let retMsgs: Array<UserMessage> = [];
-            let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            let retVal: ElementRestoreReturn = { newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos };
-
-            let msg: UserMessage = { header: BoardMessageTypes.RESTORE, payload: null };
-            retMsgs.push(msg);
-
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        }
-
-        /**   Handle a mouse down event on this element or one of it's sub-components.
+        /**   Handle a mouse down event on this element or one of it's sub-components. Only called when board is in SELECT mode.
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
          *    @param {number} localX - The relative position of the event to this elemens x position.
@@ -808,12 +266,19 @@ namespace Template {
          */
         public handleMouseDown(e: MouseEvent, localX: number, localY: number, palleteState: Pallete, component?: ViewComponents, subId?: number)
         {
-            let serverMsgs: Array<UserMessage> = [];
-            let retVal = this.getDefaultInputReturn();
+            let cursorType: ElementCursor;
 
-            // Event Unimplemented: Implementation goes here.
+
+
+            let serverMsgs: Array<UserMessage> = [];
+            let retVal: ElementInputStartReturn =
+            {
+                newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
+                newViewCentre: null, cursor: cursorType, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
+            };
 
             retVal.serverMessages = this.checkForServerId(serverMsgs);
+
             return retVal;
         }
 
@@ -880,7 +345,15 @@ namespace Template {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
 
-            // Event Unimplemented: Implementation goes here.
+            if(component === ViewComponents.Highlight)
+            {
+                retVal.wasDelete = { message: null };
+            }
+            else if(component === ViewComponents.Marker)
+            {
+                // Set View Centre
+                retVal.newViewCentre = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
+            }
 
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
@@ -921,10 +394,14 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleTouchStart(e: TouchEvent, localX: number, localY: number, palleteState: Pallete, component?: ViewComponents, subId?: number)
+        public handleTouchStart(e: TouchEvent, localTouches: Array<Point>, palleteState: Pallete, component?: ViewComponents, subId?: number)
         {
             let serverMsgs: Array<UserMessage> = [];
-            let retVal = this.getDefaultInputReturn();
+            let retVal: ElementInputStartReturn =
+            {
+                newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
+                newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
+            };
 
             // Event Unimplemented: Implementation goes here.
 
@@ -944,7 +421,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleTouchMove(e: TouchEvent, changeX: number, changeY: number, palleteState: Pallete, component?: ViewComponents, subId?: number)
+        public handleTouchMove(e: TouchEvent, touchChange: Array<Point>, palleteState: Pallete, component?: ViewComponents, subId?: number)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -967,7 +444,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleTouchEnd(e: TouchEvent, localX: number, localY: number, palleteState: Pallete, component?: ViewComponents, subId?: number)
+        public handleTouchEnd(e: TouchEvent, localTouches: Array<Point>, palleteState: Pallete, component?: ViewComponents, subId?: number)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -990,7 +467,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleTouchCancel(e: TouchEvent, localX: number, localY: number, palleteState: Pallete, component?: ViewComponents, subId?: number)
+        public handleTouchCancel(e: TouchEvent, localTouches: Array<Point>, palleteState: Pallete, component?: ViewComponents, subId?: number)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1001,40 +478,46 @@ namespace Template {
             return retVal;
         }
 
-        /**   Handle a mouse down event on the board, called when this element is selected.
+        /**   Handle a mouse down event on the board, called when this element is being edited (and as required mode is this mode).
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
-         *    @param {number} localX - The relative position of the event to this elemens x position.
-         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseDown(e: MouseEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardMouseDown(e: MouseEvent, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
-            let retVal = this.getDefaultInputReturn();
-
+            let retVal: ElementInputStartReturn =
+            {
+                newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: false,
+                newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
+            };
             // Event Unimplemented: Implementation goes here.
 
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
-        /**   Handle a mouse move event on the board, called when this element is selected.
+        /**   Handle a mouse move event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
          *
          *    For Performance reasons avoid sending server messages here unless necessary, wait for mouseUp. Likewise for undo and redo ops, just leave null.
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
          *    @param {number} changeX - The change of the mouse x position, scaled to the SVG zoom.
          *    @param {number} changeY - The change of the mouse y position, scaled to the SVG zoom.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, palleteState: Pallete)
+        public handleBoardMouseMove(e: MouseEvent, changeX: number, changeY: number, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1045,17 +528,18 @@ namespace Template {
             return retVal;
         }
 
-        /**   Handle a mouse up event on the board, called when this element is selected.
+        /**   Handle a mouse up event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
          *
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
-         *    @param {number} localX - The relative position of the event to this elemens x position.
-         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardMouseUp(e: MouseEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardMouseUp(e: MouseEvent, mouseX: number, mouseY: number, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1076,10 +560,14 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardTouchStart(e: TouchEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardTouchStart(e: TouchEvent, touches: Array<Point>, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
-            let retVal = this.getDefaultInputReturn();
+            let retVal: ElementInputStartReturn =
+            {
+                newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
+                newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
+            };
 
             // Event Unimplemented: Implementation goes here.
 
@@ -1097,7 +585,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardTouchMove(e: TouchEvent, changeX: number, changeY: number, palleteState: Pallete)
+        public handleBoardTouchMove(e: TouchEvent, toucheChanges: Array<Point>, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1118,7 +606,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardTouchEnd(e: TouchEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardTouchEnd(e: TouchEvent, touches: Array<Point>, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1139,7 +627,7 @@ namespace Template {
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleBoardTouchCancel(e: TouchEvent, x: number, y: number, palleteState: Pallete)
+        public handleBoardTouchCancel(e: TouchEvent, touches: Array<Point>, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1155,13 +643,13 @@ namespace Template {
          *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
          *    @param {number} localX - The relative position of the event to this elemens x position.
          *    @param {number} localY - The relative position of the event to this elemens y position.
-         *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ViewState} An object containing: the new view state
          */
-        public startMove(e: MouseEvent, localX: number, localY: number, palleteState: Pallete)
+        public startMove()
         {
             let retVal: ComponentViewState = this.currentViewState;
+
             return retVal;
         }
 
@@ -1172,23 +660,11 @@ namespace Template {
          *    @param {number} changeX - The expected change in this elements x position.
          *    @param {number} changeY - The expected change in this elements y position.
          *
-         *    @return {ElementMoveReturn} An object containing: the new view state, messages to be sent to the comm server
+         *    @return {ViewState} An object containing: the new view state, messages to be sent to the comm server
          */
         public handleMove(changeX: number, changeY: number)
         {
-            this.x += changeX;
-            this.y += changeY;
-
-            let newView = this.updateView({ x: this.x, y: this.y });
-
-            let serverMsg: UserMessage = { header: BoardMessageTypes.MOVE, payload: { x: changeX, y: changeY } };
-            let retVal : ElementMoveReturn = { newView: newView, serverMessages: [serverMsg] };
-
-            if(!this.serverId)
-            {
-                this.opBuffer.push(serverMsg);
-                retVal.serverMessages = [];
-            }
+            let retVal: ComponentViewState = this.currentViewState;
 
             return retVal;
         }
@@ -1198,13 +674,13 @@ namespace Template {
          *    @param {MouseEvent} e - The mouse event data associated with the mouse up event.
          *    @param {number} localX - The relative position of the event to this elemens x position.
          *    @param {number} localY - The relative position of the event to this elemens y position.
-         *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
-         *    @return {ViewState} An object containing: the new view state
+         *    @return {ElementMoveReturn} An object containing: the new view state
          */
-        public endMove(e: MouseEvent, localX: number, localY: number, palleteState: Pallete)
+        public endMove()
         {
-            let retVal: ComponentViewState = this.currentViewState;
+            let retVal : ElementMoveReturn = { newView: this.currentViewState, serverMessages: [], move: null };
+
             return retVal;
         }
 
@@ -1221,18 +697,11 @@ namespace Template {
         public handleKeyPress(e: KeyboardEvent, input: string, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
+            let retVal = this.getDefaultInputReturn();
 
-            let retVal: ElementInputReturn =
-            {
-                newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: false, newViewCentre: null
-            };
+            // Event Unimplemented: Implementation goes here.
 
-            if(!this.serverId)
-            {
-                this.opBuffer.concat(serverMsgs);
-                retVal.serverMessages = [];
-            }
-
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
@@ -1242,101 +711,47 @@ namespace Template {
          *
          *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
          */
-        public handleServerMessage(message: ServerMessage)
+        public handleElementServerMessage(message: ServerMessage)
         {
-            let newView: ViewState = null;
+            let newView: ViewState = this.currentViewState as ViewState;
             let retMsgs: Array<UserMessage> = [];
+            let alertMessage: AlertMessageData = null;
+            let infoMessage: InfoMessageData = null;
             let wasEdit = false;
             let wasDelete = false;
 
-            switch(message.header)
+            let retVal: ElementMessageReturn =
             {
-                case MessageTypes.POINT:
-                    let data = message.payload as ServerNewPointMessage;
-                    // Make sure we know about this curve.
-                    if(this.numRecieved != this.numPoints)
-                    {
-                        if(!this.pointInBuffer[data.num])
-                        {
-                            this.pointInBuffer[data.num] = {x: data.x, y: data.y};
-                            this.numRecieved++;
-                        }
-
-                        if(this.numRecieved == this.numPoints)
-                        {
-                            clearInterval(this.pointInTimeout);
-                            this.curveSet = this.pointInBuffer;
-                            newView = this.getCurrentViewState();
-                        }
-                    }
-                    break;
-                case BoardMessageTypes.IGNORE:
-                    clearInterval(this.pointInTimeout);
-                    wasDelete = true;
-                    break;
-                case BoardMessageTypes.COMPLETE:
-                    while(this.opBuffer.length > 0)
-                    {
-                        let opMsg: UserMessage;
-                        let op = this.opBuffer.shift();
-
-                        opMsg = { header: op.header, payload: op.payload };
-
-                        retMsgs.push(opMsg);
-                    }
-                    break;
-                case MessageTypes.POINTMISSED:
-                    let msdata = message.payload as ServerMissedPointMessage;
-                    let point = this.curveSet[msdata.num];
-                    let msg : UserNewPointMessage = { num: msdata.num, x: point.x, y: point.y};
-                    let msgCont : UserMessage =  { header:  MessageTypes.POINT, payload: msg };
-                    retMsgs.push(msgCont);
-                    break;
-                case BoardMessageTypes.DROPPED:
-                    wasDelete = true;
-                    break;
-                case BoardMessageTypes.MOVE:
-                    let mvdata = message.payload as ServerMoveElementMessage;
-                    this.move(mvdata.x - this.x, mvdata.y - this.y, mvdata.editTime);
-                    this.updateTime = mvdata.editTime;
-                    break;
-                case BoardMessageTypes.DELETE:
-                    wasDelete = true;
-                    this.isDeleted = true;
-                    break;
-                case BoardMessageTypes.RESTORE:
-                    break;
-                default:
-                    break;
-            }
-
-            let retVal: ElementMessageReturn = { newView: newView, serverMessages: retMsgs, wasEdit: wasEdit, wasDelete: wasDelete };
+                newView: newView, serverMessages: retMsgs, wasEdit: wasEdit, wasDelete: wasDelete, alertMessage: alertMessage, infoMessage: infoMessage
+            };
             return retVal;
         }
 
-        /**   Handle the selecting of this element that has not been induced by this elements input handles.
+        /**   Handle the selecting and starting of editing of this element that has not been induced by this elements input handles.
          *
-         *    @return {ComponentViewState} An object containing: the new view state
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleSelect()
+        public handleStartEdit()
         {
-            this.isSelected = true;
-            this.updateView({ isSelected: true });
+            let retVal: ElementInputReturn = this.getDefaultInputReturn();
+            let serverMsgs: Array<UserMessage> = [];
 
-            let retVal: ComponentViewState = this.currentViewState;
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
-        /**   Handle the deselect this element.
+        /**   Handle the deselect this element and ending of editing.
          *
-         *    @return {ComponentViewState} An object containing: the new view state
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handleDeselect()
+        public handleEndEdit()
         {
-            this.isSelected = false;
-            this.updateView({ isSelected: false });
+            let retVal: ElementInputReturn = this.getDefaultInputReturn();
+            let serverMsgs: Array<UserMessage> = [];
 
-            let retVal: ComponentViewState = this.currentViewState;
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         }
 
@@ -1352,13 +767,15 @@ namespace Template {
 
         /**   Handle the pasting of data into this element.
          *
-         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
+         *    @param {number} localX - The x position of the mouse with respect to this element.
+         *    @param {number} localY - The y position of the mouse with respect to this element.
+         *    @param {ClipboardEventData} data - The clipboard data to be pasted.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handlePaste(e: ClipboardEvent, palleteState: Pallete)
+        public handlePaste(localX: number, localY: number, data: ClipboardEventData, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1371,13 +788,11 @@ namespace Template {
 
         /**  Handle the cutting of data from this element.
          *
-         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
-         *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected
          */
-        public handleCut(e: ClipboardEvent, palleteState: Pallete)
+        public handleCut()
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1419,11 +834,12 @@ namespace Template {
 
         /**   Handle a change in the pallete for this component. Passed when this element is selected.
          *
-         *    @param {BoardPalleteChange} palleteChange - The pallete change to be handled.
+         *    @param {BoardPallete} pallete - The pallete for this element after changes.
+         *    @param {BoardPalleteChange} change - The changes made to the pallete.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, messages to be sent to the comm server
          */
-        public handlePalleteChange()
+        public handlePalleteChange(pallete: BoardPallete, change: BoardPalleteChange)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1455,52 +871,6 @@ namespace Template {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // INTERNAL FUNCTIONS
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /**
-         *
-         *
-         */
-        private move(changeX: number, changeY: number, updateTime: Date)
-        {
-            this.x += changeX;
-            this.y += changeY;
-
-            for(var i = 0; i < this.curveSet.length; i++)
-            {
-                this.curveSet[i].x += changeX;
-                this.curveSet[i].y += changeY;
-            }
-
-            let newCurveView : ElementView;
-
-            if(this.curveSet.length > 1)
-            {
-                let pathText = this.createCurveText();
-
-                newCurveView = Object.assign({}, this.currentViewState, { param: pathText, updateTime: updateTime });
-            }
-            else
-            {
-                newCurveView = Object.assign({}, this.currentViewState, { point: this.curveSet[0], updateTime: updateTime });
-            }
-        }
-
-        private createCurveText()
-        {
-            var param =     "M" + this.curveSet[0].x + "," + this.curveSet[0].y;
-            param = param +" C" + this.curveSet[1].x + "," + this.curveSet[1].y;
-            param = param + " " + this.curveSet[2].x + "," + this.curveSet[2].y;
-            param = param + " " + this.curveSet[3].x + "," + this.curveSet[3].y;
-
-            for(var i = 4; i + 2 < this.curveSet.length; i += 3)
-            {
-                param = param +" C" + this.curveSet[i + 0].x + "," + this.curveSet[i + 0].y;
-                param = param + " " + this.curveSet[i + 1].x + "," + this.curveSet[i + 1].y;
-                param = param + " " + this.curveSet[i + 2].x + "," + this.curveSet[i + 2].y;
-            }
-
-            return param;
-        }
     }
 }
 
@@ -1509,4 +879,4 @@ namespace Template {
 // REGISTER COMPONENT                                                                                                                                         //
 //                                                                                                                                                            //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-registerComponent(Template.MODENAME, Template.Element, Template.ElementView, Template.Pallete, Template.PalleteView, Template.ModeView);
+registerComponent(Highlight.MODENAME, Highlight.Element, Highlight.Pallete);

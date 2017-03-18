@@ -768,21 +768,21 @@ interface ObjectConstructor {
 }
 interface WhiteBoardDispatcher
 {
-    elementMouseOver: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseOut: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseDown: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseMove: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseUp: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseClick: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
-    elementMouseDoubleClick: (id: number, e: MouseEvent, component?: number, subId?: number) => void;
+    elementMouseOver: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseOut: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseDown: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseMove: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseUp: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseClick: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseDoubleClick: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
 
-    elementTouchStart: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
-    elementTouchMove: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
-    elementTouchEnd: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
-    elementTouchCancel: (id: number, e: TouchEvent, component?: number, subId?: number) => void;
+    elementTouchStart: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
+    elementTouchMove: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
+    elementTouchEnd: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
+    elementTouchCancel: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
 
-    elementDragOver: (id: number, e: DragEvent, component?: number, subId?: number) => void;
-    elementDrop: (id: number, e: DragEvent, component?: number, subId?: number) => void;
+    elementDragOver: (id: number, e: React.DragEvent, component?: number, subId?: number) => void;
+    elementDrop: (id: number, e: React.DragEvent, component?: number, subId?: number) => void;
 
     palleteChange: (change: BoardPalleteChange) => void;
     changeEraseSize: (newSize: number) => void;
@@ -790,26 +790,26 @@ interface WhiteBoardDispatcher
     clearAlert: (id: number) => void;
     modeChange: (newMode: string) => void;
 
-    mouseWheel: (e: MouseEvent) => void;
-    mouseDown: (e: MouseEvent) => void;
-    mouseMove: (e: MouseEvent) => void;
-    mouseUp: (e: MouseEvent) => void;
-    mouseClick: (e: MouseEvent) => void;
+    mouseWheel: (e: React.WheelEvent) => void;
+    mouseDown: (e: React.MouseEvent) => void;
+    mouseMove: (e: React.MouseEvent) => void;
+    mouseUp: (e: React.MouseEvent) => void;
+    mouseClick: (e: React.MouseEvent) => void;
 
-    touchStart: (e: TouchEvent) => void;
-    touchMove: (e: TouchEvent) => void;
-    touchEnd: (e: TouchEvent) => void;
-    touchCancel: (e: TouchEvent) => void;
+    touchStart: (e: React.TouchEvent) => void;
+    touchMove: (e: React.TouchEvent) => void;
+    touchEnd: (e: React.TouchEvent) => void;
+    touchCancel: (e: React.TouchEvent) => void;
 
-    contextCopy: (e: MouseEvent) => void;
-    contextCut: (e: MouseEvent) => void;
-    contextPaste: (e: MouseEvent) => void;
-    onCopy: (e: ClipboardEvent) => void;
-    onPaste: (e: ClipboardEvent) => void;
-    onCut: (e: ClipboardEvent) => void;
+    contextCopy: (e: React.MouseEvent) => void;
+    contextCut: (e: React.MouseEvent) => void;
+    contextPaste: (e: React.MouseEvent) => void;
+    onCopy: (e: React.ClipboardEvent) => void;
+    onPaste: (e: React.ClipboardEvent) => void;
+    onCut: (e: React.ClipboardEvent) => void;
 
-    dragOver: (e: DragEvent) => void;
-    drop: (e: DragEvent) => void;
+    dragOver: (e: React.DragEvent) => void;
+    drop: (e: React.DragEvent) => void;
 }
 
 interface Operation
@@ -840,6 +840,8 @@ const enum WorkerMessageTypes {
     SETVBOX,
     AUDIOSTREAM,
     VIDEOSTREAM,
+    STOREITEM,
+    GETITEM,
     NEWVIEWCENTRE,
     SETSELECT,
     ELEMENTMESSAGE,
@@ -889,6 +891,10 @@ const enum ControllerMessageTypes {
     KEYBOARDINPUT,
     UNDO,
     REDO,
+    DRAG,
+    DROP,
+    PASTE,
+    CUT,
     PALLETECHANGE,
     LEAVE,
     ERROR
@@ -937,6 +943,8 @@ class WhiteBoardController
     socket: Socket  = null;
     worker;
 
+    clipboardItems: Array<ClipBoardItem> = [];
+
     lMousePress: boolean = false;
     wMousePress: boolean = false;
     rMousePress: boolean = false;
@@ -969,8 +977,17 @@ class WhiteBoardController
 
     constructor(isHost: boolean, userId: number, allEdit: boolean, userEdit: boolean, workerUrl: string, componentFiles: Array<string>)
     {
+        document.body.addEventListener('mouseup', this.mouseUp, false);
+        //document.body.addEventListener('touchcancel', this.touchUp, false);
+        document.addEventListener('copy',  this.onCopy.bind(this));
+        document.addEventListener('paste', this.onPaste.bind(this));
+        document.addEventListener('cut', this.onCut.bind(this));
+
         this.isHost = isHost;
         this.userId = userId;
+
+        console.log('Controller userId: ' + userId);
+
         this.allowAllEdit = allEdit;
         this.allowUserEdit = userEdit;
 
@@ -1048,6 +1065,7 @@ class WhiteBoardController
         this.worker.onmessage = (e) =>
         {
             self.setSelectCount.bind(this)(e.data.selectCount);
+            self.setClipboard.bind(this)(e.data.clipboardData);
 
             if(e.data.viewUpdate != undefined && e.data.viewUpdate != null)
             {
@@ -1121,10 +1139,12 @@ class WhiteBoardController
 
                 self.handleMessage.bind(this)('MSG-COMPONENT', messageCont);
             }
-
         };
 
-        let message = { type: ControllerMessageTypes.START, componentFiles: componentFiles, allEdit: this.allowAllEdit, userEdit: this.allowUserEdit };
+        let message = {
+            type: ControllerMessageTypes.START, userId: this.userId, isHost: this.isHost, componentFiles: componentFiles,
+            allEdit: this.allowAllEdit, userEdit: this.allowUserEdit
+        };
         this.worker.postMessage(message);
     }
 
@@ -1158,7 +1178,7 @@ class WhiteBoardController
 
         this.socket.on('MSG-COMPONENT', function(data: ServerMessageContainer)
         {
-            if(data.type == 'ANY')
+            if(data.type == 'ANY' && data.serverId == null)
             {
                 if(data.payload.header == ElementMessageTypes.MOVE)
                 {
@@ -1268,6 +1288,11 @@ class WhiteBoardController
         this.selectCount = newCount;
     }
 
+    setClipboard(clipBoardItems: Array<ClipBoardItem>)
+    {
+        this.clipboardItems = clipBoardItems;
+    }
+
     getAudioStream(id: number)
     {
         /* TODO */
@@ -1298,7 +1323,7 @@ class WhiteBoardController
 
         for(let i = 0; i < ids.length; i++)
         {
-            newElemList = newElemList.filter(element => element.id !== ids[i]);
+            newElemList = newElemList.filter(element => element.id !== ids[i]) as Immutable.OrderedMap<number, ComponentViewState>;
         }
 
         this.setViewState({ boardElements: newElemList });
@@ -2038,7 +2063,7 @@ class WhiteBoardController
     keyPress(e: KeyboardEvent)
     {
         let inputChar = e.key;
-        e.preventDefault();
+
 
         let eventCopy =
         {
@@ -2050,19 +2075,39 @@ class WhiteBoardController
         {
             if(inputChar == 'z')
             {
+                e.preventDefault();
                 let message = { type: ControllerMessageTypes.UNDO };
                 this.worker.postMessage(message);
+                return;
             }
             else if(inputChar == 'y')
             {
+                e.preventDefault();
                 let message = { type: ControllerMessageTypes.REDO };
                 this.worker.postMessage(message);
+                return;
             }
+            else if(inputChar == 'c')
+            {
+                return;
+            }
+            else if(inputChar == 'x')
+            {
+                return;
+            }
+            else if(inputChar == 'v')
+            {
+                return;
+            }
+
+            e.preventDefault();
         }
         else
         {
+            e.preventDefault();
             let message = { type: ControllerMessageTypes.KEYBOARDINPUT, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
             this.worker.postMessage(message);
+            return;
         }
     }
 
@@ -2078,25 +2123,110 @@ class WhiteBoardController
 
     contextPaste(e: MouseEvent)
     {
+        console.log('Should have execCommand.');
         document.execCommand("paste");
     }
 
     onCopy(e: ClipboardEvent)
     {
         console.log('COPY EVENT');
-        /* TODO: */
+        e.preventDefault();
+
+        e.clipboardData.clearData();
+
+        e.clipboardData.setData('flag/whiteboard', 'COPY');
+
+        for(let i = 0; i < this.clipboardItems.length; i++)
+        {
+            e.clipboardData.setData(this.clipboardItems[i].format, this.clipboardItems[i].data);
+        }
     }
 
     onPaste(e: ClipboardEvent)
     {
         console.log('PASTE EVENT');
-        /* TODO: */
+        e.preventDefault();
+
+        let whitElem  = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
+        let mouseX = Math.round(this.prevX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(this.prevY - offsetY) * this.scaleF + this.panY;
+
+        let fileList = e.clipboardData.files;
+        let url = e.clipboardData.getData("URL");
+        let urlList = e.clipboardData.getData("text/uri-list");
+        let text = e.clipboardData.getData("text/plain");
+        let htmlText = e.clipboardData.getData("text/html");
+        let csv = e.clipboardData.getData("text/csv");
+        let enriched = e.clipboardData.getData("text/enriched");
+        let xml = e.clipboardData.getData("text/xml");
+        let png = e.clipboardData.getData("image/png");
+        let jpg = e.clipboardData.getData("image/jpg");
+        let flag = e.clipboardData.getData("flag/whiteboard");
+
+        if(jpg == null || jpg == undefined)
+        {
+            jpg = e.clipboardData.getData("image/jpeg");
+        }
+
+        let gif = e.clipboardData.getData("image/gif");
+        let svg = e.clipboardData.getData("image/svg+xml");
+
+        let img = null;
+
+        if(svg != null && svg != undefined)
+        {
+            img = svg;
+        }
+        else if(gif != null && gif != undefined)
+        {
+            img = gif;
+        }
+        else if(png != null && png != undefined)
+        {
+            img = png;
+        }
+        else if(jpg != null && jpg != undefined)
+        {
+            img = jpg;
+        }
+
+        let wasCut = false;
+        let isInternal = (flag != undefined) && (flag != null);
+
+        if(isInternal && flag == 'CUT')
+        {
+            wasCut = true;
+        }
+
+        let data: ClipboardEventData = {
+            files: fileList, url: url, urlList: urlList, plainText: text, htmlText: htmlText, enrichedText: enriched, csv: csv, xml: xml, image: img,
+            isInternal: isInternal, wasCut: wasCut
+        };
+
+        // Support text, urls, images and files.
+        let message = { type: ControllerMessageTypes.PASTE, mouseX: mouseX, mouseY: mouseY, data: data, mode: this.viewState.mode };
+        this.worker.postMessage(message);
     }
 
     onCut(e: ClipboardEvent)
     {
         console.log('CUT EVENT');
-        /* TODO: */
+        e.preventDefault();
+
+        e.clipboardData.clearData();
+
+        e.clipboardData.setData('flag/whiteboard', 'CUT');
+
+        for(let i = 0; i < this.clipboardItems.length; i++)
+        {
+            e.clipboardData.setData(this.clipboardItems[i].format, this.clipboardItems[i].data);
+        }
+
+        let message = { type: ControllerMessageTypes.CUT, mode: this.viewState.mode };
+        this.worker.postMessage(message);
     }
 
     dragOver(e: DragEvent)
@@ -2108,31 +2238,42 @@ class WhiteBoardController
     drop(e: DragEvent)
     {
 
-        var whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
-        var elemRect = whitElem.getBoundingClientRect();
-        var offsetY  = elemRect.top - document.body.scrollTop;
-        var offsetX  = elemRect.left - document.body.scrollLeft;
+        let whitElem = document.getElementById("whiteBoard-input") as HTMLCanvasElement;
+        let elemRect = whitElem.getBoundingClientRect();
+        let offsetY  = elemRect.top - document.body.scrollTop;
+        let offsetX  = elemRect.left - document.body.scrollLeft;
 
-        var x = Math.round(e.clientX - offsetX);
-        var y = Math.round(e.clientY - offsetY);
+        let mouseX = Math.round(e.clientX - offsetX) * this.scaleF + this.panX;
+        let mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panY;
 
         e.preventDefault();
 
-        /* TODO: Reimplement
-        if(e.dataTransfer.files.length  > 0)
+        let dataTransfer: DataTransfer = e.dataTransfer;
+
+
+
+        let dataCopy = {
+            dropEffect: dataTransfer.dropEffect, effectAllowed: dataTransfer.effectAllowed, files: dataTransfer.files
+        };
+
+        let eventCopy =
         {
-            if(e.dataTransfer.files.length == 1)
-            {
-                var file: File = e.dataTransfer.files[0];
-                this.placeLocalFile(x, y, this.scaleF, this.panX, this.panY, file);
-            }
-        }
-        else
-        {
-            var url: string = e.dataTransfer.getData('text/plain');
-            this.placeRemoteFile(x, y, this.scaleF, this.panX, this.panY, url);
-        }
-        */
+            altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail, dataTransfer: dataCopy,
+            buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
+        };
+
+        let loc = document.createElement("a");
+        loc.href = e.dataTransfer.getData('text/plain');
+
+        console.log('Drop was: ' + e.dataTransfer.getData('text/plain'));
+
+        let path = loc.pathname;
+
+        let message = {
+            type: ControllerMessageTypes.DROP, e: eventCopy, mouseX: mouseX, mouseY: mouseY,
+            scaleF: this.scaleF, mode: this.viewState.mode, plainData: e.dataTransfer.getData('text/plain')
+        };
+        this.worker.postMessage(message);
     }
 
     palleteChange(change: BoardPalleteChange)

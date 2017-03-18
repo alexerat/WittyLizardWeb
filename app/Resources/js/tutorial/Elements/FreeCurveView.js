@@ -28,6 +28,7 @@ var FreeCurveView;
         ViewComponents[ViewComponents["View"] = 0] = "View";
         ViewComponents[ViewComponents["Interaction"] = 1] = "Interaction";
     })(ViewComponents || (ViewComponents = {}));
+    ;
     FreeCurveView.DrawHandle = function (input, context) {
         var palleteState = input.palleteState;
         var i = 0;
@@ -65,7 +66,7 @@ var FreeCurveView;
             return _super.apply(this, arguments) || this;
         }
         ElementView.prototype.shouldComponentUpdate = function (nextProps, nextState) {
-            return this.props.state !== nextProps.state || this.props.mode != nextProps.mode;
+            return this.props.state !== nextProps.state || this.props.mode !== nextProps.mode;
         };
         ElementView.prototype.render = function () {
             var state = this.props.state;

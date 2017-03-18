@@ -44,6 +44,22 @@
             <script> componentFiles.push("{{ asset_url }}"); </script>
         {% endjavascripts %}
 
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/UploadView.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/UploadElement.js' %}
+            <script> componentFiles.push("{{ asset_url }}"); </script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/HighlightView.js' %}
+            <script src="{{ asset_url }}"></script>
+        {% endjavascripts %}
+
+        {% javascripts '@AppBundle/Resources/public/js/tutorial/Elements/HighlightElement.js' %}
+            <script> componentFiles.push("{{ asset_url }}"); </script>
+        {% endjavascripts %}
+
         {% javascripts '@AppBundle/Resources/public/js/tutorial/WhiteBoardWorker.js' output='js/compiled/WhiteBoardWorker.js' %}
             <script> var workerUrlGlobal = "{{ asset_url }}"; </script>
         {% endjavascripts %}
@@ -220,7 +236,7 @@
             boardSocket.on('READY', function(userId)
             {
                 // TODO: Implement server options.
-                whiteBoardController = new WhiteBoardController("{{isHost}}", userId, false, true, workerUrlGlobal, componentFiles);
+                whiteBoardController = new WhiteBoardController("{{isHost}}" === "TRUE", userId, false, true, workerUrlGlobal, componentFiles);
                 whiteBoardView = ReactDOM.render(React.createElement(WhiteBoardView, {controller: whiteBoardController}), document.getElementById('whiteboard-app'));
                 whiteBoardController.setView(whiteBoardView);
                 console.log('Received ready and emitted join room.');
@@ -239,7 +255,8 @@
             mediaSocket.on('READY', function(userId)
             {
                 peerHandler = new PeerHandler("{{roomToken}}", {}, mediaSocket);
-                medCont = ReactDOM.render(React.createElement(MediaContainer, {isHost: "{{isHost}}"}), document.getElementById('media-app'));
+                console.log("{{isHost}}" === "TRUE");
+                medCont = ReactDOM.render(React.createElement(MediaContainer, {isHost: "{{isHost}}" === "TRUE"}), document.getElementById('media-app'));
 
                 medCont.setStream(localStream);
                 medCont.setHandler(peerHandler, userId);

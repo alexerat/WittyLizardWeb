@@ -1,8 +1,13 @@
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var isHyphen = function (codePoint) {
     switch (codePoint) {
         case 45:
@@ -47,6 +52,7 @@ var WhiteBoardText;
         PalleteChangeType[PalleteChangeType["THROUGHLINE"] = 5] = "THROUGHLINE";
         PalleteChangeType[PalleteChangeType["OVERLINE"] = 6] = "OVERLINE";
         PalleteChangeType[PalleteChangeType["JUSTIFIED"] = 7] = "JUSTIFIED";
+        PalleteChangeType[PalleteChangeType["TEXTCHANGE"] = 8] = "TEXTCHANGE";
     })(PalleteChangeType || (PalleteChangeType = {}));
     var PalleteColour = {
         BLACK: 'black',
@@ -65,6 +71,7 @@ var WhiteBoardText;
         ViewComponents[ViewComponents["View"] = 0] = "View";
         ViewComponents[ViewComponents["Resize"] = 1] = "Resize";
         ViewComponents[ViewComponents["Interaction"] = 2] = "Interaction";
+        ViewComponents[ViewComponents["TextArea"] = 3] = "TextArea";
     })(ViewComponents || (ViewComponents = {}));
     var ResizeComponents;
     (function (ResizeComponents) {
@@ -76,39 +83,29 @@ var WhiteBoardText;
     (function (CustomContextItems) {
     })(CustomContextItems || (CustomContextItems = {}));
     var MessageTypes = {
-        NEW: 0,
-        DELETE: 1,
-        RESTORE: 2,
-        IGNORE: 3,
-        COMPLETE: 4,
-        DROPPED: 5,
-        MOVE: 6,
-        NODE: 7,
-        NODEMISSED: 8,
-        MISSINGNODE: 9,
-        RESIZE: 10,
-        JUSTIFY: 11,
-        LOCK: 12,
-        RELEASE: 13,
-        LOCKID: 14,
-        EDIT: 15,
-        UNKNOWNEDIT: 16,
-        IGNOREEDIT: 17,
-        SIZECHANGE: 18
+        NODE: 1,
+        MISSED: 2,
+        JUSTIFY: 3,
+        EDIT: 4,
+        COMPLETE: 5,
+        DROPPED: 6,
+        IGNORE: 7,
+        SIZECHANGE: 8
     };
     var MAX_STYLE_LENGTH = 200;
+    var MAX_SEGEMENT_LENGTH = 63;
     var Pallete = (function (_super) {
         __extends(Pallete, _super);
         function Pallete() {
             var _this = _super.call(this) || this;
-            _this.baseSize = PalleteSize.SMALL;
+            _this.baseSize = PalleteSize.MEDIUM;
             _this.colour = 'black';
             _this.isBold = false;
             _this.isItalic = false;
             _this.isOLine = false;
             _this.isTLine = false;
             _this.isULine = false;
-            _this.currentViewState = { colour: PalleteColour.BLACK, size: PalleteSize.SMALL };
+            _this.currentViewState = { colour: PalleteColour.BLACK, size: PalleteSize.MEDIUM };
             return _this;
         }
         Pallete.prototype.getCurrentViewState = function () {
@@ -129,19 +126,14 @@ var WhiteBoardText;
         Pallete.prototype.getWeight = function () {
             return this.isBold ? 'bold' : 'normal';
         };
-        Pallete.prototype.getDecoration = function () {
-            if (this.isOLine) {
-                return 'overline';
-            }
-            else if (this.isTLine) {
-                return 'line-through';
-            }
-            else if (this.isULine) {
-                return 'underline';
-            }
-            else {
-                return 'none';
-            }
+        Pallete.prototype.isOverline = function () {
+            return this.isOLine;
+        };
+        Pallete.prototype.isUnderline = function () {
+            return this.isULine;
+        };
+        Pallete.prototype.isThroughline = function () {
+            return this.isTLine;
         };
         Pallete.prototype.handleChange = function (change) {
             if (change.type == 0) {
@@ -161,32 +153,33 @@ var WhiteBoardText;
                 this.updateView({ isItalic: change.data });
             }
             else if (change.type == 4) {
-                if (change.data) {
-                    this.isOLine = false;
-                    this.isTLine = false;
-                }
                 this.isULine = change.data;
-                this.updateView({ isULine: change.data, isOLine: false, isTLine: false });
+                this.updateView({ isULine: change.data });
             }
             else if (change.type == 6) {
-                if (change.data) {
-                    this.isULine = false;
-                    this.isTLine = false;
-                }
                 this.isOLine = change.data;
-                this.updateView({ isOLine: change.data, isULine: false, isTLine: false });
+                this.updateView({ isOLine: change.data });
             }
             else if (change.type == 5) {
-                if (change.data) {
-                    this.isULine = false;
-                    this.isOLine = false;
-                }
                 this.isTLine = change.data;
-                this.updateView({ isTLine: change.data, isULine: false, isOLine: false });
+                this.updateView({ isTLine: change.data });
             }
             else if (change.type == 7) {
                 this.isJustified = change.data;
                 this.updateView({ isJustified: change.data });
+            }
+            else if (change.type == 8) {
+                var dataIn = change.data;
+                this.colour = dataIn.colour;
+                this.isBold = dataIn.isBold;
+                this.isItalic = dataIn.isItalic;
+                this.isULine = dataIn.isULine;
+                this.isOLine = dataIn.isOLine;
+                this.isTLine = dataIn.isTLine;
+                this.updateView({
+                    colour: dataIn.colour, isBold: dataIn.isBold, isItalic: dataIn.isItalic,
+                    isULine: dataIn.isULine, isOLine: dataIn.isOLine, isTLine: dataIn.isTLine
+                });
             }
             else {
                 console.error('Unrecognized pallete change type.');
@@ -200,76 +193,90 @@ var WhiteBoardText;
         __extends(Element, _super);
         function Element(id, userId, x, y, width, height, callbacks, size, isJustified, num_styles, styles, editLock, lockedBy, isEditing, serverId, updateTime) {
             var _this = _super.call(this, WhiteBoardText.MODENAME, id, x, y, width, height, userId, callbacks, serverId, updateTime) || this;
+            _this.textSelecting = false;
             _this.startLeft = false;
             _this.textNodes = [];
+            _this.wordData = [];
+            _this.lineData = [];
+            _this.linePositions = [];
+            _this.editData = null;
+            _this.glyphCount = 0;
             _this.text = '';
             _this.lines = [];
             _this.styleSet = [];
-            _this.gettingLock = false;
             _this.editInBuffer = [];
             _this.editOutBuffer = [];
             _this.editNum = 0;
             _this.editCount = 0;
-            _this.isMoving = false;
-            _this.moveStartX = 0;
-            _this.moveStartY = 0;
-            _this.hasMoved = false;
-            _this.isResizing = false;
-            _this.resizeHorz = false;
-            _this.resizeVert = false;
-            _this.hasResized = false;
             _this.textDown = 0;
             _this.idealX = 0;
+            _this.wordStart = null;
+            _this.wordEnd = null;
+            _this.prevWordStart = null;
+            _this.prevWordEnd = null;
+            _this.paraStart = null;
+            _this.paraEnd = null;
+            _this.prevParaStart = null;
+            _this.prevParaEnd = null;
+            _this.prevStyle = null;
+            _this.prevCursorPos = null;
+            _this.lastFowardEdit = null;
+            _this.wasSpaceLast = false;
+            _this.spaceToggle = false;
+            _this.cursorUndoPositions = [];
+            _this.cursorRedoPositions = [];
+            _this.waitingForFont = [];
             _this.text = '';
-            if (serverId != null && serverId != undefined) {
-                _this.editInBuffer[0] = { num_styles: num_styles, num_recieved: 0, styles: [], editTimer: null };
-                var buffer = _this.editInBuffer[0];
-                for (var i = 0; i < styles.length; i++) {
-                    var style = styles[i];
-                    if (style != null && style != undefined && style.text != null && style.text != undefined && style.num != null && style.num != undefined
-                        && style.start != null && style.start != undefined && style.end != null && style.end != undefined && style.style != null &&
-                        style.style != undefined && style.weight != null && style.weight != undefined && style.colour != null && style.colour != undefined
-                        && style.decoration != null && style.decoration != undefined) {
-                        buffer.styles[style.num] = style;
-                        buffer.num_recieved++;
-                    }
-                }
-                if (buffer.num_recieved < buffer.num_styles) {
-                    var self_1 = _this;
-                    buffer.editTimer = setInterval(function (id) {
-                        var buffer = self_1.editInBuffer[id];
-                        for (var i = 0; i < buffer.num_styles; i++) {
-                            if (buffer[i] == null || buffer[i] == undefined) {
-                                var msg = { seq_num: i };
-                                var msgCont = { header: MessageTypes.MISSINGNODE, payload: msg };
-                                self_1.sendServerMsg(msgCont);
-                            }
-                        }
-                    }, 1000, 0);
-                }
-                else {
-                    _this.completeEdit(0);
-                }
-            }
-            else {
-                _this.editInBuffer[0] = { num_styles: 0, num_recieved: 0, styles: [], editTimer: null };
+            if (serverId == null || serverId == undefined) {
                 _this.isEditing = true;
             }
             _this.lockedBy = lockedBy;
-            _this.calculateTextLines();
+            _this.isJustified = isJustified;
+            _this.size = size;
+            _this.editInBuffer[0] = [];
+            _this.editInBuffer[0][0] = { num_styles: num_styles, num_recieved: 0, styles: [], editTimer: null };
+            var buffer = _this.editInBuffer[0][0];
+            for (var i = 0; i < styles.length; i++) {
+                var style = styles[i];
+                if (style != null && style != undefined && style.text != null && style.text != undefined && style.seq_num != null && style.seq_num != undefined
+                    && style.start != null && style.start != undefined && style.end != null && style.end != undefined && style.style != null
+                    && style.style != undefined && style.weight != null && style.weight != undefined && style.colour != null && style.colour != undefined
+                    && style.oline != null && style.oline != undefined && style.uline != null && style.uline != undefined
+                    && style.tline != null && style.tline != undefined) {
+                    buffer.styles[style.seq_num] = style;
+                    buffer.num_recieved++;
+                }
+            }
+            if (buffer.num_recieved < buffer.num_styles) {
+                var self_1 = _this;
+                buffer.editTimer = setInterval(function (id, userId) {
+                    var buffer = self_1.editInBuffer[0][0];
+                    for (var i = 0; i < buffer.num_styles; i++) {
+                        if (buffer[i] == null || buffer[i] == undefined) {
+                            var msg = { editId: id, userId: userId, seq_num: i };
+                            var msgCont = { header: MessageTypes.MISSED, payload: msg };
+                            self_1.sendServerMsg(msgCont);
+                        }
+                    }
+                }, 1000, 0, userId);
+            }
+            else {
+                _this.completeEdit(0, 0);
+            }
             _this.cursorStart = 0;
             _this.cursorEnd = 0;
+            _this.wordStart = 0;
             _this.selectedCharacters = [];
             _this.stringStart = 0;
+            _this.prevCursorPos = _this.cursorStart;
             _this.gettingLock = false;
             _this.isEditing = isEditing;
             _this.isSelected = isEditing;
-            _this.size = size;
             _this.changeSelect(true);
             var newView = {
                 mode: WhiteBoardText.MODENAME, id: _this.id, x: _this.x, y: _this.y, width: _this.width, height: _this.height, isEditing: _this.isEditing,
-                remLock: _this.lockedBy != -1, getLock: false, textNodes: [], cursor: null, cursorElems: [], size: _this.size, updateTime: updateTime,
-                isSelected: false, text: _this.text, justified: true, isMoving: false, isResizing: false
+                remLock: (_this.lockedBy != null && !_this.isEditing), getLock: false, textNodes: _this.textNodes, cursor: null, cursorElems: [], size: _this.size,
+                updateTime: updateTime, isSelected: false, text: _this.text, justified: true, isMoving: false, isResizing: false
             };
             _this.currentViewState = newView;
             return _this;
@@ -277,7 +284,7 @@ var WhiteBoardText;
         Element.createElement = function (data) {
             if (data.serverId != null && data.serverId != undefined && data.serverMsg != null && data.serverMsg != undefined) {
                 var msg = data.serverMsg;
-                return new Element(data.id, data.userId, msg.x, msg.y, msg.width, msg.height, data.callbacks, msg.size, msg.justified, msg.num_styles, msg.styles, msg.editLock != -1, msg.editLock, false, data.serverId, msg.editTime);
+                return new Element(data.id, data.userId, msg.x, msg.y, msg.width, msg.height, data.callbacks, msg.size, msg.justified, msg.num_styles, msg.nodes, (msg.editLock != 0), (msg.editLock == 0 ? null : msg.editLock), false, data.serverId, msg.editTime);
             }
             else if (data.x != null && data.x != undefined && data.y != null && data.y != undefined &&
                 data.width != null && data.width != undefined && data.height != null && data.height != undefined) {
@@ -298,60 +305,28 @@ var WhiteBoardText;
             return null;
         };
         Element.prototype.getNewMsg = function () {
-            var styleMessages = [];
-            for (var i = 0; i < this.editInBuffer[0].styles.length; i++) {
-                styleMessages.push(this.editInBuffer[0].styles[i]);
-            }
             var msg = {
-                localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height, size: this.size, justified: this.isJustified,
-                num_styles: this.editInBuffer[0].num_styles, styles: styleMessages
+                localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height,
+                size: this.size, justified: this.isJustified, editLock: true
             };
             return msg;
         };
+        Element.prototype.getClipboardData = function () {
+            var plainText = '';
+            for (var i = 0; i < this.selectedCharacters.length; i++) {
+                plainText += this.text.substring(this.selectedCharacters[i], this.selectedCharacters[i] + 1);
+            }
+            var clipData = [];
+            clipData.push({ format: 'text/plain', data: plainText });
+            return clipData;
+        };
+        Element.prototype.getClipboardSVG = function () {
+            return null;
+        };
         Element.prototype.setServerId = function (id) {
-            this.serverId = id;
+            _super.prototype.setServerId.call(this, id);
             var messages = [];
             return messages;
-        };
-        Element.prototype.elementErase = function () {
-            var retMsgs = [];
-            var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            var message = { header: MessageTypes.DELETE, payload: null };
-            this.erase();
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: { message: message },
-                wasRestore: null, move: null
-            };
-            var msg = { header: MessageTypes.DELETE, payload: null };
-            retMsgs.push(msg);
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        };
-        Element.prototype.elementRestore = function () {
-            var retMsgs = [];
-            var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            var message = { header: MessageTypes.RESTORE, payload: null };
-            this.restore();
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                wasRestore: { message: message }, move: null
-            };
-            var msg = { header: MessageTypes.RESTORE, payload: null };
-            retMsgs.push(msg);
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        };
-        Element.prototype.handleErase = function () {
-            var serverMsgs = [];
-            var retVal = this.getDefaultInputReturn();
-            var eraseRet = this.elementErase();
-            retVal.serverMessages = eraseRet.serverMessages;
-            retVal.newView = eraseRet.newView;
-            var undoOp = this.elementRestore;
-            var redoOp = this.elementErase;
-            retVal.undoOp = undoOp.bind(this);
-            retVal.redoOp = redoOp.bind(this);
-            return retVal;
         };
         Element.prototype.handleMouseDown = function (e, localX, localY, palleteState, component, subId) {
             var cursorType;
@@ -361,16 +336,23 @@ var WhiteBoardText;
                 this.oldHeight = this.height;
                 this.startTime = this.updateTime;
                 if (subId == 1) {
+                    this.resizeHorz = true;
+                    this.resizeVert = false;
                     cursorType = { cursor: 'ew-resize', url: [], offset: { x: 0, y: 0 } };
                 }
                 else if (subId == 2) {
+                    this.resizeHorz = false;
+                    this.resizeVert = true;
                     cursorType = { cursor: 'ns-resize', url: [], offset: { x: 0, y: 0 } };
                 }
                 else if (subId == 0) {
+                    this.resizeHorz = true;
+                    this.resizeVert = true;
                     cursorType = { cursor: 'nwse-resize', url: [], offset: { x: 0, y: 0 } };
                 }
+                this.updateView({ isResizing: true });
             }
-            else {
+            else if (component == 2) {
                 this.isMoving = true;
                 this.moveStartX = this.x;
                 this.moveStartY = this.y;
@@ -378,6 +360,9 @@ var WhiteBoardText;
                 cursorType = { cursor: 'move', url: [], offset: { x: 0, y: 0 } };
                 this.updateView({ isSelected: true, isMoving: true });
                 this.isSelected = true;
+            }
+            else if (component == 3) {
+                this.textSelecting = true;
             }
             var serverMsgs = [];
             var retVal = {
@@ -454,29 +439,38 @@ var WhiteBoardText;
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: false,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
-            if (this.isEditing) {
+            if (this.isEditing && e.buttons === 1) {
+                this.textSelecting = true;
                 this.cursorStart = this.findTextPos(mouseX - this.x, mouseY - this.y);
                 this.cursorEnd = this.cursorStart;
                 this.textDown = this.cursorStart;
-                this.changeSelect(true);
+                (_a = retVal.palleteChanges).push.apply(_a, this.changeSelect(true));
             }
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
+            var _a;
         };
         Element.prototype.handleBoardMouseMove = function (e, changeX, changeY, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            var palleteChanges = [];
             if (this.isResizing) {
-                var newWidth = this.resizeHorz ? this.width + changeX : this.width;
-                var newHeight = this.resizeVert ? this.height + changeY : this.height;
-                this.resize(newWidth, newHeight, new Date());
-                this.hasResized = true;
+                var lineCount = this.textNodes.length;
+                if (lineCount == 0) {
+                    lineCount = 1;
+                }
+                var newWidth = this.resizeHorz ? Math.max(2 * this.size, mouseX - this.x) : this.width;
+                var newHeight = this.resizeVert ? Math.max(lineCount * 2 * this.size, mouseY - this.y) : this.height;
+                if (newHeight != this.oldHeight || newWidth != this.oldWidth) {
+                    this.resize(newWidth, newHeight, new Date());
+                    this.hasResized = true;
+                }
             }
             else if (this.isMoving) {
                 this.move(changeX, changeY, new Date());
                 this.hasMoved = true;
             }
-            else if (this.isEditing && e.buttons == 1) {
+            else if (e.buttons === 1 && this.textSelecting) {
                 var newLoc = this.findTextPos(mouseX - this.x, mouseY - this.y);
                 if (this.textDown < newLoc) {
                     this.cursorStart = this.textDown;
@@ -490,6 +484,7 @@ var WhiteBoardText;
                 }
                 this.changeSelect(true);
             }
+            retVal.newView = this.currentViewState;
             return retVal;
         };
         Element.prototype.handleBoardMouseUp = function (e, mouseX, mouseY, palleteState) {
@@ -501,20 +496,25 @@ var WhiteBoardText;
                 var changeX_1 = this.x - this.moveStartX;
                 var changeY_1 = this.y - this.moveStartY;
                 var msgPayload = { x: this.x, y: this.y };
-                var msg = { header: MessageTypes.MOVE, payload: msgPayload };
+                var msg = { header: BaseMessageTypes.MOVE, payload: msgPayload };
                 serverMsgs.push(msg);
                 retVal.undoOp = function () { return _this.moveOperation(-changeX_1, -changeY_1, _this.startTime); };
                 retVal.redoOp = function () { return _this.moveOperation(changeX_1, changeY_1, _this.updateTime); };
             }
             if (this.hasResized) {
                 this.hasResized = false;
-                var msgPayload = { width: this.width, height: this.height };
-                var msg = { header: MessageTypes.RESIZE, payload: msgPayload };
+                var msgPayload = { width: this.width, height: this.height, editTime: new Date() };
+                var msg = { header: BaseMessageTypes.RESIZE, payload: msgPayload };
                 serverMsgs.push(msg);
                 retVal.undoOp = function () { return _this.resizeOperation(_this.oldWidth, _this.oldHeight, _this.startTime); };
                 retVal.redoOp = function () { return _this.resizeOperation(_this.width, _this.height, _this.updateTime); };
             }
+            this.textSelecting = false;
+            this.isResizing = false;
             this.isMoving = false;
+            this.updateView({ isMoving: false, isResizing: false });
+            retVal.newView = this.currentViewState;
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
         Element.prototype.handleBoardTouchStart = function (e, touches, palleteState) {
@@ -561,7 +561,7 @@ var WhiteBoardText;
             this.isMoving = false;
             this.updateView({ isMoving: false });
             var msgPayload = { x: this.x, y: this.y };
-            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
+            var serverMsg = { header: BaseMessageTypes.MOVE, payload: msgPayload };
             var serverMsgs = [];
             var retVal = { newView: this.currentViewState, serverMessages: [], move: { x: this.x, y: this.y, message: serverMsg } };
             retVal.serverMessages = this.checkForServerId(serverMsgs);
@@ -572,10 +572,16 @@ var WhiteBoardText;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             var i;
-            var line;
-            var style;
             var newStart;
             var newEnd;
+            var wasSpace = false;
+            var wasNewPara = false;
+            var prevStringStart;
+            var prevCursorStart;
+            var prevCursorEnd;
+            var insertion = { start: null, text: null, style: null };
+            var deletions = [];
+            var editData = { deletions: deletions, insertion: insertion, styleChanges: [] };
             switch (input) {
                 case 'ArrowLeft':
                     newStart = this.cursorStart;
@@ -625,12 +631,13 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                             this.cursorEnd = newEnd;
                         }
+                        this.changeSelect(true);
                     }
                     else {
                         this.cursorStart = this.cursorStart == this.cursorEnd || !this.startLeft ? newStart : newEnd;
                         this.cursorEnd = this.cursorStart;
+                        (_a = retVal.palleteChanges).push.apply(_a, this.changeSelect(true));
                     }
-                    this.changeSelect(true);
                     break;
                 case 'ArrowRight':
                     newStart = this.cursorStart;
@@ -680,12 +687,13 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                             this.cursorEnd = newEnd;
                         }
+                        this.changeSelect(true);
                     }
                     else {
                         this.cursorStart = this.cursorStart == this.cursorEnd || this.startLeft ? newEnd : newStart;
                         this.cursorEnd = this.cursorStart;
+                        (_b = retVal.palleteChanges).push.apply(_b, this.changeSelect(true));
                     }
-                    this.changeSelect(true);
                     break;
                 case 'ArrowUp':
                     if (e.ctrlKey) {
@@ -747,6 +755,7 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                             this.cursorEnd = newEnd;
                         }
+                        this.changeSelect(false);
                     }
                     else {
                         if (this.startLeft && this.cursorStart != this.cursorEnd) {
@@ -756,8 +765,8 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                         }
                         this.cursorEnd = this.cursorStart;
+                        (_c = retVal.palleteChanges).push.apply(_c, this.changeSelect(false));
                     }
-                    this.changeSelect(false);
                     break;
                 case 'ArrowDown':
                     if (e.ctrlKey) {
@@ -813,6 +822,7 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                             this.cursorEnd = newEnd;
                         }
+                        this.changeSelect(false);
                     }
                     else {
                         if (this.startLeft || this.cursorStart == this.cursorEnd) {
@@ -822,11 +832,27 @@ var WhiteBoardText;
                             this.cursorStart = newStart;
                         }
                         this.cursorEnd = this.cursorStart;
+                        (_d = retVal.palleteChanges).push.apply(_d, this.changeSelect(false));
                     }
-                    this.changeSelect(false);
                     break;
                 case 'Backspace':
+                    if (this.wordEnd > this.operationPos) {
+                        this.wordEnd = this.operationPos;
+                        this.lastFowardEdit = this.wordEnd;
+                        if (this.wordStart >= this.operationPos) {
+                            this.wordStart = this.prevWordStart;
+                            this.prevWordStart = null;
+                            this.prevWordEnd = null;
+                        }
+                    }
                     if (this.cursorEnd > 0) {
+                        var tPrevStart = this.cursorStart;
+                        prevStringStart = this.stringStart;
+                        prevCursorStart = this.cursorStart;
+                        var bPrevCursorStart = this.cursorStart;
+                        prevCursorEnd = this.cursorEnd;
+                        var prevText_1 = this.text;
+                        var prevStyles_1 = this.styleSet;
                         if (e.ctrlKey) {
                             if (this.cursorStart > 0) {
                             }
@@ -834,37 +860,270 @@ var WhiteBoardText;
                         else {
                             if (this.cursorStart == this.cursorEnd) {
                                 this.cursorStart--;
+                                this.findStringPositions();
+                                bPrevCursorStart = this.cursorStart;
                             }
-                            var start_1 = this.cursorStart;
-                            var end_1 = this.cursorEnd;
+                            var sortedSelect_1 = this.selectedCharacters.slice();
+                            sortedSelect_1.sort(function (a, b) { return b - a; });
+                            var prev_1 = -2;
+                            var start_1 = -1;
+                            editData.insertion = null;
+                            for (var i_1 = 0; i_1 < sortedSelect_1.length; i_1++) {
+                                if (sortedSelect_1[i_1] - 1 != prev_1) {
+                                    if (start_1 >= 0) {
+                                        var newDeletion = { start: start_1, end: prev_1 };
+                                        deletions.push(newDeletion);
+                                    }
+                                    start_1 = sortedSelect_1[i_1];
+                                }
+                                prev_1 = sortedSelect_1[i_1];
+                                if (this.text.charAt(sortedSelect_1[i_1]).match(/\s/)) {
+                                    if (this.wasSpaceLast) {
+                                        this.spaceToggle = true;
+                                    }
+                                    wasSpace = true;
+                                }
+                                if (this.text.charAt(sortedSelect_1[i_1]) == '\n') {
+                                    wasNewPara = true;
+                                }
+                            }
+                            this.removeSelection(sortedSelect_1);
+                            this.generateLines();
+                            this.evaluateChanges(editData);
+                            this.calculateTextLines();
+                            this.findStringPositions();
+                            var msg_1 = this.newEdit();
+                            if (msg_1 != null) {
+                                serverMsgs.push(msg_1);
+                            }
                             this.cursorEnd = this.cursorStart;
-                            this.insertText('', palleteState);
                         }
+                        if ((wasSpace && !this.spaceToggle) || (!wasSpace && this.spaceToggle) || this.prevCursorPos != tPrevStart) {
+                            var undoStart = this.prevWordStart;
+                            var undoEnd = this.prevWordEnd;
+                            if (this.lastFowardEdit != null) {
+                                this.wordEnd = this.lastFowardEdit;
+                            }
+                            this.wordMerger(undoStart, undoEnd);
+                            if (this.lastFowardEdit != null) {
+                                this.wordStart = this.lastFowardEdit;
+                                this.wordEnd = this.operationPos;
+                                undoStart = this.prevWordStart;
+                                undoEnd = this.prevWordEnd;
+                                this.wordMerger(undoStart, undoEnd);
+                            }
+                            this.lastFowardEdit = null;
+                        }
+                        var undoPositions_1 = {
+                            start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
+                        };
+                        var redoPositions_1 = {
+                            start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
+                        };
+                        var undoOp_1 = function () {
+                            _this.text = prevText_1;
+                            _this.styleSet = prevStyles_1;
+                            _this.cursorStart = undoPositions_1.bStart;
+                            _this.cursorEnd = undoPositions_1.bPrevEnd;
+                            _this.startLeft = true;
+                            _this.generateLines();
+                            _this.calculateTextLines();
+                            _this.findStringPositions();
+                            _this.findCursorElems();
+                            _this.updateView({
+                                textNodes: _this.textNodes, width: _this.width, height: _this.height,
+                                cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                            });
+                            var retVal = {
+                                id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                                palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                            };
+                            return retVal;
+                        };
+                        var newText_1 = this.text;
+                        var newStyles_1 = this.styleSet;
+                        var redoOp_1 = function () {
+                            _this.text = newText_1;
+                            _this.styleSet = newStyles_1;
+                            _this.cursorStart = redoPositions_1.end;
+                            _this.cursorEnd = redoPositions_1.end;
+                            _this.startLeft = true;
+                            _this.generateLines();
+                            _this.calculateTextLines();
+                            _this.findStringPositions();
+                            _this.findCursorElems();
+                            _this.updateView({
+                                textNodes: _this.textNodes, width: _this.width, height: _this.height,
+                                cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                            });
+                            var retVal = {
+                                id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                                palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                            };
+                            return retVal;
+                        };
+                        this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                        this.operationStack[this.operationPos++] = { undo: undoOp_1, redo: redoOp_1 };
+                        if (!wasSpace) {
+                            this.wasSpaceLast = false;
+                            this.spaceToggle = false;
+                        }
+                        else {
+                            this.wasSpaceLast = true;
+                        }
+                        this.wordEnd = this.operationPos;
+                        this.cursorUndoPositions.push(undoPositions_1);
+                        this.cursorRedoPositions.push(redoPositions_1);
+                        this.prevCursorPos = this.cursorStart;
                     }
                     break;
-                case 'Enter':
-                    input = '\n';
                 default:
-                    var start = this.cursorStart;
-                    var end = this.cursorEnd;
-                    this.cursorStart++;
+                    if (input == 'Enter') {
+                        input = '\n';
+                        wasNewPara = true;
+                    }
+                    else if (input == 'Tab') {
+                        input = '\t';
+                    }
+                    if (this.wordEnd > this.operationPos) {
+                        this.wordEnd = this.operationPos;
+                        if (this.wordStart >= this.operationPos) {
+                            this.wordStart = this.prevWordStart;
+                            this.prevWordStart = null;
+                            this.prevWordEnd = null;
+                        }
+                    }
+                    if (input.match(/\s/)) {
+                        if (this.wasSpaceLast) {
+                            this.spaceToggle = true;
+                        }
+                        wasSpace = true;
+                    }
+                    var sortedSelect = this.selectedCharacters.slice();
+                    sortedSelect.sort(function (a, b) { return b - a; });
+                    var prev = -2;
+                    var start = -1;
+                    for (var i_2 = 0; i_2 < sortedSelect.length; i_2++) {
+                        if (sortedSelect[i_2] - 1 != prev) {
+                            if (start >= 0) {
+                                var newDeletion = { start: start, end: prev };
+                                deletions.push(newDeletion);
+                            }
+                            start = sortedSelect[i_2];
+                        }
+                        prev = sortedSelect[i_2];
+                    }
+                    var prevText_2 = this.text;
+                    var prevStyles_2 = this.styleSet;
+                    this.removeSelection(sortedSelect);
+                    this.generateLines();
+                    this.calculateTextLines();
+                    this.findStringPositions();
+                    var tmpGlyphLength = this.glyphCount;
+                    var newStyle = {
+                        colour: palleteState.getColour(), weight: palleteState.getWeight(), style: palleteState.getStyle(),
+                        oline: palleteState.isOverline(), uline: palleteState.isUnderline(), tline: palleteState.isThroughline()
+                    };
+                    prevStringStart = this.stringStart;
+                    prevCursorStart = this.cursorStart;
+                    prevCursorEnd = this.cursorEnd;
+                    insertion.start = this.stringStart;
+                    insertion.text = input;
+                    insertion.style = null;
+                    var sty = this.insertText(input, newStyle);
+                    editData.insertion.style = sty;
+                    this.evaluateChanges(editData);
+                    this.generateLines();
+                    this.calculateTextLines();
+                    this.cursorStart += this.glyphCount - tmpGlyphLength;
                     this.cursorEnd = this.cursorStart;
-                    console.log('Inserting: ' + input);
-                    this.insertText(input, palleteState);
-                    this.stringStart += input.length;
+                    this.findStringPositions();
+                    var msg = this.newEdit();
+                    if (msg != null) {
+                        serverMsgs.push(msg);
+                    }
+                    (_e = retVal.palleteChanges).push.apply(_e, this.changeSelect(true));
+                    if ((wasSpace && !this.spaceToggle) || (!wasSpace && this.spaceToggle) || this.prevCursorPos != prevCursorStart || this.prevCursorPos != prevCursorEnd) {
+                        var undoStart = this.prevWordStart;
+                        var undoEnd = this.prevWordEnd;
+                        this.wordMerger(undoStart, undoEnd);
+                        this.lastFowardEdit = null;
+                    }
+                    var undoPositions_2 = {
+                        start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
+                    };
+                    var redoPositions_2 = {
+                        start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
+                    };
+                    var newCursorStart = this.cursorStart;
+                    var undoOp = function () {
+                        _this.text = prevText_2;
+                        _this.styleSet = prevStyles_2;
+                        _this.cursorStart = undoPositions_2.start;
+                        _this.cursorEnd = undoPositions_2.prevEnd;
+                        _this.startLeft = true;
+                        _this.generateLines();
+                        _this.calculateTextLines();
+                        _this.findStringPositions();
+                        _this.findCursorElems();
+                        _this.updateView({
+                            textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                        });
+                        var retVal = {
+                            id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                            palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                        };
+                        return retVal;
+                    };
+                    var newText_2 = this.text;
+                    var newStyles_2 = this.styleSet;
+                    var redoOp = function () {
+                        _this.text = newText_2;
+                        _this.styleSet = newStyles_2;
+                        _this.cursorStart = redoPositions_2.start;
+                        _this.cursorEnd = redoPositions_2.end;
+                        _this.startLeft = true;
+                        _this.generateLines();
+                        _this.calculateTextLines();
+                        _this.findStringPositions();
+                        _this.findCursorElems();
+                        _this.updateView({
+                            textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                        });
+                        var retVal = {
+                            id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                            palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                        };
+                        return retVal;
+                    };
+                    this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                    this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                    this.wordEnd = this.operationPos;
+                    if (!wasSpace) {
+                        this.lastFowardEdit = this.wordEnd;
+                        this.wasSpaceLast = false;
+                        this.spaceToggle = false;
+                    }
+                    else {
+                        this.wasSpaceLast = true;
+                    }
+                    this.cursorUndoPositions.push(undoPositions_2);
+                    this.cursorRedoPositions.push(redoPositions_2);
+                    this.prevCursorPos = this.cursorStart;
                     break;
             }
-            if (this.hasResized) {
-                this.hasResized = false;
-                var msgPayload = { width: this.width, height: this.height };
-                var msg = { header: MessageTypes.RESIZE, payload: msgPayload };
-                serverMsgs.push(msg);
-                retVal.undoOp = function () { return _this.resizeOperation(_this.oldWidth, _this.oldHeight, _this.startTime); };
-                retVal.redoOp = function () { return _this.resizeOperation(_this.width, _this.height, _this.updateTime); };
+            if (this.isSelected) {
+                this.findCursorElems();
             }
+            this.updateView({
+                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+            });
+            retVal.serverMessages = this.checkForServerId(serverMsgs);
+            retVal.newView = this.currentViewState;
             return retVal;
+            var _a, _b, _c, _d, _e;
         };
-        Element.prototype.handleServerMessage = function (message) {
+        Element.prototype.handleElementServerMessage = function (message) {
             var newView = this.currentViewState;
             var retMsgs = [];
             var alertMessage = null;
@@ -874,24 +1133,18 @@ var WhiteBoardText;
             switch (message.header) {
                 case MessageTypes.NODE:
                     var nodeData = message.payload;
-                    if (this.editInBuffer[nodeData.editId]) {
-                        var buffer_1 = this.editInBuffer[nodeData.editId];
-                        buffer_1.styles.push(nodeData);
-                        if (buffer_1.styles.length == this.editInBuffer[nodeData.editId].num_styles) {
-                            clearInterval(this.editInBuffer[nodeData.editId].editTimer);
-                            this.completeEdit(nodeData.editId);
+                    if (this.editInBuffer[nodeData.userId] != null && this.editInBuffer[nodeData.userId] != undefined &&
+                        this.editInBuffer[nodeData.userId][nodeData.editId] != null && this.editInBuffer[nodeData.userId][nodeData.editId] != undefined) {
+                        var buffer_1 = this.editInBuffer[nodeData.userId][nodeData.editId];
+                        buffer_1.styles.push(nodeData.node);
+                        if (buffer_1.styles.length == this.editInBuffer[nodeData.userId][nodeData.editId].num_styles) {
+                            clearInterval(this.editInBuffer[nodeData.userId][nodeData.editId].editTimer);
+                            this.completeEdit(nodeData.userId, nodeData.editId);
                         }
                     }
                     else {
                         console.log('STYLENODE: Unkown edit, ID: ' + nodeData.editId);
-                        var message_1 = { header: MessageTypes.UNKNOWNEDIT, payload: null };
-                        retMsgs.push(message_1);
                     }
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.RESIZE:
-                    var resizeData = message.payload;
-                    this.resize(resizeData.width, resizeData.height, resizeData.editTime);
                     newView = this.currentViewState;
                     break;
                 case MessageTypes.JUSTIFY:
@@ -899,37 +1152,20 @@ var WhiteBoardText;
                     this.setJustified(justifyData.newState);
                     newView = this.currentViewState;
                     break;
-                case MessageTypes.LOCK:
-                    var lockData = message.payload;
-                    this.setLock(lockData.userId);
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.RELEASE:
-                    this.setUnLock();
-                    break;
-                case MessageTypes.LOCKID:
-                    if (this.gettingLock) {
-                        this.setEdit();
+                case MessageTypes.SIZECHANGE:
+                    var sizeData = message.payload;
+                    this.size = sizeData.newSize;
+                    this.generateLines();
+                    this.calculateTextLines();
+                    if (this.isSelected) {
+                        this.findCursorElems();
                     }
-                    else {
-                        var releaseMsg = { header: MessageTypes.RELEASE, payload: null };
-                        retMsgs.push(releaseMsg);
-                    }
-                    newView = this.currentViewState;
+                    this.updateView({
+                        textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false,
+                        size: this.size
+                    });
                     break;
-                case MessageTypes.IGNORE:
-                    if (this.editInBuffer[0]) {
-                        clearInterval(this.editInBuffer[0].editTimer);
-                        this.editInBuffer[0] = null;
-                    }
-                    wasDelete = true;
-                    break;
-                case MessageTypes.IGNOREEDIT:
-                    var igdata = message.payload;
-                    if (this.editInBuffer[igdata.editId]) {
-                        clearInterval(this.editInBuffer[igdata.editId].editTimer);
-                        this.editInBuffer[igdata.editId] = null;
-                    }
+                case MessageTypes.DROPPED:
                     break;
                 case MessageTypes.COMPLETE:
                     while (this.opBuffer.length > 0) {
@@ -939,63 +1175,48 @@ var WhiteBoardText;
                         retMsgs.push(opMsg);
                     }
                     break;
-                case MessageTypes.NODEMISSED:
+                case MessageTypes.MISSED:
                     var msdata = message.payload;
                     var node = this.editOutBuffer[msdata.editId][msdata.num];
                     var msg = {
-                        num: msdata.num, editId: msdata.editId, start: node.start, end: node.end, text: node.text,
-                        weight: node.weight, style: node.style, decoration: node.decoration, colour: node.colour
+                        node: node, editId: msdata.editId,
                     };
                     var msgCont = { header: MessageTypes.NODE, payload: msg };
                     retMsgs.push(msgCont);
                     break;
-                case MessageTypes.DROPPED:
-                    alertMessage = { header: 'CONNECTION ERROR', message: 'Unable to send data to server due to connection problems.' };
-                    wasDelete = true;
-                    break;
-                case MessageTypes.MOVE:
-                    var mvdata = message.payload;
-                    this.move(mvdata.x - this.x, mvdata.y - this.y, mvdata.editTime);
-                    this.updateTime = mvdata.editTime;
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.DELETE:
-                    wasDelete = true;
-                    this.erase();
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.RESTORE:
-                    this.restore();
-                    newView = this.currentViewState;
-                    break;
                 case MessageTypes.EDIT:
                     var editData = message.payload;
-                    if (!this.editInBuffer[editData.editId]) {
-                        this.editInBuffer[editData.editId] = { num_styles: editData.num_styles, num_recieved: 0, styles: [], editTimer: null };
+                    if (this.editInBuffer[editData.userId] == null || this.editInBuffer[editData.userId] == undefined) {
+                        this.editInBuffer[editData.userId] = [];
                     }
-                    var buffer = this.editInBuffer[editData.editId];
+                    this.editInBuffer[editData.userId][editData.editId] = { num_styles: editData.num_styles, num_recieved: 0, styles: [], editTimer: null };
+                    var buffer = this.editInBuffer[editData.userId][editData.editId];
                     for (var i = 0; i < editData.styles.length; i++) {
                         var style = editData.styles[i];
-                        if (style != null && style != undefined && style.text != null && style.text != undefined && style.num != null && style.num != undefined
-                            && style.start != null && style.start != undefined && style.end != null && style.end != undefined && style.style != null &&
-                            style.style != undefined && style.weight != null && style.weight != undefined && style.colour != null && style.colour != undefined
-                            && style.decoration != null && style.decoration != undefined) {
-                            buffer.styles[style.num] = style;
+                        if (style != null && style != undefined && style.text != null && style.text != undefined
+                            && style.seq_num != null && style.seq_num != undefined && style.start != null && style.start != undefined && style.end != null
+                            && style.end != undefined && style.style != null && style.style != undefined && style.weight != null && style.weight != undefined
+                            && style.colour != null && style.colour != undefined && style.oline != null && style.oline != undefined && style.uline != null
+                            && style.uline != undefined && style.tline != null && style.tline != undefined) {
+                            buffer.styles[style.seq_num] = style;
                             buffer.num_recieved++;
                         }
                     }
                     if (buffer.num_recieved < buffer.num_styles) {
                         var self_2 = this;
-                        buffer.editTimer = setInterval(function (id) {
-                            var buffer = self_2.editInBuffer[id];
+                        buffer.editTimer = setInterval(function (id, userId) {
+                            var buffer = self_2.editInBuffer[userId][id];
                             for (var i = 0; i < buffer.num_styles; i++) {
                                 if (buffer[i] == null || buffer[i] == undefined) {
-                                    var msg_1 = { seq_num: i };
-                                    var msgCont_1 = { header: MessageTypes.MISSINGNODE, payload: msg_1 };
+                                    var msg_2 = { editId: id, userId: userId, seq_num: i };
+                                    var msgCont_1 = { header: MessageTypes.MISSED, payload: msg_2 };
                                     self_2.sendServerMsg(msgCont_1);
                                 }
                             }
-                        }, 1000, editData.editId);
+                        }, 1000, editData.editId, editData.userId);
+                    }
+                    else {
+                        this.completeEdit(editData.userId, editData.editId);
                     }
                     break;
                 default:
@@ -1014,12 +1235,13 @@ var WhiteBoardText;
             this.gettingLock = true;
             this.cursorStart = this.text.length;
             this.cursorEnd = this.text.length;
-            this.changeSelect(true);
+            (_a = retVal.palleteChanges).push.apply(_a, this.changeSelect(true));
             this.updateView({ gettingLock: true, isSelected: true });
-            var messageContainer = { header: MessageTypes.LOCK, payload: null };
+            var messageContainer = { header: BaseMessageTypes.LOCK, payload: null };
             serverMsgs.push(messageContainer);
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
+            var _a;
         };
         Element.prototype.handleEndEdit = function () {
             var retVal = this.getDefaultInputReturn();
@@ -1028,41 +1250,274 @@ var WhiteBoardText;
             this.isEditing = false;
             this.updateView({ isSelected: false, isEditing: false });
             this.stopLock();
-            var messageContainer = { header: MessageTypes.RELEASE, payload: null };
+            var messageContainer = { header: BaseMessageTypes.RELEASE, payload: null };
             serverMsgs.push(messageContainer);
             var lineCount = this.textNodes.length;
             if (lineCount == 0) {
                 lineCount = 1;
             }
-            if (lineCount * 1.5 * this.size < this.height) {
-                this.resize(this.width, lineCount * 1.5 * this.size, new Date());
+            if (lineCount * 2 * this.size < this.height) {
+                this.resize(this.width, lineCount * 2 * this.size, new Date());
+            }
+            if (this.wordEnd != null) {
+                var undoStart = this.wordStart;
+                var undoEnd = this.wordEnd;
+                this.operationStack.splice(undoStart, undoEnd - undoStart);
+                this.wordEnd = null;
+                this.operationPos -= undoEnd - undoStart;
+            }
+            if (this.prevWordStart != null && this.prevWordEnd != null) {
+                var undoStart = this.prevWordStart;
+                var undoEnd = this.prevWordEnd;
+                this.operationStack.splice(undoStart, undoEnd - undoStart);
+                this.prevWordEnd = null;
+                this.prevWordStart = null;
+                this.operationPos -= undoEnd - undoStart;
             }
             retVal.newView = this.currentViewState;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleCopy = function (e, palleteState) {
-            if (this.isEditing && this.cursorStart != this.cursorEnd) {
-                e.clipboardData.setData('text/plain', this.text.substring(this.cursorStart, this.cursorEnd));
-            }
+        Element.prototype.handleDeselect = function () {
+            this.cursorElems = null;
+            this.updateView({ cursor: null, cursorElems: [] });
+            return _super.prototype.handleDeselect.call(this);
         };
-        Element.prototype.handlePaste = function (e, palleteState) {
+        Element.prototype.handlePaste = function (localX, localY, data, palleteState) {
+            var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            var input = data.plainText;
             if (this.isEditing) {
-                var data = e.clipboardData.getData('text/plain');
-                this.insertText(data, palleteState);
-                this.cursorStart = this.cursorStart + data.length;
+                var sortedSelect = this.selectedCharacters.slice();
+                sortedSelect.sort(function (a, b) { return b - a; });
+                var prevText_3 = this.text;
+                var prevStyles_3 = this.styleSet;
+                this.removeSelection(sortedSelect);
+                this.generateLines();
+                this.calculateTextLines();
+                this.findStringPositions();
+                var tmpGlyphLength = this.glyphCount;
+                var newStyle = {
+                    colour: palleteState.getColour(), weight: palleteState.getWeight(), style: palleteState.getStyle(),
+                    oline: palleteState.isOverline(), uline: palleteState.isUnderline(), tline: palleteState.isThroughline()
+                };
+                var prevStringStart = this.stringStart;
+                var prevCursorStart = this.cursorStart;
+                var prevCursorEnd = this.cursorEnd;
+                this.insertText(input, newStyle);
+                this.generateLines();
+                this.calculateTextLines();
+                this.cursorStart += this.glyphCount - tmpGlyphLength;
                 this.cursorEnd = this.cursorStart;
-                this.changeSelect(true);
+                this.findStringPositions();
+                var msg = this.newEdit();
+                if (msg != null) {
+                    serverMsgs.push(msg);
+                }
+                (_a = retVal.palleteChanges).push.apply(_a, this.changeSelect(true));
+                var undoStart = this.prevWordStart;
+                var undoEnd = this.prevWordEnd;
+                this.wordMerger(undoStart, undoEnd);
+                this.lastFowardEdit = null;
+                var undoPositions_3 = {
+                    start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
+                };
+                var redoPositions_3 = {
+                    start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
+                };
+                var newCursorStart = this.cursorStart;
+                var undoOp = function () {
+                    _this.text = prevText_3;
+                    _this.styleSet = prevStyles_3;
+                    _this.cursorStart = undoPositions_3.start;
+                    _this.cursorEnd = undoPositions_3.prevEnd;
+                    _this.startLeft = true;
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    _this.findStringPositions();
+                    _this.findCursorElems();
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                    });
+                    var retVal = {
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                        palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                    };
+                    return retVal;
+                };
+                var newText_3 = this.text;
+                var newStyles_3 = this.styleSet;
+                var redoOp = function () {
+                    _this.text = newText_3;
+                    _this.styleSet = newStyles_3;
+                    _this.cursorStart = redoPositions_3.start;
+                    _this.cursorEnd = redoPositions_3.end;
+                    _this.startLeft = true;
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    _this.findStringPositions();
+                    _this.findCursorElems();
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                    });
+                    var retVal = {
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                        palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                    };
+                    return retVal;
+                };
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                this.wordEnd = this.operationPos;
+                this.lastFowardEdit = this.wordEnd;
+                this.wasSpaceLast = false;
+                this.cursorUndoPositions.push(undoPositions_3);
+                this.cursorRedoPositions.push(redoPositions_3);
+                this.prevCursorPos = this.cursorStart;
             }
+            if (this.isSelected) {
+                this.findCursorElems();
+            }
+            this.updateView({
+                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+            });
             retVal.serverMessages = this.checkForServerId(serverMsgs);
+            retVal.newView = this.currentViewState;
             return retVal;
+            var _a;
         };
-        Element.prototype.handleCut = function (e, palleteState) {
+        Element.prototype.handleCut = function () {
+            var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            if (this.wordEnd > this.operationPos) {
+                this.wordEnd = this.operationPos;
+                this.lastFowardEdit = this.wordEnd;
+                if (this.wordStart >= this.operationPos) {
+                    this.wordStart = this.prevWordStart;
+                    this.prevWordStart = null;
+                    this.prevWordEnd = null;
+                }
+            }
+            if (this.cursorEnd > 0 && this.cursorStart != this.cursorEnd) {
+                var tPrevStart = this.cursorStart;
+                var prevStringStart = this.stringStart;
+                var prevCursorStart = this.cursorStart;
+                var bPrevCursorStart = this.cursorStart;
+                var prevCursorEnd = this.cursorEnd;
+                var prevText_4 = this.text;
+                var prevStyles_4 = this.styleSet;
+                var wasSpace = false;
+                var wasNewPara = false;
+                var sortedSelect = this.selectedCharacters.slice();
+                sortedSelect.sort(function (a, b) { return b - a; });
+                for (var i = 0; i < sortedSelect.length; i++) {
+                    if (this.text.charAt(sortedSelect[i]).match(/\s/)) {
+                        if (this.wasSpaceLast) {
+                            this.spaceToggle = true;
+                        }
+                        wasSpace = true;
+                    }
+                    if (this.text.charAt(sortedSelect[i]) == '\n') {
+                        wasNewPara = true;
+                    }
+                }
+                this.removeSelection(sortedSelect);
+                this.generateLines();
+                this.calculateTextLines();
+                this.findStringPositions();
+                var msg = this.newEdit();
+                if (msg != null) {
+                    serverMsgs.push(msg);
+                }
+                this.cursorEnd = this.cursorStart;
+                if ((wasSpace && !this.spaceToggle) || (!wasSpace && this.spaceToggle) || this.prevCursorPos != tPrevStart) {
+                    var undoStart = this.prevWordStart;
+                    var undoEnd = this.prevWordEnd;
+                    if (this.lastFowardEdit != null) {
+                        this.wordEnd = this.lastFowardEdit;
+                    }
+                    this.wordMerger(undoStart, undoEnd);
+                    if (this.lastFowardEdit != null) {
+                        this.wordStart = this.lastFowardEdit;
+                        this.wordEnd = this.operationPos;
+                        undoStart = this.prevWordStart;
+                        undoEnd = this.prevWordEnd;
+                        this.wordMerger(undoStart, undoEnd);
+                    }
+                    this.lastFowardEdit = null;
+                }
+                var undoPositions_4 = {
+                    start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
+                };
+                var redoPositions_4 = {
+                    start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
+                };
+                var undoOp = function () {
+                    _this.text = prevText_4;
+                    _this.styleSet = prevStyles_4;
+                    _this.cursorStart = undoPositions_4.bStart;
+                    _this.cursorEnd = undoPositions_4.bPrevEnd;
+                    _this.startLeft = true;
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    _this.findStringPositions();
+                    _this.findCursorElems();
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height,
+                        cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                    });
+                    var retVal = {
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                        palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                    };
+                    return retVal;
+                };
+                var newText_4 = this.text;
+                var newStyles_4 = this.styleSet;
+                var redoOp = function () {
+                    _this.text = newText_4;
+                    _this.styleSet = newStyles_4;
+                    _this.cursorStart = redoPositions_4.end;
+                    _this.cursorEnd = redoPositions_4.end;
+                    _this.startLeft = true;
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    _this.findStringPositions();
+                    _this.findCursorElems();
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height,
+                        cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                    });
+                    var retVal = {
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: null,
+                        palleteChanges: [], wasDelete: null, wasRestore: null, move: null
+                    };
+                    return retVal;
+                };
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                if (!wasSpace) {
+                    this.wasSpaceLast = false;
+                    this.spaceToggle = false;
+                }
+                else {
+                    this.wasSpaceLast = true;
+                }
+                this.wordEnd = this.operationPos;
+                this.cursorUndoPositions.push(undoPositions_4);
+                this.cursorRedoPositions.push(redoPositions_4);
+                this.prevCursorPos = this.cursorStart;
+            }
+            if (this.isSelected) {
+                this.findCursorElems();
+            }
+            this.updateView({
+                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+            });
             retVal.serverMessages = this.checkForServerId(serverMsgs);
+            retVal.newView = this.currentViewState;
             return retVal;
         };
         Element.prototype.handleCustomContext = function (item, palleteState) {
@@ -1079,174 +1534,268 @@ var WhiteBoardText;
             var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            var palleteChanges = [];
             if (change.type == 7) {
                 var prevVal_1 = this.isJustified;
-                retVal.undoOp = function () {
+                var undoOp = function () {
                     var retMsgs = [];
+                    var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.setJustified(prevVal_1);
+                    palleteChanges.push({ type: 7, data: _this.isJustified });
                     var payload = { newState: prevVal_1 };
                     var retVal = {
-                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                        wasRestore: null, move: null
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
+                        wasDelete: null, wasRestore: null, move: null
                     };
                     var msg = { header: MessageTypes.JUSTIFY, payload: payload };
                     retMsgs.push(msg);
                     retVal.serverMessages = _this.checkForServerId(retMsgs);
                     return retVal;
                 };
-                retVal.redoOp = function () {
+                var redoOp = function () {
                     var retMsgs = [];
+                    var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.setJustified(pallete.isJustified);
-                    var payload = { newState: pallete.isJustified };
+                    palleteChanges.push({ type: 7, data: _this.isJustified });
+                    var payload = { newState: _this.isJustified };
                     var retVal = {
-                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                        wasRestore: null, move: null
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
+                        wasDelete: null, wasRestore: null, move: null
                     };
                     var msg = { header: MessageTypes.JUSTIFY, payload: payload };
                     retMsgs.push(msg);
                     retVal.serverMessages = _this.checkForServerId(retMsgs);
                     return retVal;
                 };
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                retVal.undoOp = null;
+                retVal.redoOp = null;
                 this.setJustified(pallete.isJustified);
+                palleteChanges.push({ type: 7, data: this.isJustified });
                 var payload = { newState: this.isJustified };
                 var msg = { header: MessageTypes.JUSTIFY, payload: payload };
                 serverMsgs.push(msg);
             }
             else if (change.type == 1) {
                 var prevVal_2 = this.size;
-                retVal.undoOp = function () {
+                var undoOp = function () {
                     var retMsgs = [];
+                    var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.size = prevVal_2;
-                    _this.updateText();
-                    var payload = { newSize: prevVal_2 };
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    if (_this.isSelected) {
+                        _this.findCursorElems();
+                    }
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false,
+                        size: _this.size
+                    });
+                    palleteChanges.push({ type: 1, data: _this.size });
+                    var payload = { newSize: _this.size };
                     var retVal = {
-                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                        wasRestore: null, move: null
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
+                        wasDelete: null, wasRestore: null, move: null
                     };
                     var msg = { header: MessageTypes.SIZECHANGE, payload: payload };
                     retMsgs.push(msg);
                     retVal.serverMessages = _this.checkForServerId(retMsgs);
                     return retVal;
                 };
-                retVal.redoOp = function () {
+                var redoOp = function () {
                     var retMsgs = [];
+                    var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.size = pallete.baseSize;
-                    _this.updateText();
-                    var payload = { newSize: pallete.baseSize };
+                    _this.generateLines();
+                    _this.calculateTextLines();
+                    if (_this.isSelected) {
+                        _this.findCursorElems();
+                    }
+                    _this.updateView({
+                        textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false,
+                        size: _this.size
+                    });
+                    palleteChanges.push({ type: 1, data: _this.size });
+                    var payload = { newSize: _this.size };
                     var retVal = {
-                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                        wasRestore: null, move: null
+                        id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
+                        wasDelete: null, wasRestore: null, move: null
                     };
                     var msg = { header: MessageTypes.SIZECHANGE, payload: payload };
                     retMsgs.push(msg);
                     retVal.serverMessages = _this.checkForServerId(retMsgs);
                     return retVal;
                 };
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                retVal.undoOp = null;
+                retVal.redoOp = null;
                 this.size = pallete.baseSize;
-                this.updateText();
-                var payload = { newState: this.isJustified };
-                var msg = { header: MessageTypes.JUSTIFY, payload: payload };
+                this.generateLines();
+                this.calculateTextLines();
+                if (this.isSelected) {
+                    this.findCursorElems();
+                }
+                this.updateView({
+                    textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false,
+                    size: this.size
+                });
+                palleteChanges.push({ type: 1, data: this.size });
+                var payload = { newSize: this.size };
+                var msg = { header: MessageTypes.SIZECHANGE, payload: payload };
+                console.log('Adding size change message.');
+                console.log(msg);
                 serverMsgs.push(msg);
             }
             else {
                 var styles_1 = [];
-                var sortedSelect = this.selectedCharacters.slice();
-                sortedSelect.sort();
-                for (var i = 0; i < this.styleSet.length; i++) {
-                    var style = this.styleSet[i];
-                    var currentStyle = null;
-                    var newStyle = null;
-                    for (var j = 0; j < sortedSelect.length; j++) {
-                        if (style.start <= sortedSelect[j] && style.end > sortedSelect[j]) {
-                            if (!this.isCurrentStyle(style, pallete)) {
-                                if (style.start == sortedSelect[j]) {
-                                    newStyle =
-                                        {
-                                            start: sortedSelect[j], end: sortedSelect[j] + 1, decoration: pallete.getDecoration(),
-                                            weight: pallete.getWeight(), style: pallete.getStyle(), colour: pallete.getColour(),
-                                            text: this.text.charAt(sortedSelect[j]), num: styles_1.length
-                                        };
-                                    style.start = sortedSelect[j] + 1;
-                                    i--;
-                                }
-                                else if (style.end - 1 == sortedSelect[j]) {
-                                    currentStyle =
-                                        {
-                                            start: style.start, end: sortedSelect[j], decoration: style.decoration,
-                                            weight: style.weight, style: style.style, colour: style.colour,
-                                            text: this.text.substring(style.start, sortedSelect[j]), num: styles_1.length
-                                        };
-                                    newStyle =
-                                        {
-                                            start: sortedSelect[j], end: sortedSelect[j] + 1, decoration: pallete.getDecoration(),
-                                            weight: pallete.getWeight(), style: pallete.getStyle(), colour: pallete.getColour(),
-                                            text: this.text.charAt(sortedSelect[j]), num: styles_1.length + 1
-                                        };
-                                }
-                                else {
-                                    currentStyle =
-                                        {
-                                            start: style.start, end: sortedSelect[j], decoration: style.decoration,
-                                            weight: style.weight, style: style.style, colour: style.colour,
-                                            text: this.text.substring(style.start, sortedSelect[j]), num: styles_1.length
-                                        };
-                                    newStyle =
-                                        {
-                                            start: sortedSelect[j], end: sortedSelect[j] + 1, decoration: pallete.getDecoration(),
-                                            weight: pallete.getWeight(), style: pallete.getStyle(), colour: pallete.getColour(),
-                                            text: this.text.charAt(sortedSelect[j]), num: styles_1.length + 1
-                                        };
-                                    style.start = sortedSelect[j] + 1;
-                                    i--;
-                                }
-                                break;
+                if (this.selectedCharacters.length > 0) {
+                    var sortedSelect = this.selectedCharacters.slice();
+                    sortedSelect.sort(function (a, b) { return a - b; });
+                    for (var i = 0; i < this.styleSet.length; i++) {
+                        var style = this.styleSet[i];
+                        if (sortedSelect.length == 0) {
+                            style.text = this.text.substring(style.start, style.end);
+                            style.seq_num = styles_1.length;
+                            styles_1.push(style);
+                        }
+                        else if (this.isCurrentStyle(style, pallete) || sortedSelect[0] >= style.end) {
+                            if (styles_1.length > 0 && this.stylesMatch(styles_1[styles_1.length - 1], style)
+                                && styles_1[styles_1.length - 1].end - styles_1[styles_1.length - 1].start + style.end - style.start <= MAX_STYLE_LENGTH) {
+                                styles_1[styles_1.length - 1].end = style.end;
+                                styles_1[styles_1.length - 1].text = this.text.substring(styles_1[styles_1.length - 1].start, styles_1[styles_1.length - 1].end);
+                            }
+                            else {
+                                style.text = this.text.substring(style.start, style.end);
+                                style.seq_num = styles_1.length;
+                                styles_1.push(style);
                             }
                         }
-                        if (newStyle == null) {
-                            currentStyle =
-                                {
-                                    start: style.start, end: style.end, decoration: style.decoration,
-                                    weight: style.weight, style: style.style, colour: style.colour,
-                                    text: this.text.substring(style.start, style.end), num: styles_1.length
-                                };
-                        }
-                        if (currentStyle != null) {
-                            styles_1.push(currentStyle);
-                        }
-                        if (newStyle != null) {
-                            styles_1.push(newStyle);
+                        else {
+                            var styleSplits = [];
+                            if (style.start < sortedSelect[0]) {
+                                style.end = sortedSelect[0];
+                                style.text = this.text.substring(style.start, style.end);
+                                style.seq_num = styles_1.length;
+                                styles_1.push(style);
+                            }
+                            for (var j = 0; j < sortedSelect.length; j++) {
+                                if (style.end <= sortedSelect[j]) {
+                                    break;
+                                }
+                                if (styleSplits.length > 0 && styleSplits[styleSplits.length - 1].end < sortedSelect[j]) {
+                                    style.start = styleSplits[styleSplits.length - 1].end;
+                                    style.end = sortedSelect[j];
+                                    style.text = this.text.substring(style.start, style.end);
+                                    style.seq_num = styles_1.length;
+                                    styles_1.push(style);
+                                }
+                                if (styleSplits.length > 0 && this.isCurrentStyle(styleSplits[styleSplits.length - 1], pallete)) {
+                                    if (styleSplits[styleSplits.length - 1].end - styleSplits[styleSplits.length - 1].start < MAX_STYLE_LENGTH) {
+                                        styleSplits[styleSplits.length - 1].end++;
+                                        styleSplits[styleSplits.length - 1].text = this.text.substring(styleSplits[styleSplits.length - 1].start, styleSplits[styleSplits.length - 1].end);
+                                    }
+                                    else {
+                                        var newStyle = {
+                                            start: sortedSelect[j], end: sortedSelect[j] + 1, oline: pallete.isOverline(), uline: pallete.isUnderline(),
+                                            tline: pallete.isThroughline(), weight: pallete.getWeight(), style: pallete.getStyle(), colour: pallete.getColour(),
+                                            text: this.text.substring(sortedSelect[j], sortedSelect[j] + 1), seq_num: null
+                                        };
+                                        styleSplits.push(newStyle);
+                                    }
+                                }
+                                else {
+                                    var newStyle = {
+                                        start: sortedSelect[j], end: sortedSelect[j] + 1, oline: pallete.isOverline(), uline: pallete.isUnderline(),
+                                        tline: pallete.isThroughline(), weight: pallete.getWeight(), style: pallete.getStyle(), colour: pallete.getColour(),
+                                        text: this.text.substring(sortedSelect[j], sortedSelect[j] + 1), seq_num: null
+                                    };
+                                    styleSplits.push(newStyle);
+                                }
+                                sortedSelect.splice(0, 1);
+                                j--;
+                            }
+                            if (styleSplits[styleSplits.length - 1].end < style.end) {
+                                style.start = styleSplits[styleSplits.length - 1].end;
+                                style.text = this.text.substring(style.start, style.end);
+                                styleSplits.push(style);
+                            }
+                            var lastStyle = styles_1[styles_1.length - 1];
+                            if (styles_1.length > 0 && lastStyle.colour == styleSplits[0].colour && lastStyle.oline == styleSplits[0].oline
+                                && lastStyle.uline == styleSplits[0].uline
+                                && lastStyle.tline == styleSplits[0].tline
+                                && lastStyle.weight == styleSplits[0].weight
+                                && lastStyle.end - lastStyle.start + styleSplits[0].end - styleSplits[0].start <= MAX_STYLE_LENGTH) {
+                                lastStyle.end = styleSplits[0].end;
+                                lastStyle.text = this.text.substring(lastStyle.start, lastStyle.end);
+                            }
+                            else {
+                                styleSplits[0].seq_num = styles_1.length;
+                                styles_1.push(styleSplits[0]);
+                            }
+                            for (var j = 1; j < styleSplits.length; j++) {
+                                styleSplits[j].seq_num = styles_1.length;
+                                styles_1.push(styleSplits[j]);
+                            }
                         }
                     }
                 }
+                else {
+                    styles_1 = this.styleSet;
+                }
                 var undoSet_1 = this.styleSet.slice();
-                retVal.undoOp = function () { return _this.setStyleSet(undoSet_1); };
-                retVal.redoOp = function () { return _this.setStyleSet(styles_1); };
+                var cursoorStartPrev_1 = this.cursorStart;
+                var cursoorEndPrev_1 = this.cursorEnd;
+                var undoOp = function () { return _this.setStyleSet(undoSet_1, cursoorStartPrev_1, cursoorEndPrev_1); };
+                var redoOp = function () { return _this.setStyleSet(styles_1, cursoorStartPrev_1, cursoorEndPrev_1); };
+                this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                retVal.undoOp = null;
+                retVal.redoOp = null;
+                retVal.palleteChanges = palleteChanges;
                 this.styleSet = styles_1;
-                this.updateText();
+                this.generateLines();
+                this.calculateTextLines();
+                if (this.isSelected) {
+                    this.findCursorElems();
+                }
+                this.updateView({
+                    textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+                });
                 serverMsgs.push(this.textEdited());
             }
             retVal.serverMessages = this.checkForServerId(serverMsgs);
+            retVal.newView = this.currentViewState;
             return retVal;
         };
         Element.prototype.audioStream = function (stream) {
         };
         Element.prototype.videoStream = function (stream) {
         };
-        Element.prototype.setStyleSet = function (styleSet) {
+        Element.prototype.setStyleSet = function (styleSet, cursorStart, cursorEnd) {
             var retMsgs = [];
             var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
+            this.cursorStart = cursorStart;
+            this.cursorEnd = cursorEnd;
             this.styleSet = styleSet;
-            this.updateText();
-            var payload = this.textEdited();
+            this.generateLines();
+            this.calculateTextLines();
+            if (this.isSelected) {
+                this.findCursorElems();
+            }
+            this.updateView({
+                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+            });
+            var msg = this.textEdited();
             var retVal = {
                 id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
                 wasRestore: null, move: null
             };
-            var msg = { header: MessageTypes.EDIT, payload: payload };
             retMsgs.push(msg);
             retVal.serverMessages = this.checkForServerId(retMsgs);
             return retVal;
@@ -1256,37 +1805,14 @@ var WhiteBoardText;
             this.height = height;
             if (this.width != width) {
                 this.width = width;
-                this.textNodes = this.calculateTextLines();
+                this.calculateTextLines();
             }
             if (this.isEditing) {
-                this.findCursorElems(this.cursorStart, this.cursorEnd);
+                this.findCursorElems();
             }
             this.updateView({
                 textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems
             });
-        };
-        Element.prototype.moveOperation = function (changeX, changeY, updateTime) {
-            this.move(changeX, changeY, updateTime);
-            var msgPayload = { x: this.x, y: this.y };
-            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
-                wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
-            };
-            return retVal;
-        };
-        Element.prototype.resizeOperation = function (width, height, updateTime) {
-            var serverMessages = [];
-            this.resize(width, height, updateTime);
-            var msgPayload = { width: this.width, height: this.height };
-            var serverMsg = { header: MessageTypes.RESIZE, payload: msgPayload };
-            serverMessages.push(serverMsg);
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
-                wasRestore: null, move: null
-            };
-            retVal.serverMessages = this.checkForServerId(serverMessages);
-            return retVal;
         };
         Element.prototype.stopLock = function () {
             this.gettingLock = false;
@@ -1296,7 +1822,7 @@ var WhiteBoardText;
             this.updateView({ getLock: false, isEditing: false, cursor: null, cursorElems: [] });
         };
         Element.prototype.changeSelect = function (setIdeal) {
-            var palleteChange = null;
+            var palleteChanges = [];
             if (setIdeal) {
                 if (this.startLeft) {
                     this.idealX = this.findXPos(this.cursorEnd);
@@ -1305,42 +1831,37 @@ var WhiteBoardText;
                     this.idealX = this.findXPos(this.cursorStart);
                 }
             }
-            this.findCursorElems(this.cursorStart, this.cursorEnd);
+            this.findStringPositions();
+            this.findCursorElems();
             if (this.styleSet.length > 0) {
                 var i = 0;
-                while (i < this.styleSet.length && this.styleSet[i].start > this.cursorStart || this.styleSet[i].end < this.cursorStart) {
+                while (i < this.styleSet.length - 1 && (this.styleSet[i].start > this.cursorStart || this.styleSet[i].end < this.cursorStart)) {
                     i++;
                 }
                 var isBold = this.styleSet[i].weight == 'bold';
                 var isItalic = this.styleSet[i].style == 'italic';
-                var isOLine = this.styleSet[i].decoration == 'overline';
-                var isULine = this.styleSet[i].decoration == 'underline';
-                var isTLine = this.styleSet[i].decoration == 'line-through';
-                palleteChange = { colour: this.styleSet[i].colour, isBold: isBold, isItalic: isItalic, isOLine: isOLine, isULine: isULine, isTLine: isTLine };
+                var isOLine = this.styleSet[i].oline;
+                var isULine = this.styleSet[i].uline;
+                var isTLine = this.styleSet[i].tline;
+                var change = {
+                    colour: this.styleSet[i].colour, isBold: isBold, isItalic: isItalic, isOLine: isOLine, isULine: isULine, isTLine: isTLine
+                };
+                palleteChanges.push({ type: 8, data: change });
             }
             this.updateView({ cursor: this.cursor, cursorElems: this.cursorElems });
-            return palleteChange;
+            return palleteChanges;
         };
         Element.prototype.setEdit = function () {
             this.cursorStart = this.text.length;
             this.cursorEnd = this.text.length;
             this.gettingLock = false;
             this.isEditing = true;
-            this.changeSelect(true);
+            this.updatePallete(this.changeSelect(true));
             this.updateView({ getLock: false, isEditing: true });
-        };
-        Element.prototype.setLock = function (userId) {
-            this.lockedBy = userId;
-            this.editLock = true;
-            this.updateView({ remLock: true });
-        };
-        Element.prototype.setUnLock = function () {
-            this.editLock = false;
-            this.updateView({ remLock: false });
         };
         Element.prototype.setJustified = function (state) {
             this.isJustified = state;
-            this.textNodes = this.calculateTextLines();
+            this.calculateTextLines();
             if (this.isEditing) {
                 if (this.startLeft) {
                     this.idealX = this.findXPos(this.cursorEnd);
@@ -1348,455 +1869,1958 @@ var WhiteBoardText;
                 else {
                     this.idealX = this.findXPos(this.cursorStart);
                 }
-                this.findCursorElems(this.cursorStart, this.cursorEnd);
+                this.findCursorElems();
             }
             this.updateView({ textNodes: this.textNodes, cursor: this.cursor, cursorElems: this.cursorElems });
-        };
-        Element.prototype.updateText = function () {
-            console.log('Generating lines...');
-            this.generateLines();
-            this.textNodes = this.calculateTextLines();
-            if (this.isSelected) {
-                this.findCursorElems(this.cursorStart, this.cursorEnd);
-            }
-            this.updateView({
-                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
-            });
         };
         Element.prototype.findXPos = function (loc) {
             if (this.textNodes.length == 0) {
                 return 0;
             }
-            var currGlyphCount = 0;
             for (var i = 0; i < this.textNodes.length; i++) {
                 var line = this.textNodes[i];
-                if (currGlyphCount + line.glyphs.length > loc) {
-                    return line.glyphs[loc - currGlyphCount].startPos;
+                if (loc >= line.start && loc <= line.end) {
+                    if (loc == line.end) {
+                        if (line.sections.length == 0) {
+                            return 0;
+                        }
+                        else if (!line.spaceRemoved) {
+                            var lastSec = line.sections[line.sections.length - 1];
+                            var glyphIdx = loc - line.start - -1;
+                            var localPos = (lastSec.glyphs[loc - line.start - 1].startAdvance + lastSec.glyphs[loc - line.start - 1].xAdvance);
+                            return (lastSec.startPos + localPos * this.size / 1000);
+                        }
+                    }
+                    else {
+                        for (var j = 0; j < line.sections.length; j++) {
+                            if (line.sections[j].startGlyph <= loc && line.sections[j].startGlyph + line.sections[j].glyphs.length >= loc) {
+                                var localPos = line.sections[j].glyphs[loc - line.sections[j].startGlyph - line.start].startAdvance;
+                                return (line.sections[j].startPos + localPos * this.size / 1000);
+                            }
+                        }
+                    }
                 }
-                currGlyphCount += line.glyphs.length;
             }
         };
         Element.prototype.findTextPos = function (x, y) {
             var xFind = 0;
-            if (y < this.y || this.textNodes.length == 0) {
+            if (y < 0 || this.textNodes.length == 0) {
                 return 0;
             }
             else {
-                var lineNum = Math.floor(((y - this.y) / (1.5 * this.size)) + 0.15);
+                var lineNum = Math.floor((y / (2 * this.size)));
                 if (lineNum >= this.textNodes.length) {
                     return this.textNodes[this.textNodes.length - 1].end;
                 }
                 if (!this.textNodes[lineNum]) {
                     console.log('Line is: ' + lineNum);
                 }
-                if (x > this.x) {
-                    if (x > this.x + this.width) {
+                if (x > 0) {
+                    if (x > this.width) {
                         return this.textNodes[lineNum].end;
                     }
                     else {
-                        xFind = x - this.x;
+                        xFind = x;
                     }
                 }
                 else {
                     return this.textNodes[lineNum].start;
                 }
                 var line = this.textNodes[lineNum];
-                if (line.glyphs.length == 0) {
+                if (line.sections.length == 0) {
                     return line.start;
                 }
                 var i = 0;
-                while (i < line.glyphs.length && xFind > line.glyphs[i].startPos) {
+                while (i < line.sections.length && xFind > line.sections[i].startPos) {
+                    i++;
+                }
+                var secIdx = i - 1;
+                var sec = line.sections[secIdx];
+                i = 0;
+                while (i < sec.glyphs.length && xFind > sec.startPos + sec.glyphs[i].startAdvance * this.size / 1000) {
                     i++;
                 }
                 var curr = i - 1;
-                var glyph = line.glyphs[i - 1];
+                var glyph = sec.glyphs[curr];
                 var selPoint = void 0;
-                if (curr + 1 < line.glyphs.length) {
-                    if (xFind - glyph.startPos > line.glyphs[curr + 1].startPos - xFind) {
-                        selPoint = line.start + curr + 1;
-                    }
-                    else {
-                        selPoint = line.start + i;
-                    }
+                var glyphStart = sec.startPos + glyph.startAdvance * this.size / 1000;
+                var glyphEnd = glyphStart + glyph.xAdvance * this.size / 1000;
+                if (xFind - glyphStart > glyphEnd - xFind) {
+                    selPoint = line.start + curr + 1;
                 }
                 else {
-                    if (xFind - glyph.startPos > glyph.startPos + glyph.advance - xFind) {
-                        selPoint = line.start + curr + 1;
-                    }
-                    else {
-                        selPoint = line.start + i;
-                    }
+                    selPoint = line.start + curr;
                 }
                 return selPoint;
             }
         };
-        Element.prototype.findCursorElems = function (cursorStart, cursorEnd) {
+        Element.prototype.findCursorElems = function () {
             this.cursorElems = [];
-            if (this.textNodes.length == 0) {
-                this.cursor = { x: this.x, y: this.y, height: 1.5 * this.size };
+            if (this.textNodes.length == 0 && this.isEditing) {
+                this.cursor = { x: 0, y: 0, height: 2 * this.size };
             }
-            var currGlyphCount = 0;
             for (var i = 0; i < this.textNodes.length; i++) {
                 var line = this.textNodes[i];
                 var selStart = null;
                 var selEnd = null;
                 var endFound = false;
-                if (cursorStart >= currGlyphCount && cursorStart < currGlyphCount + line.glyphs.length) {
-                    if (cursorStart == currGlyphCount + line.glyphs.length && !line.spaceRemoved) {
-                        selStart = this.width;
+                if (this.cursorStart >= line.start && this.cursorStart <= line.end) {
+                    if (this.cursorStart == line.start) {
+                        selStart = 0;
+                    }
+                    else if (this.cursorStart == line.end) {
+                        var sec = line.sections[line.sections.length - 1];
+                        var idx = this.cursorStart - sec.startGlyph - 1;
+                        selStart = sec.startPos + ((sec.glyphs[idx].startAdvance + sec.glyphs[idx].xAdvance) * this.size / 1000);
                     }
                     else {
-                        selStart = line.glyphs[cursorStart - currGlyphCount].startPos;
+                        for (var j = 0; j < line.sections.length; j++) {
+                            var sec = line.sections[j];
+                            if (this.cursorStart >= sec.startGlyph && this.cursorStart <= sec.startGlyph + sec.glyphs.length) {
+                                selStart = sec.startPos + sec.glyphs[this.cursorStart - sec.startGlyph].startAdvance * this.size / 1000;
+                            }
+                        }
                     }
                 }
-                else if (cursorStart < currGlyphCount && cursorEnd > currGlyphCount) {
+                else if (this.cursorStart < line.start) {
                     selStart = 0;
                 }
-                if (cursorEnd > currGlyphCount && cursorEnd < currGlyphCount + line.glyphs.length) {
-                    if (cursorEnd == currGlyphCount + line.glyphs.length && !line.spaceRemoved) {
-                        selEnd = this.width;
+                if (this.cursorEnd >= line.start && this.cursorEnd <= line.end) {
+                    if (this.cursorEnd == line.start) {
+                        selEnd = 0;
+                    }
+                    else if (this.cursorEnd == line.end) {
+                        if (!line.spaceRemoved && line.justified) {
+                            selEnd = this.width;
+                        }
+                        else {
+                            var sec = line.sections[line.sections.length - 1];
+                            var idx = this.cursorEnd - line.start - 1;
+                            selStart = sec.startPos + ((sec.glyphs[idx].startAdvance + sec.glyphs[idx].xAdvance) * this.size / 1000);
+                        }
                     }
                     else {
-                        selEnd = line.glyphs[cursorEnd - currGlyphCount].startPos;
+                        for (var j = 0; j < line.sections.length; j++) {
+                            var sec = line.sections[j];
+                            if (this.cursorEnd >= sec.startGlyph && this.cursorEnd <= sec.startGlyph + sec.glyphs.length) {
+                                selEnd = sec.startPos + sec.glyphs[this.cursorEnd - sec.startGlyph].startAdvance * this.size / 1000;
+                            }
+                        }
                     }
                 }
-                else if (cursorEnd >= currGlyphCount + line.glyphs.length && cursorStart <= currGlyphCount + line.glyphs.length && i < this.textNodes.length - 1) {
+                else if (this.cursorEnd > line.end) {
                     selEnd = this.width;
                 }
-                if (cursorEnd >= currGlyphCount && cursorEnd <= currGlyphCount + line.glyphs.length && (this.startLeft || cursorStart == cursorEnd) &&
-                    currGlyphCount != currGlyphCount + line.glyphs.length) {
-                    if (cursorEnd != currGlyphCount + line.glyphs.length || line.spaceRemoved) {
-                        this.cursor = { x: this.x + selEnd, y: this.y + 1.5 * this.size * line.lineNum, height: 1.5 * this.size };
+                if (this.isEditing) {
+                    if (this.cursorEnd >= line.start && this.cursorEnd <= line.end && (this.startLeft || this.cursorStart == this.cursorEnd)) {
+                        this.cursor = { x: selEnd, y: 2 * this.size * line.lineNum + 0.2 * this.size, height: 2 * this.size };
+                    }
+                    else if (this.cursorStart >= line.start && this.cursorStart <= line.end && !this.startLeft) {
+                        this.cursor = { x: selStart, y: 2 * this.size * line.lineNum + 0.2 * this.size, height: 2 * this.size };
                     }
                 }
-                else if (cursorStart >= currGlyphCount && cursorStart <= currGlyphCount + line.glyphs.length && (!this.startLeft || cursorStart == cursorEnd)) {
-                    if (cursorStart != currGlyphCount + line.glyphs.length || line.spaceRemoved) {
-                        this.cursor = { x: this.x + selStart, y: this.y + 1.5 * this.size * line.lineNum, height: 1.5 * this.size };
-                    }
+                else {
+                    this.cursor = null;
                 }
-                if (selStart != null && selEnd != null && cursorStart != cursorEnd) {
+                if (selStart != null && selEnd != null && this.cursorStart != this.cursorEnd) {
                     this.cursorElems.push({
-                        x: this.x + selStart, y: this.y + 1.5 * this.size * line.lineNum, width: selEnd - selStart, height: 1.5 * this.size
+                        x: selStart, y: 2 * this.size * line.lineNum + 0.2 * this.size, width: selEnd - selStart, height: 2 * this.size
                     });
                 }
-                currGlyphCount += line.glyphs.length;
             }
         };
+        Element.prototype.splitText = function (text) {
+            var words = [];
+            var j;
+            var isWhiteSpace = text.charAt(0).match(/\s/) ? true : false;
+            var txtStart = 0;
+            for (j = 0; j < text.length; j++) {
+                if (isWhiteSpace) {
+                    if (!text.charAt(j).match(/\s/)) {
+                        if (j > 0) {
+                            txtStart = j;
+                            isWhiteSpace = false;
+                        }
+                        else {
+                            isWhiteSpace = false;
+                        }
+                    }
+                }
+                else {
+                    if (text.charAt(j).match(/\s/)) {
+                        words.push({ start: txtStart, word: text.substring(txtStart, j) });
+                        txtStart = j;
+                        isWhiteSpace = true;
+                    }
+                }
+            }
+            if (!isWhiteSpace) {
+                words.push({ start: txtStart, word: text.substring(txtStart, j) });
+            }
+            return words;
+        };
+        Element.prototype.splitSegments = function (style, wordStart, localStart, word) {
+            var segments = [];
+            var wordPos = 0;
+            var hasHyphen = false;
+            var advance = 0;
+            while (word.length - wordPos > MAX_SEGEMENT_LENGTH) {
+                var wordSlice_1 = word.slice(wordPos, wordPos + MAX_SEGEMENT_LENGTH);
+                var glyphs_1 = [];
+                hasHyphen = this.processGlyphs(glyphs_1, style, word, wordStart + localStart + wordPos);
+                var wordAdvance_1 = 0;
+                for (var k = 0; k < glyphs_1.length; k++) {
+                    wordAdvance_1 += (glyphs_1[k].xAdvance) * this.size / 1000;
+                }
+                var newSegment_1 = {
+                    style: style, startPos: localStart + wordPos, glyphs: glyphs_1, startAdvance: advance,
+                    segmentAdvance: wordAdvance_1, segmentLength: word.length, hasHyphen: hasHyphen
+                };
+                segments.push(newSegment_1);
+                wordPos += MAX_SEGEMENT_LENGTH;
+                advance += wordAdvance_1;
+            }
+            var wordSlice = word.slice(wordPos, word.length);
+            var glyphs = [];
+            hasHyphen = this.processGlyphs(glyphs, style, word, wordStart + localStart + wordPos);
+            var wordAdvance = 0;
+            for (var k = 0; k < glyphs.length; k++) {
+                wordAdvance += (glyphs[k].xAdvance) * this.size / 1000;
+            }
+            var newSegment = {
+                style: style, startPos: localStart + wordPos, glyphs: glyphs, startAdvance: advance,
+                segmentAdvance: wordAdvance, segmentLength: word.length, hasHyphen: hasHyphen
+            };
+            segments.push(newSegment);
+            return segments;
+        };
+        Element.prototype.splitWithStyles = function (wordStart, localStart, word) {
+            var segments = [];
+            var styIndex = 0;
+            while (styIndex + 1 < this.styleSet.length && this.styleSet[styIndex + 1].start < wordStart + localStart) {
+                styIndex++;
+            }
+            var style = this.styleSet[styIndex];
+            var currentStart = localStart;
+            var end = wordStart + localStart + word.length;
+            while (end > style.end) {
+                var text_1 = word.substring(wordStart + localStart, style.end);
+                segments.push.apply(segments, this.splitSegments(style, wordStart, localStart, text_1));
+                styIndex++;
+                style = this.styleSet[styIndex];
+                localStart += style.end - (wordStart + localStart);
+            }
+            var text = word.substring(wordStart + localStart, end);
+            segments.push.apply(segments, this.splitSegments(style, wordStart, localStart, text));
+            return segments;
+        };
+        Element.prototype.applyDeletion = function (word, deletion) {
+            if (deletion.end < word.startPos) {
+                var change = deletion.end - deletion.start;
+                word.startPos -= change;
+                for (var k = 0; k < word.segments.length; k++) {
+                    word.segments[k].startPos -= change;
+                }
+            }
+            else if (deletion.start < word.startPos + word.wordLength) {
+                if (deletion.start > word.startPos) {
+                    if (deletion.end < word.startPos + word.wordLength) {
+                        word.wordLength -= deletion.end - deletion.start;
+                        word.wordAdvance = -1;
+                    }
+                    else {
+                        word.wordLength = deletion.start - word.startPos;
+                        word.wordAdvance = -1;
+                    }
+                }
+                else {
+                    word.startPos -= word.startPos - deletion.start;
+                    if (deletion.end < word.startPos + word.wordLength) {
+                        word.wordLength -= deletion.end - word.startPos;
+                        word.wordAdvance = -1;
+                    }
+                    else {
+                        word.wordLength = 0;
+                    }
+                }
+                for (var k = 0; k < word.segments.length; k++) {
+                    var segment = word.segments[k];
+                    if (deletion.end < segment.startPos) {
+                        segment.startPos -= deletion.end - deletion.start;
+                    }
+                    else if (deletion.start < segment.startPos + segment.segmentLength) {
+                        if (deletion.start > segment.startPos) {
+                            if (deletion.end < segment.startPos + segment.segmentLength) {
+                                segment.segmentLength -= deletion.end - deletion.start;
+                                segment.segmentAdvance = -1;
+                            }
+                            else {
+                                segment.segmentLength = deletion.start - segment.startPos;
+                                segment.segmentAdvance = -1;
+                            }
+                        }
+                        else {
+                            segment.startPos -= segment.startPos - deletion.start;
+                            if (deletion.end < segment.startPos + segment.segmentLength) {
+                                segment.segmentLength -= deletion.end - segment.startPos;
+                                segment.segmentAdvance = -1;
+                            }
+                            else {
+                                word.segments.splice(k, 1);
+                                k--;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        Element.prototype.processDeletions = function () {
+        };
+        Element.prototype.processInsertions = function () {
+        };
+        Element.prototype.processStyleChanges = function () {
+        };
+        Element.prototype.evaluateChanges = function (editData) {
+            var newLinePositions = [];
+            var lineStartWord = 0;
+            var currentLine = 0;
+            var oldLineIndex = 0;
+            var newWordData = [];
+            var inserted = false;
+            var insertData = [];
+            var insertStyle;
+            var newLineData = [];
+            if (editData.insertion != null) {
+                insertData = this.splitText(editData.insertion.text);
+                insertStyle = editData.insertion.style;
+            }
+            for (var i = 0; i < this.linePositions.length; i++) {
+                var removed = false;
+                var newPosition = this.linePositions[i];
+                for (var j = 0; j < editData.deletions.length; j++) {
+                    var deletion = editData.deletions[j];
+                    if (this.linePositions[i] >= deletion.start && this.linePositions[i] < deletion.end) {
+                        removed = true;
+                    }
+                    else if (this.linePositions[i] >= deletion.end) {
+                        newPosition -= (deletion.end - deletion.start);
+                    }
+                }
+                if (!removed) {
+                    if (editData.insertion != null && newPosition >= editData.insertion.start) {
+                        newPosition += editData.insertion.text.length;
+                    }
+                    newLinePositions.push(newPosition);
+                }
+            }
+            var word = null;
+            var nextWord = null;
+            var wordCount = 0;
+            var totalCount = 0;
+            for (var i = 0; i < this.wordData.length - 1; i++) {
+                if (nextWord == null) {
+                    word = {
+                        startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
+                        wordLength: this.wordData[i].wordLength
+                    };
+                    nextWord = {
+                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                        wordLength: this.wordData[i + 1].wordLength
+                    };
+                    for (var j = 0; j < editData.deletions.length; j++) {
+                        this.applyDeletion(word, editData.deletions[j]);
+                        this.applyDeletion(nextWord, editData.deletions[j]);
+                    }
+                }
+                else {
+                    word = nextWord;
+                    nextWord = {
+                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                        wordLength: this.wordData[i + 1].wordLength
+                    };
+                    for (var j = 0; j < editData.deletions.length; j++) {
+                        this.applyDeletion(nextWord, editData.deletions[j]);
+                    }
+                }
+                while (word.startPos + word.wordLength == nextWord.startPos) {
+                    word.wordLength += nextWord.wordLength;
+                    var wordSeg = word.segments[word.segments.length - 1];
+                    var sty1 = wordSeg.style;
+                    var sty2 = nextWord.segments[0].style;
+                    for (var j = 0; j < nextWord.segments.length; j++) {
+                        nextWord.segments[j].startPos += word.wordLength;
+                    }
+                    if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                        wordSeg.segmentLength += nextWord.segments[0].segmentLength;
+                        wordSeg.segmentAdvance = -1;
+                        (_a = word.segments).push.apply(_a, nextWord.segments.slice(1, nextWord.segments.length));
+                    }
+                    else {
+                        (_b = word.segments).push.apply(_b, nextWord.segments.slice(0, nextWord.segments.length));
+                    }
+                    i++;
+                    nextWord = {
+                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                        wordLength: this.wordData[i + 1].wordLength
+                    };
+                }
+                while (newLinePositions[oldLineIndex] > word.startPos) {
+                    newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                    currentLine++;
+                    oldLineIndex++;
+                    totalCount += wordCount;
+                    wordCount = 0;
+                }
+                if (insertData.length == 0 && editData.insertion != null && editData.insertion.text.length > 0) {
+                    if (word.startPos >= editData.insertion.start) {
+                        word.startPos += editData.insertion.text.length;
+                    }
+                    newWordData.push(word);
+                    inserted = true;
+                }
+                else if (word.wordLength > 0) {
+                    console.log('Made it here.');
+                    var insert = insertData[0];
+                    console.log('and new word data is:');
+                    console.log(newWordData);
+                    if (editData.insertion.start >= word.startPos && editData.insertion.start <= word.startPos + word.wordLength) {
+                        console.log('Went in here.');
+                        if (editData.insertion.start == word.startPos + word.wordLength) {
+                            console.log('and in here.');
+                            if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                newWordData.push(word);
+                                wordCount++;
+                                var startSpaces_1 = editData.insertion.text.substring(0, insert.start);
+                                var newLineIndex_1 = startSpaces_1.indexOf('\n');
+                                var runningPos_1 = insertData[0].start;
+                                while (newLineIndex_1 >= 0) {
+                                    runningPos_1 += newLineIndex_1;
+                                    startSpaces_1 = startSpaces_1.substring(newLineIndex_1, startSpaces_1.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos_1);
+                                    newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                    currentLine++;
+                                    totalCount += wordCount;
+                                    wordCount = 0;
+                                    newLineIndex_1 = startSpaces_1.indexOf('\n');
+                                }
+                                var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                var wordAdvance = 0;
+                                for (var k = 0; k < newSegments.length; k++) {
+                                    wordAdvance += newSegments[k].segmentAdvance;
+                                }
+                                var newWord = {
+                                    startPos: insert.start + editData.insertion.start, wordAdvance: wordAdvance,
+                                    wordLength: insert.word.length, segments: newSegments
+                                };
+                                newWordData.push(newWord);
+                                wordCount++;
+                            }
+                            else {
+                                var seg = word.segments[word.segments.length - 1];
+                                var sty1 = seg.style;
+                                var sty2 = insertStyle;
+                                if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                    console.log('Made it to the right spot.');
+                                    var newText = this.text.substring(seg.startPos, seg.startPos + seg.segmentLength + insert.word.length);
+                                    var newSegments = this.splitSegments(insertStyle, word.startPos, seg.startPos, newText);
+                                    word.wordAdvance -= seg.segmentAdvance;
+                                    word.segments.splice(word.segments.length - 1, 1);
+                                    var wordAdvance = 0;
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        wordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    word.wordAdvance += wordAdvance;
+                                    (_c = word.segments).push.apply(_c, newSegments);
+                                    word.wordLength += insert.word.length;
+                                    console.log('New word data was: ');
+                                    console.log(newWordData);
+                                    newWordData.push(word);
+                                    wordCount++;
+                                    console.log('New word data is now: ');
+                                    console.log(newWordData);
+                                }
+                                else {
+                                    var newText = this.text.substring(editData.insertion.start, editData.insertion.start + insert.word.length);
+                                    var newSegments = this.splitSegments(insertStyle, word.startPos, editData.insertion.start - word.startPos, newText);
+                                    var wordAdvance = 0;
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        wordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    word.wordAdvance += wordAdvance;
+                                    (_d = word.segments).push.apply(_d, newSegments);
+                                    word.wordLength += insert.word.length;
+                                    newWordData.push(word);
+                                    wordCount++;
+                                }
+                            }
+                        }
+                        else if (editData.insertion.start != word.startPos) {
+                            console.log('Went in this condition.');
+                            var seg = null;
+                            var segIndex = -1;
+                            for (var k = 0; k < word.segments.length; k++) {
+                                var segment = word.segments[k];
+                                if (editData.insertion.start == segment.startPos + segment.segmentLength) {
+                                    seg = segment;
+                                    segIndex = k;
+                                    if (segment.style.style == insertStyle.style && segment.style.weight == insertStyle.weight) {
+                                        break;
+                                    }
+                                }
+                                else if (editData.insertion.start >= segment.startPos && editData.insertion.start < segment.startPos + segment.segmentLength) {
+                                    seg = segment;
+                                    segIndex = k;
+                                    break;
+                                }
+                            }
+                            var sty1 = seg.style;
+                            var sty2 = insertStyle;
+                            if (insertData.length == 1) {
+                                if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                    var startSpaces_2 = editData.insertion.text.substring(0, insert.start);
+                                    var newLineIndex_2 = startSpaces_2.indexOf('\n');
+                                    var runningPos_2 = insertData[0].start;
+                                    while (newLineIndex_2 >= 0) {
+                                        runningPos_2 += newLineIndex_2;
+                                        startSpaces_2 = startSpaces_2.substring(newLineIndex_2, startSpaces_2.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos_2);
+                                        newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                        currentLine++;
+                                        totalCount += wordCount;
+                                        wordCount = 0;
+                                        newLineIndex_2 = startSpaces_2.indexOf('\n');
+                                    }
+                                    var segStartText = this.text.substring(seg.startPos, insert.start);
+                                    var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, segStartText);
+                                    var startWordAdvance = 0;
+                                    for (var k = 0; k < segIndex; k++) {
+                                        startWordAdvance += word.segments[k].segmentAdvance;
+                                    }
+                                    for (var k = 0; k < newStartSegments.length; k++) {
+                                        startWordAdvance += newStartSegments[k].segmentAdvance;
+                                    }
+                                    var newStartWord = {
+                                        startPos: word.startPos, wordAdvance: startWordAdvance,
+                                        wordLength: insert.start - word.startPos, segments: word.segments.slice(0, segIndex).concat(newStartSegments)
+                                    };
+                                    newWordData.push(newStartWord);
+                                    wordCount++;
+                                    if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                        var insertSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                        var insertWordAdvance = 0;
+                                        for (var k = 0; k < insertSegments.length; k++) {
+                                            insertWordAdvance += insertSegments[k].segmentAdvance;
+                                        }
+                                        var insertWord = {
+                                            startPos: insert.start, wordAdvance: insertWordAdvance,
+                                            wordLength: insert.word.length, segments: insertSegments
+                                        };
+                                        newWordData.push(insertWord);
+                                        wordCount++;
+                                        var spacesStart_1 = insertData[0].start + insertData[0].word.length;
+                                        var spacesEnd_1 = insert.start + insert.word.length;
+                                        var startSpaces_3 = editData.insertion.text.substring(spacesStart_1, spacesEnd_1);
+                                        var newLineIndex_3 = startSpaces_3.indexOf('\n');
+                                        var runningPos_3 = insertData[0].start + insertData[0].word.length;
+                                        while (newLineIndex_3 >= 0) {
+                                            runningPos_3 += newLineIndex_3;
+                                            startSpaces_3 = startSpaces_3.substring(newLineIndex_3, startSpaces_3.length);
+                                            newLinePositions.splice(currentLine, 0, runningPos_3);
+                                            newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                            currentLine++;
+                                            totalCount += wordCount;
+                                            wordCount = 0;
+                                            newLineIndex_3 = startSpaces_3.indexOf('\n');
+                                        }
+                                        var newEndStart = editData.insertion.start + editData.insertion.text.length;
+                                        var segEndText = this.text.substring(newEndStart, seg.segmentLength - (insert.start - (seg.startPos + word.startPos)));
+                                        var newEndSegments = this.splitSegments(seg.style, word.startPos, 0, segEndText);
+                                        var endWordAdvance = 0;
+                                        for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                            endWordAdvance += word.segments[k].segmentAdvance;
+                                            word.segments[k].startPos -= (editData.insertion.start - word.startPos);
+                                        }
+                                        for (var k = 0; k < newEndSegments.length; k++) {
+                                            endWordAdvance += newEndSegments[k].segmentAdvance;
+                                        }
+                                        var endSegments = newEndSegments.slice();
+                                        if (segIndex < word.segments.length) {
+                                            endSegments.push.apply(endSegments, word.segments.slice(segIndex + 1, word.segments.length));
+                                        }
+                                        var newEndWord = {
+                                            startPos: newEndStart, wordAdvance: endWordAdvance,
+                                            wordLength: word.wordLength - newStartWord.wordLength, segments: endSegments
+                                        };
+                                        newWordData.push(newEndWord);
+                                        wordCount++;
+                                    }
+                                    else {
+                                        if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                            var includeNextSeg = false;
+                                            var newLength = (seg.segmentLength - (insert.start - (seg.startPos + word.startPos))) + insert.word.length;
+                                            if (segIndex < word.segments.length) {
+                                                var testSty = word.segments[segIndex + 1].style;
+                                                if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                                    includeNextSeg = true;
+                                                    newLength += word.segments[segIndex + 1].segmentLength;
+                                                }
+                                            }
+                                            var newText = this.text.substring(insert.start, insert.start + newLength);
+                                            var newSegments = this.splitSegments(insertStyle, word.startPos, 0, newText);
+                                            var endWordAdvance = 0;
+                                            for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                                endWordAdvance += word.segments[k].segmentAdvance;
+                                                word.segments[k].startPos -= (editData.insertion.start - word.startPos);
+                                            }
+                                            for (var k = 0; k < newSegments.length; k++) {
+                                                endWordAdvance += newSegments[k].segmentAdvance;
+                                            }
+                                            var endSegments = newSegments.slice();
+                                            var tmpIndex = segIndex + (includeNextSeg ? 1 : 0);
+                                            if (tmpIndex + 1 < word.segments.length) {
+                                                endSegments.push.apply(endSegments, word.segments.slice(tmpIndex + 1, word.segments.length));
+                                            }
+                                            var newEndWord = {
+                                                startPos: insert.start, wordAdvance: endWordAdvance,
+                                                wordLength: newLength, segments: endSegments
+                                            };
+                                            newWordData.push(newEndWord);
+                                            wordCount++;
+                                        }
+                                        else {
+                                            var includeNextSeg = false;
+                                            var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                            var splitStart = insert.start + insert.word.length;
+                                            var splitLength = seg.segmentLength - (insert.start - (seg.startPos + word.startPos));
+                                            if (segIndex < word.segments.length) {
+                                                var testSty = word.segments[segIndex + 1].style;
+                                                if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                                    includeNextSeg = true;
+                                                    splitLength += word.segments[segIndex + 1].segmentLength;
+                                                }
+                                            }
+                                            var splitText = this.text.substring(splitStart, splitStart + splitLength);
+                                            var splitSegments = this.splitSegments(seg.style, word.startPos, insert.word.length, splitText);
+                                            var endWordAdvance = 0;
+                                            var newLength = 0;
+                                            for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                                endWordAdvance += word.segments[k].segmentAdvance;
+                                                newLength += word.segments[k].segmentLength;
+                                                word.segments[k].startPos -= (editData.insertion.start - word.startPos);
+                                            }
+                                            for (var k = 0; k < newSegments.length; k++) {
+                                                endWordAdvance += newSegments[k].segmentAdvance;
+                                                newLength += newSegments[k].segmentLength;
+                                            }
+                                            for (var k = 0; k < splitSegments.length; k++) {
+                                                endWordAdvance += splitSegments[k].segmentAdvance;
+                                                newLength += splitSegments[k].segmentLength;
+                                            }
+                                            var endSegments = splitSegments.concat(newSegments);
+                                            var tmpIndex = segIndex + (includeNextSeg ? 1 : 0);
+                                            if (tmpIndex + 1 < word.segments.length) {
+                                                endSegments.push.apply(endSegments, word.segments.slice(tmpIndex + 1, word.segments.length));
+                                            }
+                                            var newEndWord = {
+                                                startPos: insert.start, wordAdvance: endWordAdvance,
+                                                wordLength: newLength, segments: endSegments
+                                            };
+                                            newWordData.push(newEndWord);
+                                            wordCount++;
+                                        }
+                                    }
+                                }
+                                else if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                    if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                        var newText = this.text.substring(segIndex, insert.start + insert.word.length);
+                                        var newStartSegments = this.splitSegments(insertStyle, word.startPos, segIndex, newText);
+                                        var startWordAdvance = 0;
+                                        for (var k = 0; k < segIndex; k++) {
+                                            startWordAdvance += newStartSegments[k].segmentAdvance;
+                                        }
+                                        var newStartWord = {
+                                            startPos: word.startPos, wordAdvance: startWordAdvance,
+                                            wordLength: insert.start - word.startPos + insert.word.length,
+                                            segments: word.segments.slice(0, segIndex).concat(newStartSegments)
+                                        };
+                                        newWordData.push(newStartWord);
+                                        wordCount++;
+                                    }
+                                    else {
+                                        var newSegments = this.splitSegments(insertStyle, word.startPos, insert.start - word.startPos, insert.word);
+                                        var splitText = this.text.substring(seg.startPos, insert.start);
+                                        var splitSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, splitText);
+                                        var startWordAdvance = 0;
+                                        var newLength = 0;
+                                        for (var k = 0; k < segIndex; k++) {
+                                            startWordAdvance += word.segments[k].segmentAdvance;
+                                            newLength += word.segments[k].segmentLength;
+                                        }
+                                        for (var k = 0; k < newSegments.length; k++) {
+                                            startWordAdvance += newSegments[k].segmentAdvance;
+                                            newLength += newSegments[k].segmentLength;
+                                        }
+                                        for (var k = 0; k < splitSegments.length; k++) {
+                                            startWordAdvance += splitSegments[k].segmentAdvance;
+                                            newLength += splitSegments[k].segmentLength;
+                                        }
+                                        var startSegments = splitSegments.concat(newSegments);
+                                        if (segIndex > 0) {
+                                            startSegments.push.apply(startSegments, word.segments.slice(0, segIndex));
+                                        }
+                                        var newstartWord = {
+                                            startPos: insert.start, wordAdvance: startWordAdvance,
+                                            wordLength: newLength, segments: startSegments
+                                        };
+                                        newWordData.push(newstartWord);
+                                        wordCount++;
+                                    }
+                                    var spacesStart_2 = insertData[0].start + insertData[0].word.length;
+                                    var spacesEnd_2 = insert.start + insert.word.length;
+                                    var startSpaces_4 = editData.insertion.text.substring(spacesStart_2, spacesEnd_2);
+                                    var newLineIndex_4 = startSpaces_4.indexOf('\n');
+                                    var runningPos_4 = insertData[0].start + insertData[0].word.length;
+                                    while (newLineIndex_4 >= 0) {
+                                        runningPos_4 += newLineIndex_4;
+                                        startSpaces_4 = startSpaces_4.substring(newLineIndex_4, startSpaces_4.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos_4);
+                                        newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                        currentLine++;
+                                        totalCount += wordCount;
+                                        wordCount = 0;
+                                        newLineIndex_4 = startSpaces_4.indexOf('\n');
+                                    }
+                                    var newSegEnd = seg.startPos + seg.segmentLength + editData.insertion.text.length;
+                                    var segEndText = this.text.substring(insert.start + editData.insertion.text.length, newSegEnd);
+                                    var newEndSegments = this.splitSegments(seg.style, word.startPos, 0, segEndText);
+                                    var endWordAdvance = 0;
+                                    for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                        endWordAdvance += word.segments[k].segmentAdvance;
+                                        word.segments[k].startPos -= insert.start - (seg.startPos + word.startPos);
+                                    }
+                                    for (var k = 0; k < newEndSegments.length; k++) {
+                                        endWordAdvance += newEndSegments[k].segmentAdvance;
+                                    }
+                                    var endSegments = newEndSegments;
+                                    if (segIndex + 1 < word.segments.length) {
+                                        endSegments.push.apply(endSegments, word.segments.slice(segIndex + 1, word.segments.length));
+                                    }
+                                    var newEndWord = {
+                                        startPos: insert.start + editData.insertion.text.length, wordAdvance: endWordAdvance,
+                                        wordLength: newSegEnd - (insert.start + editData.insertion.text.length), segments: endSegments
+                                    };
+                                    newWordData.push(newEndWord);
+                                    wordCount++;
+                                }
+                                else {
+                                    if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                        var includeNextSeg = false;
+                                        var splitLength = seg.segmentLength + insert.word.length;
+                                        if (segIndex < word.segments.length) {
+                                            var testSty = word.segments[segIndex + 1].style;
+                                            if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                                includeNextSeg = true;
+                                                splitLength += word.segments[segIndex + 1].segmentLength;
+                                            }
+                                        }
+                                        var newText = this.text.substring(seg.startPos, seg.startPos + splitLength);
+                                        var newSegments = this.splitSegments(insertStyle, word.startPos, seg.startPos, newText);
+                                        word.wordAdvance -= seg.segmentAdvance;
+                                        word.segments.splice(segIndex, includeNextSeg ? 2 : 1);
+                                        var wordAdvance = 0;
+                                        for (var k = 0; k < newSegments.length; k++) {
+                                            wordAdvance += newSegments[k].segmentAdvance;
+                                        }
+                                        for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                            word.segments[k].startPos += insert.word.length;
+                                        }
+                                        word.wordAdvance += wordAdvance;
+                                        (_e = word.segments).splice.apply(_e, [segIndex, 0].concat(newSegments));
+                                        newWordData.push(word);
+                                        wordCount++;
+                                    }
+                                    else {
+                                        var startText = this.text.substring(seg.startPos, insert.start);
+                                        var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, startText);
+                                        var newSegments = this.splitSegments(insertStyle, word.startPos, insert.start - word.startPos, insert.word);
+                                        var includeNextSeg = false;
+                                        var newEndPos = 2 * seg.startPos + seg.segmentAdvance - insert.start;
+                                        if (segIndex < word.segments.length) {
+                                            var testSty = word.segments[segIndex + 1].style;
+                                            if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                                includeNextSeg = true;
+                                                newEndPos += word.segments[segIndex + 1].segmentLength;
+                                            }
+                                        }
+                                        var endLocalStart = insert.start - word.startPos + insert.word.length;
+                                        var endText = this.text.substring(insert.start + insert.word.length, word.startPos + newEndPos);
+                                        var newEndSegments = this.splitSegments(seg.style, word.startPos, endLocalStart, endText);
+                                        word.wordAdvance -= seg.segmentAdvance;
+                                        word.wordLength += insert.word.length;
+                                        for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                            word.segments[k].startPos += insert.word.length;
+                                        }
+                                        for (var k = 0; k < newStartSegments.length; k++) {
+                                            word.wordAdvance += newStartSegments[k].segmentAdvance;
+                                        }
+                                        for (var k = 0; k < newSegments.length; k++) {
+                                            word.wordAdvance += newSegments[k].segmentAdvance;
+                                        }
+                                        for (var k = 0; k < newEndSegments.length; k++) {
+                                            word.wordAdvance += newEndSegments[k].segmentAdvance;
+                                        }
+                                        var wordSegments = [];
+                                        if (segIndex > 0) {
+                                            wordSegments.push.apply(wordSegments, word.segments.slice(0, segIndex));
+                                        }
+                                        wordSegments.push.apply(wordSegments, newStartSegments);
+                                        wordSegments.push.apply(wordSegments, newSegments);
+                                        wordSegments.push.apply(wordSegments, newEndSegments);
+                                        var tmpIndex = segIndex + (includeNextSeg ? 1 : 0);
+                                        if (tmpIndex + 1 < word.segments.length) {
+                                            wordSegments.push.apply(wordSegments, word.segments.slice(tmpIndex + 1, word.segments.length));
+                                        }
+                                        word.segments = wordSegments;
+                                        newWordData.push(word);
+                                        wordCount++;
+                                    }
+                                }
+                            }
+                            else {
+                                if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                    var startSpaces_5 = editData.insertion.text.substring(0, insert.start);
+                                    var newLineIndex_5 = startSpaces_5.indexOf('\n');
+                                    var runningPos_5 = insertData[0].start;
+                                    while (newLineIndex_5 >= 0) {
+                                        runningPos_5 += newLineIndex_5;
+                                        startSpaces_5 = startSpaces_5.substring(newLineIndex_5, startSpaces_5.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos_5);
+                                        newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                        currentLine++;
+                                        totalCount += wordCount;
+                                        wordCount = 0;
+                                        newLineIndex_5 = startSpaces_5.indexOf('\n');
+                                    }
+                                    var segStartText = this.text.substring(seg.startPos, insert.start);
+                                    var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, segStartText);
+                                    var startWordAdvance = 0;
+                                    for (var k = 0; k < segIndex; k++) {
+                                        startWordAdvance += word.segments[k].segmentAdvance;
+                                    }
+                                    for (var k = 0; k < newStartSegments.length; k++) {
+                                        startWordAdvance += newStartSegments[k].segmentAdvance;
+                                    }
+                                    var newStartWord = {
+                                        startPos: word.startPos, wordAdvance: startWordAdvance,
+                                        wordLength: insert.start - word.startPos, segments: word.segments.slice(0, segIndex).concat(newStartSegments)
+                                    };
+                                    newWordData.push(newStartWord);
+                                    wordCount++;
+                                    var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                    var insertWordAdvance = 0;
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        insertWordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    var insertWord = {
+                                        startPos: insert.start, wordAdvance: insertWordAdvance,
+                                        wordLength: insert.word.length, segments: newSegments
+                                    };
+                                    newWordData.push(insertWord);
+                                    wordCount++;
+                                }
+                                else {
+                                    var newSegments = [];
+                                    var insertWordAdvance = 0;
+                                    if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                        var newWord = this.text.substring(seg.startPos, insert.start + insert.word.length);
+                                        if (segIndex > 0) {
+                                            newSegments.push.apply(newSegments, word.segments.slice(0, segIndex));
+                                        }
+                                        newSegments.push.apply(newSegments, this.splitSegments(insertStyle, word.startPos, seg.startPos, newWord));
+                                    }
+                                    else {
+                                        var cutText = this.text.substring(seg.startPos, insert.start);
+                                        var cutSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, cutText);
+                                        if (segIndex > 0) {
+                                            newSegments.push.apply(newSegments, word.segments.slice(0, segIndex));
+                                        }
+                                        if (cutSegments.length > 0) {
+                                            newSegments.push.apply(newSegments, cutSegments);
+                                        }
+                                        newSegments.push.apply(newSegments, this.splitSegments(insertStyle, word.startPos, insert.start - word.startPos, insert.word));
+                                    }
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        insertWordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    var insertWord = {
+                                        startPos: word.startPos, wordAdvance: insertWordAdvance,
+                                        wordLength: insert.start + insert.word.length - word.startPos, segments: newSegments
+                                    };
+                                    newWordData.push(insertWord);
+                                    wordCount++;
+                                }
+                            }
+                        }
+                        for (var j = 1; j < insertData.length - 1; j++) {
+                            var spacesStart_3 = insertData[j - 1].start + insertData[j - 1].word.length;
+                            var spacesEnd_3 = insertData[j].start;
+                            var startSpaces_6 = editData.insertion.text.substring(spacesStart_3, spacesEnd_3);
+                            var newLineIndex_6 = startSpaces_6.indexOf('\n');
+                            var runningPos_6 = insertData[j - 1].start + insertData[j - 1].word.length;
+                            while (newLineIndex_6 >= 0) {
+                                runningPos_6 += newLineIndex_6;
+                                startSpaces_6 = startSpaces_6.substring(newLineIndex_6, startSpaces_6.length);
+                                newLinePositions.splice(currentLine, 0, runningPos_6);
+                                newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                currentLine++;
+                                totalCount += wordCount;
+                                wordCount = 0;
+                                newLineIndex_6 = startSpaces_6.indexOf('\n');
+                            }
+                            console.log('Went through loop.');
+                            var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insertData[j].word);
+                            var wordAdvance = 0;
+                            for (var k = 0; k < newSegments.length; k++) {
+                                wordAdvance += newSegments[k].segmentAdvance;
+                            }
+                            var newWord = {
+                                startPos: insertData[j].start + editData.insertion.start, wordAdvance: wordAdvance,
+                                wordLength: insertData[j].word.length, segments: newSegments
+                            };
+                            newWordData.push(newWord);
+                            wordCount++;
+                        }
+                        var spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
+                        var spacesEnd = insertData[insertData.length - 1].start;
+                        var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                        var newLineIndex = startSpaces.indexOf('\n');
+                        var runningPos = spacesStart;
+                        while (newLineIndex >= 0) {
+                            runningPos += newLineIndex;
+                            startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                            newLinePositions.splice(currentLine, 0, runningPos);
+                            newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                            currentLine++;
+                            totalCount += wordCount;
+                            wordCount = 0;
+                            newLineIndex = startSpaces.indexOf('\n');
+                        }
+                        insert = insertData[insertData.length - 1];
+                        if (editData.insertion.start == word.startPos) {
+                            console.log('Did the start insert thing.');
+                            if (editData.insertion.text.charAt(editData.insertion.text.length - 1).match(/\s/)) {
+                                var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                var wordAdvance = 0;
+                                for (var k = 0; k < newSegments.length; k++) {
+                                    wordAdvance += newSegments[k].segmentAdvance;
+                                }
+                                var newWord = {
+                                    startPos: insert.start + editData.insertion.start, wordAdvance: wordAdvance,
+                                    wordLength: insert.word.length, segments: newSegments
+                                };
+                                newWordData.push(newWord);
+                                wordCount++;
+                                var spacesStart_4 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
+                                var spacesEnd_4 = editData.insertion.start + editData.insertion.text.length;
+                                var startSpaces_7 = editData.insertion.text.substring(spacesStart_4, spacesEnd_4);
+                                var newLineIndex_7 = startSpaces_7.indexOf('\n');
+                                var runningPos_7 = spacesStart_4;
+                                while (newLineIndex_7 >= 0) {
+                                    runningPos_7 += newLineIndex_7;
+                                    startSpaces_7 = startSpaces_7.substring(newLineIndex_7, startSpaces_7.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos_7);
+                                    newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                    currentLine++;
+                                    totalCount += wordCount;
+                                    wordCount = 0;
+                                    newLineIndex_7 = startSpaces_7.indexOf('\n');
+                                }
+                                word.startPos += editData.insertion.text.length;
+                                newWordData.push(word);
+                                wordCount++;
+                            }
+                            else {
+                                var seg = word.segments[0];
+                                var sty1 = word.segments[0].style;
+                                var sty2 = insertStyle;
+                                if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                    var includeNextSeg = false;
+                                    var newLength = seg.segmentLength + insert.word.length;
+                                    if (word.segments.length > 1) {
+                                        var testSty = word.segments[1].style;
+                                        if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                            includeNextSeg = true;
+                                            newLength += word.segments[1].segmentLength;
+                                        }
+                                    }
+                                    var newText = this.text.substring(word.startPos, word.startPos + newLength);
+                                    var newSegments = this.splitSegments(insertStyle, word.startPos, 0, newText);
+                                    word.wordAdvance -= seg.segmentAdvance;
+                                    word.segments.splice(0, includeNextSeg ? 2 : 1);
+                                    var wordAdvance = 0;
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        wordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    for (var k = 0; k < word.segments.length; k++) {
+                                        word.segments[k].startPos += insert.word.length;
+                                    }
+                                    word.wordAdvance += wordAdvance;
+                                    word.segments = newSegments.concat(word.segments);
+                                    newWordData.push(word);
+                                    wordCount++;
+                                }
+                                else {
+                                    var includeNextSeg = false;
+                                    var newLength = insert.word.length;
+                                    if (word.segments.length > 1) {
+                                        var testSty = word.segments[1].style;
+                                        if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                            includeNextSeg = true;
+                                            newLength += word.segments[1].segmentLength;
+                                        }
+                                    }
+                                    var newText = this.text.substring(insert.start, insert.start + newLength);
+                                    var newSegments = this.splitSegments(insertStyle, word.startPos, 0, newText);
+                                    var wordAdvance = 0;
+                                    for (var k = 0; k < newSegments.length; k++) {
+                                        wordAdvance += newSegments[k].segmentAdvance;
+                                    }
+                                    for (var k = 0; k < word.segments.length; k++) {
+                                        word.segments[k].startPos += insert.word.length;
+                                    }
+                                    word.wordAdvance += wordAdvance;
+                                    word.segments = newSegments.concat(word.segments.slice(includeNextSeg ? 1 : 0));
+                                    newWordData.push(word);
+                                    wordCount++;
+                                }
+                            }
+                        }
+                        else if (editData.insertion.start != word.startPos + word.wordLength && insertData.length > 1) {
+                            console.log('Did the end multi insert data.');
+                            var seg = null;
+                            var segIndex = -1;
+                            for (var k = 0; k < word.segments.length; k++) {
+                                var segment = word.segments[k];
+                                if (editData.insertion.start == segment.startPos + segment.segmentLength) {
+                                    seg = segment;
+                                    segIndex = k;
+                                    if (segment.style.style == insertStyle.style && segment.style.weight == insertStyle.weight) {
+                                        break;
+                                    }
+                                }
+                                else if (editData.insertion.start >= segment.startPos && editData.insertion.start < segment.startPos + segment.segmentLength) {
+                                    seg = segment;
+                                    segIndex = k;
+                                    break;
+                                }
+                            }
+                            var sty1 = seg.style;
+                            var sty2 = insertStyle;
+                            if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                var insertWordAdvance = 0;
+                                for (var k = 0; k < newSegments.length; k++) {
+                                    insertWordAdvance += newSegments[k].segmentAdvance;
+                                }
+                                var insertWord = {
+                                    startPos: insert.start, wordAdvance: insertWordAdvance,
+                                    wordLength: insert.word.length, segments: newSegments
+                                };
+                                newWordData.push(insertWord);
+                                wordCount++;
+                                var spacesStart_5 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
+                                var spacesEnd_5 = editData.insertion.start + editData.insertion.text.length;
+                                var startSpaces_8 = editData.insertion.text.substring(spacesStart_5, spacesEnd_5);
+                                var newLineIndex_8 = startSpaces_8.indexOf('\n');
+                                var runningPos_8 = spacesStart_5;
+                                while (newLineIndex_8 >= 0) {
+                                    runningPos_8 += newLineIndex_8;
+                                    startSpaces_8 = startSpaces_8.substring(newLineIndex_8, startSpaces_8.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos_8);
+                                    newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                    currentLine++;
+                                    totalCount += wordCount;
+                                    wordCount = 0;
+                                    newLineIndex_8 = startSpaces_8.indexOf('\n');
+                                }
+                                var cutStart = editData.insertion.start + editData.insertion.text.length;
+                                var cutLength = seg.startPos + seg.segmentLength + word.startPos - editData.insertion.start;
+                                var cutText = this.text.substring(cutStart, cutStart + cutLength);
+                                var cutSegments = this.splitSegments(seg.style, word.startPos, 0, cutText);
+                                var cutWordAdvance = 0;
+                                for (var k = 0; k < cutSegments.length; k++) {
+                                    cutWordAdvance += cutSegments[k].segmentAdvance;
+                                }
+                                for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                    cutWordAdvance += word.segments[k].segmentAdvance;
+                                    word.segments[k].startPos -= editData.insertion.start - word.startPos;
+                                }
+                                if (segIndex < word.segments.length) {
+                                    cutSegments.push.apply(cutSegments, word.segments.slice(segIndex + 1, word.segments.length));
+                                }
+                                var cutWord = {
+                                    startPos: cutStart, wordAdvance: cutWordAdvance,
+                                    wordLength: word.wordLength - (editData.insertion.start - word.startPos), segments: cutSegments
+                                };
+                                newWordData.push(cutWord);
+                                wordCount++;
+                            }
+                            else {
+                                var includeNextSeg = false;
+                                var cutLength = seg.startPos + seg.segmentLength + word.startPos - editData.insertion.start;
+                                var newSegments = [];
+                                var insertWordAdvance = 0;
+                                if (segIndex < word.segments.length) {
+                                    var testSty = word.segments[segIndex + 1].style;
+                                    if (testSty.style == sty1.style && testSty.weight == sty1.weight) {
+                                        includeNextSeg = true;
+                                        cutLength += word.segments[segIndex + 1].segmentLength;
+                                    }
+                                }
+                                if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                    var newWord = this.text.substring(insert.start, insert.start + insert.word.length + cutLength);
+                                    newSegments = this.splitSegments(insertStyle, word.startPos, 0, newWord);
+                                    for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                        word.segments[k].startPos -= editData.insertion.start - word.startPos;
+                                    }
+                                    var tmpIndex = segIndex + (includeNextSeg ? 1 : 0);
+                                    if (tmpIndex < word.segments.length) {
+                                        newSegments.push.apply(newSegments, word.segments.slice(tmpIndex + 1, word.segments.length));
+                                    }
+                                }
+                                else {
+                                    var cutText = this.text.substring(insert.start + insert.word.length, insert.start + insert.word.length + cutLength);
+                                    var cutSegments = this.splitSegments(seg.style, word.startPos, insert.word.length, cutText);
+                                    newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
+                                    if (cutSegments.length > 0) {
+                                        newSegments.push.apply(newSegments, cutSegments);
+                                    }
+                                    for (var k = segIndex + 1; k < word.segments.length; k++) {
+                                        word.segments[k].startPos -= editData.insertion.start - word.startPos;
+                                    }
+                                    var tmpIndex = segIndex + (includeNextSeg ? 1 : 0);
+                                    if (tmpIndex < word.segments.length) {
+                                        newSegments.push.apply(newSegments, word.segments.slice(tmpIndex + 1, word.segments.length));
+                                    }
+                                }
+                                for (var k = 0; k < newSegments.length; k++) {
+                                    insertWordAdvance += newSegments[k].segmentAdvance;
+                                }
+                                var insertWord = {
+                                    startPos: word.startPos, wordAdvance: insertWordAdvance,
+                                    wordLength: insert.word.length + word.wordLength - (insert.start - word.startPos), segments: newSegments
+                                };
+                                newWordData.push(insertWord);
+                                wordCount++;
+                            }
+                        }
+                        inserted = true;
+                    }
+                    else if (!inserted && editData.insertion.start < word.startPos) {
+                        console.log('Did the non-insert add.');
+                        inserted = true;
+                        if (editData.insertion.text.charAt(0).match(/\s/)) {
+                            var spacesStart = 0;
+                            var spacesEnd = insertData[0].start;
+                            var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                            var newLineIndex = startSpaces.indexOf('\n');
+                            var runningPos = spacesStart;
+                            while (newLineIndex >= 0) {
+                                runningPos += newLineIndex;
+                                startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                newLinePositions.splice(currentLine, 0, runningPos);
+                                newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                currentLine++;
+                                totalCount += wordCount;
+                                wordCount = 0;
+                                newLineIndex = startSpaces.indexOf('\n');
+                            }
+                        }
+                        for (var j = 0; j < insertData.length; j++) {
+                            var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insertData[j].word);
+                            var wordAdvance = 0;
+                            for (var k = 0; k < newSegments.length; k++) {
+                                wordAdvance += newSegments[k].segmentAdvance;
+                            }
+                            var newWord = {
+                                startPos: insertData[j].start + editData.insertion.start, wordAdvance: wordAdvance,
+                                wordLength: insertData[j].word.length, segments: newSegments
+                            };
+                            newWordData.push(newWord);
+                            wordCount++;
+                            if (j < insertData.length - 1) {
+                                var spacesStart = insertData[j].start + insertData[j].word.length;
+                                var spacesEnd = editData.insertion.start + editData.insertion.text.length;
+                                var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                                var newLineIndex = startSpaces.indexOf('\n');
+                                var runningPos = spacesStart;
+                                while (newLineIndex >= 0) {
+                                    runningPos += newLineIndex;
+                                    startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos);
+                                    newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                    currentLine++;
+                                    totalCount += wordCount;
+                                    wordCount = 0;
+                                    newLineIndex = startSpaces.indexOf('\n');
+                                }
+                            }
+                        }
+                        if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                            var spacesStart = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
+                            var spacesEnd = editData.insertion.start + editData.insertion.text.length;
+                            var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                            var newLineIndex = startSpaces.indexOf('\n');
+                            var runningPos = spacesStart;
+                            while (newLineIndex >= 0) {
+                                runningPos += newLineIndex;
+                                startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                newLinePositions.splice(currentLine, 0, runningPos);
+                                newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                currentLine++;
+                                totalCount += wordCount;
+                                wordCount = 0;
+                                newLineIndex = startSpaces.indexOf('\n');
+                            }
+                        }
+                        word.startPos += editData.insertion.text.length;
+                        newWordData.push(word);
+                        wordCount++;
+                    }
+                    else {
+                        console.log('Did the final else.');
+                        if (word.startPos >= editData.insertion.start) {
+                            word.startPos += editData.insertion.text.length;
+                        }
+                        console.log('New word data was:');
+                        console.log(newWordData);
+                        newWordData.push(word);
+                        wordCount++;
+                        console.log('New word data is now:');
+                        console.log(newWordData);
+                    }
+                }
+                if (editData.styleChanges.length > 0 && editData.insertion == null) {
+                    var changedSegments = [];
+                    var working = [];
+                    var endNextAdded = false;
+                    var changesSegsAdvance = 0;
+                    var newSegments = [];
+                    for (var j = 0; j < editData.styleChanges.length; j++) {
+                        var change = editData.styleChanges[j];
+                        if (change.start < word.startPos + word.wordLength && change.end > word.startPos) {
+                            for (var k = 0; k < word.segments.length; k++) {
+                                var seg = word.segments[k];
+                                if (change.start < seg.startPos + seg.segmentLength && change.end > seg.startPos) {
+                                    if (working.length == 0 || working[working.length - 1] == k - 1) {
+                                        if (endNextAdded) {
+                                            endNextAdded = false;
+                                        }
+                                        if (working.length == 0 && k > 0) {
+                                            working.push(k - 1);
+                                            changesSegsAdvance += word.segments[k - 1].segmentAdvance;
+                                        }
+                                        working.push(k);
+                                    }
+                                    else if (!endNextAdded) {
+                                        endNextAdded = true;
+                                        working.push(k);
+                                        changesSegsAdvance += seg.segmentAdvance;
+                                    }
+                                    else {
+                                        endNextAdded = false;
+                                        changedSegments.push(working);
+                                        working = [];
+                                    }
+                                }
+                                else if (change.start >= seg.startPos + seg.segmentLength) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    var prevAdded = 0;
+                    var newAdvance = 0;
+                    for (var j = 0; j < changedSegments.length; j++) {
+                        if (prevAdded < changedSegments[j][0]) {
+                            newSegments.push.apply(newSegments, word.segments.slice(prevAdded, changedSegments[j][0]));
+                        }
+                        var localStart = word.segments[changedSegments[j][0]].startPos;
+                        var start = word.startPos + localStart;
+                        var endSeg = word.segments[changedSegments[j][changedSegments[j].length - 1]];
+                        var textLength = endSeg.startPos + endSeg.segmentLength - localStart;
+                        var splitText = this.text.substring(start, start + textLength);
+                        var newSplit = this.splitWithStyles(word.startPos, localStart, splitText);
+                        for (var k = 0; k < newSplit.length; k++) {
+                            newAdvance += newSplit[k].segmentAdvance;
+                        }
+                        newSegments.push.apply(newSegments, newSplit);
+                    }
+                    word.segments = newSegments;
+                    word.wordAdvance += newAdvance - changesSegsAdvance;
+                    newWordData.push(word);
+                    wordCount++;
+                    console.log('Did the style change insert.');
+                }
+            }
+            if (editData.insertion != null && !inserted) {
+                for (var j = 0; j < insertData.length; j++) {
+                    var newSegments = this.splitSegments(insertStyle, insertData[j].start, 0, insertData[j].word);
+                    var wordAdvance = 0;
+                    for (var k = 0; k < newSegments.length; k++) {
+                        wordAdvance += newSegments[k].segmentAdvance;
+                    }
+                    var newWord = {
+                        startPos: insertData[j].start + editData.insertion.start, wordAdvance: wordAdvance,
+                        wordLength: insertData[j].word.length, segments: newSegments
+                    };
+                    newWordData.push(newWord);
+                    wordCount++;
+                }
+            }
+            this.lineData = newLineData;
+            this.linePositions = newLinePositions;
+            this.wordData = newWordData;
+            console.log('New word data is:');
+            console.log(newWordData);
+            var _a, _b, _c, _d, _e;
+        };
         Element.prototype.calculateTextLines = function () {
-            var i;
             var childText = [];
             var currPos = 0;
-            var prevPos = 0;
+            var prevGlyphPos = 0;
             var txtStart = 0;
-            var dy = this.size;
-            var ddy = 1.5 * this.size;
-            var nodeCounter;
+            var dy = 2 * this.size;
             var computedTextLength;
             var currY = this.y;
             var lineCount = 0;
             var isSpace = false;
             var currStyle = 0;
-            for (var k = 0; k < this.lines.length; k++) {
-                nodeCounter = 0;
+            var glyphCount = 0;
+            if (this.text.length == 0) {
+                this.textNodes = [];
+                this.glyphCount = 0;
+                return;
+            }
+            for (var k = 0; k < this.lineData.length; k++) {
                 computedTextLength = 0;
-                var nLineTrig = false;
-                var startSpace = this.lines[k].startSpace;
-                var wordsT = this.lines[k].words;
-                var spacesT = this.lines[k].spaces;
-                var wordC = 0;
-                var spaceC = 0;
-                var line = '';
-                var fDash = void 0;
-                console.log('Calculating line.');
-                console.log(wordsT);
-                console.log(this.styleSet);
-                while (wordC < wordsT.length || spaceC < spacesT.length) {
-                    var lineComplete = false;
-                    var word = void 0;
-                    var tmpLineGlyphs = [];
-                    currY += dy;
-                    var currLength = 0;
-                    var tspanEl = {
-                        x: this.x, y: currY, dx: 0, dy: dy, start: prevPos, end: prevPos, spaceRemoved: true,
-                        justified: this.isJustified, lineNum: lineCount, glyphs: []
-                    };
-                    var progPos = true;
-                    nLineTrig = false;
-                    if (startSpace) {
-                        if (spaceC >= spacesT.length) {
-                            console.error('ERROR: Space array out of bounds');
-                            return [];
+                var wordNum = 0;
+                var wordIdx = this.lineData[k].startWord;
+                var wordCount = this.lineData[k].count;
+                var startPos = k > 0 ? this.linePositions[k - 1] + 1 : 0;
+                var endPos = k < this.lineData.length - 1 ? this.linePositions[k] : this.text.length;
+                var insertSpace = false;
+                var glyphs = [];
+                var currentAdvance = 0;
+                var lineComplete = false;
+                var slicePos = 0;
+                var sliceSeg = 0;
+                var wasSpaceLast = false;
+                var spaceAdvance = 0;
+                var sliceAdvance = 0;
+                var tspanEl = void 0;
+                var prevSlicePos = 0;
+                var numSpaces = 0;
+                var lineGlyphCount = 0;
+                while (wordNum < wordCount) {
+                    tspanEl =
+                        {
+                            x: this.x, y: currY, dx: 0, dy: dy, start: prevGlyphPos, end: 0, endStringPos: 0,
+                            spaceRemoved: true, justified: this.isJustified, lineNum: lineCount, sections: []
+                        };
+                    numSpaces = 0;
+                    if (wordCount > 0) {
+                        if (startPos < this.wordData[wordIdx].startPos) {
+                            insertSpace = true;
                         }
-                        word = spacesT[spaceC];
-                        isSpace = true;
-                        spaceC++;
+                    }
+                    else if (startPos != endPos) {
+                        insertSpace = true;
+                    }
+                    prevSlicePos = slicePos;
+                    slicePos = 0;
+                    if (insertSpace) {
+                        if (prevSlicePos > 0) {
+                            if (spaceAdvance - sliceAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                for (var j = prevSlicePos; j < glyphs.length; j++) {
+                                    if (tmpAdvance + glyphs[j].xAdvance > this.width) {
+                                        slicePos = j + 1;
+                                        if (j + 1 >= glyphs.length) {
+                                            wasSpaceLast = true;
+                                        }
+                                    }
+                                    tmpAdvance += glyphs[j].xAdvance;
+                                }
+                                numSpaces += slicePos - prevSlicePos - 1;
+                                var newSec = {
+                                    startPos: currentAdvance - sliceAdvance, glyphs: glyphs.slice(prevSlicePos, slicePos - 1),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                if (wasSpaceLast) {
+                                    slicePos = 0;
+                                    insertSpace = !insertSpace;
+                                    wordIdx++;
+                                    wordNum++;
+                                }
+                                sliceAdvance += tmpAdvance;
+                                lineGlyphCount += (slicePos - prevSlicePos - 1);
+                                lineComplete = true;
+                                glyphCount += lineGlyphCount + 1;
+                            }
+                            else {
+                                numSpaces += glyphs.length - prevSlicePos;
+                                var newSec = {
+                                    startPos: currentAdvance - sliceAdvance, glyphs: glyphs.slice(prevSlicePos, glyphs.length),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                currentAdvance += (spaceAdvance - sliceAdvance);
+                                lineGlyphCount += (glyphs.length - prevSlicePos);
+                                sliceAdvance = 0;
+                                insertSpace = !insertSpace;
+                                wordIdx++;
+                                wordNum++;
+                            }
+                        }
+                        else {
+                            var start = this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength;
+                            var end = this.wordData[wordIdx + 1].startPos;
+                            var text = this.text.substring(start, end);
+                            spaceAdvance = this.processSpaceGlyphs(glyphs, text, start);
+                            if (spaceAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                for (var j = 0; j < glyphs.length; j++) {
+                                    if (tmpAdvance + glyphs[j].xAdvance > this.width) {
+                                        slicePos = j + 1;
+                                        if (j + 1 >= glyphs.length) {
+                                            wasSpaceLast = true;
+                                        }
+                                    }
+                                    tmpAdvance += glyphs[j].xAdvance;
+                                }
+                                numSpaces += slicePos - 1;
+                                var newSec = {
+                                    startPos: currentAdvance, glyphs: glyphs.slice(0, slicePos - 1),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                lineGlyphCount += slicePos - 1;
+                                if (wasSpaceLast) {
+                                    slicePos = 0;
+                                    insertSpace = !insertSpace;
+                                    wordIdx++;
+                                    wordNum++;
+                                }
+                                sliceAdvance = tmpAdvance;
+                                lineComplete = true;
+                                glyphCount += lineGlyphCount;
+                            }
+                            else {
+                                numSpaces += glyphs.length;
+                                var newSec = {
+                                    startPos: currentAdvance, glyphs: glyphs,
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                currentAdvance += spaceAdvance;
+                                lineGlyphCount += glyphs.length;
+                                insertSpace = !insertSpace;
+                            }
+                        }
                     }
                     else {
-                        if (wordC >= wordsT.length) {
-                            console.error('ERROR: Word array out of bounds');
-                            return [];
-                        }
-                        word = wordsT[wordC];
-                        isSpace = false;
-                        wordC++;
-                    }
-                    var glyphRun = { glyphs: [], positions: [] };
-                    var wordPos = 0;
-                    var tempGlyphs = void 0;
-                    while (currStyle < this.styleSet.length && currPos + word.length > this.styleSet[currStyle].end) {
-                        var fontSet = 'NORMAL';
-                        if (this.styleSet[currStyle].weight == 'bold') {
-                            if (this.styleSet[currStyle].style == 'italic') {
-                                fontSet = 'BOLDITALIC';
-                            }
-                            else {
-                                fontSet = 'BOLD';
-                            }
-                        }
-                        else {
-                            if (this.styleSet[currStyle].style == 'italic') {
-                                fontSet = 'ITALIC';
-                            }
-                        }
-                        console.log(word.substring(wordPos, this.styleSet[currStyle].end - currPos - wordPos));
-                        tempGlyphs = fontHelper[fontSet].layout(word.substring(wordPos, this.styleSet[currStyle].end - currPos - wordPos));
-                        for (var i_1 = 0; i_1 < tempGlyphs.length; i_1++) {
-                            tempGlyphs.glyphs[i_1].weight = this.styleSet[currStyle].weight;
-                            tempGlyphs.glyphs[i_1].colour = this.styleSet[currStyle].colour;
-                            tempGlyphs.glyphs[i_1].style = this.styleSet[currStyle].style;
-                            tempGlyphs.glyphs[i_1].decoration = this.styleSet[currStyle].decoration;
-                        }
-                        (_a = glyphRun.glyphs).push.apply(_a, tempGlyphs.glyphs);
-                        (_b = glyphRun.positions).push.apply(_b, tempGlyphs.positions);
-                        wordPos = this.styleSet[currStyle].end - currPos;
-                        currStyle++;
-                    }
-                    if (currStyle < this.styleSet.length) {
-                        var fontSet = 'NORMAL';
-                        if (this.styleSet[currStyle].weight == 'bold') {
-                            if (this.styleSet[currStyle].style == 'italic') {
-                                fontSet = 'BOLDITALIC';
-                            }
-                            else {
-                                fontSet = 'BOLD';
-                            }
-                        }
-                        else {
-                            if (this.styleSet[currStyle].style == 'italic') {
-                                fontSet = 'ITALIC';
-                            }
-                        }
-                        console.log(word.substring(wordPos, this.styleSet[currStyle].end - currPos - wordPos));
-                        tempGlyphs = fontHelper[fontSet].layout(word.substring(wordPos, this.styleSet[currStyle].end - currPos - wordPos));
-                        for (var i_2 = 0; i_2 < tempGlyphs.length; i_2++) {
-                            tempGlyphs.glyphs[i_2].weight = this.styleSet[currStyle].weight;
-                            tempGlyphs.glyphs[i_2].colour = this.styleSet[currStyle].colour;
-                            tempGlyphs.glyphs[i_2].style = this.styleSet[currStyle].style;
-                            tempGlyphs.glyphs[i_2].decoration = this.styleSet[currStyle].decoration;
-                        }
-                        (_c = glyphRun.glyphs).push.apply(_c, tempGlyphs.glyphs);
-                        (_d = glyphRun.positions).push.apply(_d, tempGlyphs.positions);
-                    }
-                    var wordGlyphs = [];
-                    var fDash_1 = -1;
-                    console.log(tempGlyphs);
-                    console.log(glyphRun.positions);
-                    console.log(this.width);
-                    console.log(computedTextLength);
-                    for (var j = 0; j < glyphRun.positions.length; j++) {
-                        var charWidth = (glyphRun.positions[j].xAdvance) * this.size / 1000;
-                        console.log(computedTextLength);
-                        console.log(charWidth);
-                        if (computedTextLength + charWidth < this.width) {
-                            if (glyphRun.glyphs[j].codePoints.length == 1 && isHyphen(glyphRun.glyphs[j].codePoints[0])) {
-                                fDash_1 = j;
-                            }
-                            var wordGlyph = { path: glyphRun.glyphs[j].path.toSVG(), stringPositions: glyphRun.glyphs[j].stringPositions,
-                                xAdvance: glyphRun.positions[j].xAdvance, yAdvance: glyphRun.positions[j].yAdvance, xOffset: glyphRun.positions[j].xOffset,
-                                yOffset: glyphRun.positions[j].yOffset, isSpace: isSpace, weight: glyphRun.glyphs[j].weight, colour: glyphRun.glyphs[j].colour,
-                                style: glyphRun.glyphs[j].style, decoration: glyphRun.glyphs[j].decoration };
-                            wordGlyphs.push(wordGlyph);
-                            computedTextLength += charWidth;
-                        }
-                        else {
-                            lineComplete = true;
-                            if (fDash_1 != -1) {
-                                var newStr = word.substring(fDash_1 + 1, word.length);
-                                wordsT.splice(wordC, 0, newStr);
-                            }
-                            else {
-                                if (j == 0) {
-                                    console.error('TEXTBOX TOO SMALL FOR FIRST LETTERS.');
-                                    return [];
-                                }
-                                if (startSpace) {
-                                    if (j + 1 < word.length) {
-                                        spacesT.splice(spaceC, 0, word.substring(j + 1, word.length));
+                        var word = this.wordData[wordIdx];
+                        if (prevSlicePos > 0 || sliceSeg > 0) {
+                            if (word.wordAdvance - sliceAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                var segIndex = sliceSeg;
+                                var fDash = -1;
+                                var fDashSeg = -1;
+                                var fDashGlyph = void 0;
+                                var sections = [];
+                                if (word.segments[segIndex].hasHyphen) {
+                                    var glyphAdvance = 0;
+                                    var seg = word.segments[segIndex];
+                                    for (var i = 0; i < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[i].xAdvance <= this.width; i++) {
+                                        if (seg.glyphs[i].isHyphen) {
+                                            fDash = i;
+                                            fDashSeg = segIndex;
+                                        }
+                                        glyphAdvance += seg.glyphs[i].xAdvance;
                                     }
-                                    else {
-                                        startSpace = !startSpace;
+                                }
+                                var endPos_1 = word.segments[segIndex].glyphs.length;
+                                if (tmpAdvance + word.segments[segIndex].segmentAdvance >= this.width) {
+                                    var glyphAdvance = 0;
+                                    var seg = word.segments[segIndex];
+                                    while (slicePos < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[slicePos].xAdvance <= this.width) {
+                                        slicePos++;
+                                        sliceSeg = segIndex;
+                                        glyphAdvance += seg.glyphs[slicePos].xAdvance;
                                     }
-                                    currPos += wordGlyphs.length;
-                                    prevPos = currPos + 1;
+                                    endPos_1 = slicePos;
                                 }
-                                else {
-                                    wordsT.splice(wordC, 0, word.substring(j, word.length));
-                                    currPos += wordGlyphs.length;
-                                    tspanEl.spaceRemoved = false;
-                                    prevPos = currPos;
+                                var newSec = {
+                                    startPos: tmpAdvance - sliceAdvance, glyphs: word.segments[segIndex].glyphs.slice(prevSlicePos, endPos_1),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                                };
+                                sections.push(newSec);
+                                tmpAdvance += word.segments[segIndex].segmentAdvance;
+                                lineGlyphCount += (endPos_1 - prevSlicePos);
+                                for (segIndex = sliceSeg + 1; segIndex < word.segments.length && tmpAdvance < this.width; segIndex++) {
+                                    slicePos = 0;
+                                    if (word.segments[segIndex].hasHyphen) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        for (var i = 0; i < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[i].xAdvance <= this.width; i++) {
+                                            if (seg.glyphs[i].isHyphen) {
+                                                fDash = i;
+                                                fDashSeg = segIndex;
+                                            }
+                                            glyphAdvance += seg.glyphs[i].xAdvance;
+                                        }
+                                    }
+                                    var endPos_2 = word.segments[segIndex].glyphs.length;
+                                    if (tmpAdvance + word.segments[segIndex].segmentAdvance >= this.width) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        while (slicePos < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[slicePos].xAdvance <= this.width) {
+                                            slicePos++;
+                                            sliceSeg = segIndex;
+                                            glyphAdvance += seg.glyphs[slicePos].xAdvance;
+                                        }
+                                        endPos_2 = slicePos;
+                                    }
+                                    var newSec_1 = {
+                                        startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_2),
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    sections.push(newSec_1);
+                                    tmpAdvance += word.segments[segIndex].segmentAdvance;
+                                    lineGlyphCount += endPos_2;
                                 }
-                            }
-                            break;
-                        }
-                    }
-                    if (!lineComplete && progPos) {
-                        currPos += word.length;
-                        startSpace = !startSpace;
-                    }
-                    line = word;
-                    currLength = computedTextLength;
-                    tmpLineGlyphs.push.apply(tmpLineGlyphs, wordGlyphs);
-                    while (!lineComplete && (wordC < wordsT.length || spaceC < spacesT.length)) {
-                        wordGlyphs = [];
-                        if (startSpace) {
-                            word = spacesT[spaceC++];
-                            isSpace = true;
-                        }
-                        else {
-                            word = wordsT[wordC++];
-                            isSpace = false;
-                        }
-                        var glyphRun_1 = { glyphs: [], positions: [] };
-                        var wordPos_1 = 0;
-                        var tempGlyphs_1 = void 0;
-                        while (currStyle < this.styleSet.length && currPos + word.length > this.styleSet[currStyle].end) {
-                            var fontSet = 'NORMAL';
-                            if (this.styleSet[currStyle].weight == 'bold') {
-                                if (this.styleSet[currStyle].style == 'italic') {
-                                    fontSet = 'BOLDITALIC';
+                                if (fDash != -1) {
+                                    slicePos = fDash + 1;
+                                    sliceSeg = fDashSeg;
                                 }
-                                else {
-                                    fontSet = 'BOLD';
-                                }
-                            }
-                            else {
-                                if (this.styleSet[currStyle].style == 'italic') {
-                                    fontSet = 'ITALIC';
-                                }
-                            }
-                            tempGlyphs_1 = fontHelper[fontSet].layout(word.substring(wordPos_1, this.styleSet[currStyle].end - currPos - wordPos_1));
-                            for (var i_3 = 0; i_3 < tempGlyphs_1.length; i_3++) {
-                                tempGlyphs_1.glyphs[i_3].weight = this.styleSet[currStyle].weight;
-                                tempGlyphs_1.glyphs[i_3].colour = this.styleSet[currStyle].colour;
-                                tempGlyphs_1.glyphs[i_3].style = this.styleSet[currStyle].style;
-                                tempGlyphs_1.glyphs[i_3].decoration = this.styleSet[currStyle].decoration;
-                            }
-                            (_e = glyphRun_1.glyphs).push.apply(_e, tempGlyphs_1.glyphs);
-                            (_f = glyphRun_1.positions).push.apply(_f, tempGlyphs_1.positions);
-                            wordPos_1 = this.styleSet[currStyle].end - currPos;
-                            currStyle++;
-                        }
-                        if (currStyle < this.styleSet.length) {
-                            var fontSet = 'NORMAL';
-                            if (this.styleSet[currStyle].weight == 'bold') {
-                                if (this.styleSet[currStyle].style == 'italic') {
-                                    fontSet = 'BOLDITALIC';
-                                }
-                                else {
-                                    fontSet = 'BOLD';
-                                }
-                            }
-                            else {
-                                if (this.styleSet[currStyle].style == 'italic') {
-                                    fontSet = 'ITALIC';
-                                }
-                            }
-                            tempGlyphs_1 = fontHelper[fontSet].layout(word.substring(wordPos_1, this.styleSet[currStyle].end - currPos - wordPos_1));
-                            for (var i_4 = 0; i_4 < tempGlyphs_1.length; i_4++) {
-                                tempGlyphs_1.glyphs[i_4].weight = this.styleSet[currStyle].weight;
-                                tempGlyphs_1.glyphs[i_4].colour = this.styleSet[currStyle].colour;
-                                tempGlyphs_1.glyphs[i_4].style = this.styleSet[currStyle].style;
-                                tempGlyphs_1.glyphs[i_4].decoration = this.styleSet[currStyle].decoration;
-                            }
-                            (_g = glyphRun_1.glyphs).push.apply(_g, tempGlyphs_1.glyphs);
-                            (_h = glyphRun_1.positions).push.apply(_h, tempGlyphs_1.positions);
-                        }
-                        var tmpLength = computedTextLength;
-                        for (var j = 0; j < glyphRun_1.positions.length; j++) {
-                            var charWidth = (glyphRun_1.positions[j].xAdvance) * this.size / 1000;
-                            if (tmpLength + charWidth < this.width) {
-                                if (glyphRun_1.glyphs[j].codePoints.length == 1 && isHyphen(glyphRun_1.glyphs[j].codePoints[0])) {
-                                    fDash_1 = j;
-                                }
-                                var wordGlyph = { path: glyphRun_1.glyphs[j].path.toSVG(), stringPositions: glyphRun_1.glyphs[j].stringPositions,
-                                    xAdvance: glyphRun_1.positions[j].xAdvance, yAdvance: glyphRun_1.positions[j].yAdvance, xOffset: glyphRun_1.positions[j].xOffset,
-                                    yOffset: glyphRun_1.positions[j].yOffset, isSpace: isSpace, weight: glyphRun_1.glyphs[j].weight,
-                                    colour: glyphRun_1.glyphs[j].colour, style: glyphRun_1.glyphs[j].style, decoration: glyphRun_1.glyphs[j].decoration };
-                                wordGlyphs.push(wordGlyph);
-                                tmpLength += charWidth;
-                            }
-                            else {
+                                tspanEl.spaceRemoved = false;
+                                sliceAdvance += tmpAdvance;
                                 lineComplete = true;
-                                if (startSpace) {
-                                    if (word.length > j + 1) {
-                                        wordsT[--spaceC] = word.substring(j + 1, word.length);
-                                        word = word.substring(0, j);
-                                        startSpace = !startSpace;
-                                    }
+                                glyphCount += lineGlyphCount;
+                            }
+                            else {
+                                var secEnd = word.segments[sliceSeg].glyphs.length;
+                                var newSec = {
+                                    startPos: currentAdvance - sliceAdvance, glyphs: word.segments[sliceSeg].glyphs.slice(slicePos, secEnd),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[slicePos].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                currentAdvance += (word.segments[sliceSeg].segmentAdvance - sliceAdvance);
+                                for (var j = sliceSeg + 1; j < word.segments.length; j++) {
+                                    var newSec_2 = {
+                                        startPos: currentAdvance, glyphs: word.segments[j].glyphs,
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    tspanEl.sections.push(newSec_2);
+                                    currentAdvance += word.segments[j].segmentAdvance;
+                                    lineGlyphCount += word.segments[j].glyphs.length;
                                 }
-                                else {
-                                    word = '';
-                                    wordC--;
-                                    startSpace = !startSpace;
-                                    tmpLength = computedTextLength;
-                                    wordGlyphs = [];
-                                }
-                                break;
+                                insertSpace = !insertSpace;
                             }
                         }
-                        computedTextLength = tmpLength;
-                        currPos += word.length;
-                        startSpace = !startSpace;
-                        tmpLineGlyphs.push.apply(tmpLineGlyphs, wordGlyphs);
+                        else {
+                            if (word.wordAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                var segIndex = 0;
+                                var fDash = -1;
+                                var fDashSeg = -1;
+                                var fDashGlyph = void 0;
+                                var sections = [];
+                                for (segIndex = 0; segIndex < word.segments.length && tmpAdvance < this.width; segIndex++) {
+                                    slicePos = 0;
+                                    if (word.segments[segIndex].hasHyphen) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        var glyph = seg.glyphs[0];
+                                        for (var i = 0; i < seg.glyphs.length && tmpAdvance + glyphAdvance + glyph.xAdvance <= this.width; i++) {
+                                            glyph = seg.glyphs[i];
+                                            if (seg.glyphs[i].isHyphen) {
+                                                fDash = i;
+                                                fDashSeg = segIndex;
+                                            }
+                                            glyphAdvance += glyph.xAdvance * 1000 / this.size;
+                                        }
+                                    }
+                                    var endPos_3 = word.segments[segIndex].glyphs.length;
+                                    if (tmpAdvance + word.segments[segIndex].segmentAdvance >= this.width) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        var glyph = seg.glyphs[slicePos];
+                                        while (slicePos < seg.glyphs.length && tmpAdvance + glyphAdvance + glyph.xAdvance * 1000 / this.size <= this.width) {
+                                            slicePos++;
+                                            sliceSeg = segIndex;
+                                            glyph = seg.glyphs[slicePos];
+                                            glyphAdvance += glyph.xAdvance * 1000 / this.size;
+                                        }
+                                        endPos_3 = slicePos;
+                                    }
+                                    var newSec = {
+                                        startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_3),
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    sections.push(newSec);
+                                    tmpAdvance += word.segments[segIndex].segmentAdvance;
+                                    lineGlyphCount += endPos_3;
+                                }
+                                if (fDash != -1) {
+                                    slicePos = fDash + 1;
+                                    sliceSeg = fDashSeg;
+                                }
+                                tspanEl.spaceRemoved = false;
+                                sliceAdvance = tmpAdvance;
+                                lineComplete = true;
+                                glyphCount += lineGlyphCount;
+                            }
+                            else {
+                                for (var j = 0; j < word.segments.length; j++) {
+                                    var newSec = {
+                                        startPos: currentAdvance, glyphs: word.segments[j].glyphs,
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    tspanEl.sections.push(newSec);
+                                    currentAdvance += word.segments[j].segmentAdvance;
+                                    lineGlyphCount += word.segments[j].glyphs.length;
+                                }
+                                insertSpace = !insertSpace;
+                            }
+                        }
                     }
-                    dy = ddy;
-                    nodeCounter = 0;
-                    if (wordC == wordsT.length && spaceC == spacesT.length) {
-                        tspanEl.justified = false;
+                    while (!lineComplete && wordIdx < wordCount) {
+                        if (insertSpace) {
+                            var start = this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength;
+                            var end = this.wordData[wordIdx + 1].startPos;
+                            var text = this.text.substring(start, end);
+                            spaceAdvance = this.processSpaceGlyphs(glyphs, text, start);
+                            if (spaceAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                for (var j = 0; j < glyphs.length; j++) {
+                                    if (tmpAdvance + glyphs[j].xAdvance * 1000 / this.size > this.width) {
+                                        slicePos = j + 1;
+                                        if (j + 1 >= glyphs.length) {
+                                            wasSpaceLast = true;
+                                        }
+                                    }
+                                    tmpAdvance += glyphs[j].xAdvance * 1000 / this.size;
+                                }
+                                numSpaces += slicePos - 1;
+                                var newSec = {
+                                    startPos: currentAdvance, glyphs: glyphs.slice(0, slicePos - 1),
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                if (wasSpaceLast) {
+                                    slicePos = 0;
+                                    insertSpace = !insertSpace;
+                                    wordIdx++;
+                                    wordNum++;
+                                }
+                                lineGlyphCount += slicePos - 1;
+                                glyphCount += lineGlyphCount + 1;
+                                sliceAdvance = tmpAdvance;
+                                lineComplete = true;
+                            }
+                            else {
+                                numSpaces += glyphs.length;
+                                var newSec = {
+                                    startPos: currentAdvance, glyphs: glyphs,
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                };
+                                tspanEl.sections.push(newSec);
+                                currentAdvance += spaceAdvance;
+                                lineGlyphCount += glyphs.length;
+                                insertSpace = !insertSpace;
+                            }
+                        }
+                        else {
+                            var word = this.wordData[wordIdx];
+                            if (word.wordAdvance > this.width) {
+                                var tmpAdvance = 0;
+                                var segIndex = 0;
+                                var fDash = -1;
+                                var fDashSeg = -1;
+                                var fDashGlyph = void 0;
+                                var sections = [];
+                                for (segIndex = 0; segIndex < word.segments.length && tmpAdvance < this.width; segIndex++) {
+                                    if (word.segments[segIndex].hasHyphen) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        for (var i = 0; i < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[i].xAdvance <= this.width; i++) {
+                                            if (seg.glyphs[i].isHyphen) {
+                                                fDash = i;
+                                                fDashSeg = segIndex;
+                                            }
+                                            glyphAdvance += seg.glyphs[i].xAdvance;
+                                        }
+                                    }
+                                    var endPos_4 = word.segments[segIndex].glyphs.length;
+                                    if (tmpAdvance + word.segments[segIndex].segmentAdvance >= this.width) {
+                                        var glyphAdvance = 0;
+                                        var seg = word.segments[segIndex];
+                                        while (slicePos < seg.glyphs.length && tmpAdvance + glyphAdvance + seg.glyphs[slicePos].xAdvance <= this.width) {
+                                            slicePos++;
+                                            sliceSeg = segIndex;
+                                            glyphAdvance += seg.glyphs[slicePos].xAdvance;
+                                        }
+                                        endPos_4 = slicePos;
+                                    }
+                                    var newSec = {
+                                        startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_4),
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    sections.push(newSec);
+                                    lineGlyphCount += endPos_4;
+                                    tmpAdvance += word.segments[segIndex].segmentAdvance;
+                                }
+                                if (fDash != -1) {
+                                    slicePos = fDash + 1;
+                                    sliceSeg = fDashSeg;
+                                    tspanEl.spaceRemoved = false;
+                                    sliceAdvance = tmpAdvance;
+                                    glyphCount += lineGlyphCount;
+                                    (_a = tspanEl.sections).push.apply(_a, sections);
+                                }
+                                lineComplete = true;
+                            }
+                            else {
+                                for (var j = 0; j < word.segments.length; j++) {
+                                    var newSec = {
+                                        startPos: currentAdvance, glyphs: word.segments[j].glyphs,
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                    };
+                                    tspanEl.sections.push(newSec);
+                                    currentAdvance += word.segments[j].segmentAdvance;
+                                    lineGlyphCount += word.segments[j].glyphs.length;
+                                }
+                                insertSpace = !insertSpace;
+                            }
+                        }
                     }
-                    var reqAdjustment = this.width - computedTextLength;
-                    var numSpaces = line.length - line.replace(/\s/g, "").length;
+                    var reqAdjustment = this.width - currentAdvance;
                     var extraSpace = 0;
                     if (tspanEl.justified) {
                         extraSpace = reqAdjustment / numSpaces;
                     }
-                    var lineGlyphs = [];
                     var currentDist = 0;
-                    for (var i_5 = 0; i_5 < tmpLineGlyphs.length; i_5++) {
-                        var newGlyph = {
-                            path: tmpLineGlyphs[i_5].path, stringPositions: tmpLineGlyphs[i_5].stringPositions, startPos: currentDist,
-                            advance: tmpLineGlyphs[i_5].xAdvance, weight: tmpLineGlyphs[i_5].weight, colour: tmpLineGlyphs[i_5].colour, style: tmpLineGlyphs[i_5].style,
-                            decoration: tmpLineGlyphs[i_5].decoration
-                        };
-                        console.log(tmpLineGlyphs[i_5].path);
-                        currentDist += tmpLineGlyphs[i_5].xAdvance;
-                        if (tmpLineGlyphs[i_5].isSpace) {
-                            currentDist += extraSpace;
+                    for (var j = 0; j < tspanEl.sections.length; j++) {
+                        var sec = tspanEl.sections[j];
+                        if (sec.glyphs[0].isSpace) {
+                            sec.startPos = currentDist;
+                            for (var i = 0; i < sec.glyphs.length; i++) {
+                                sec.glyphs[i].xAdvance += extraSpace * this.size / 1000;
+                                currentDist += sec.glyphs[i].xAdvance * 1000 / this.size;
+                            }
                         }
-                        lineGlyphs.push(newGlyph);
+                        else {
+                            var secAdvance = 0;
+                            if (j + 1 < tspanEl.sections.length) {
+                                secAdvance = tspanEl.sections[j + 1].startPos - sec.startPos;
+                            }
+                            sec.startPos = currentDist;
+                            currentDist += secAdvance;
+                        }
                     }
-                    tspanEl.glyphs = lineGlyphs;
-                    tspanEl.end = tspanEl.start + lineGlyphs.length;
-                    childText.push(tspanEl);
+                    tspanEl.endStringPos = currPos;
+                    tspanEl.end = tspanEl.start + lineGlyphCount;
+                    prevGlyphPos = tspanEl.start + lineGlyphCount + (tspanEl.spaceRemoved ? 1 : 0);
+                    if (lineComplete) {
+                        childText.push(tspanEl);
+                    }
                     lineCount++;
+                    currentAdvance = 0;
+                }
+                var lineEnd = this.text.length;
+                if (k + 1 < this.lineData.length) {
+                    lineEnd = this.linePositions[k + 1];
+                }
+                if (!lineComplete && wordCount > 0 && lineEnd > this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength) {
+                    sliceAdvance = 0;
+                    var first = true;
+                    var start = this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength;
+                    var text = this.text.substring(start, lineEnd);
+                    spaceAdvance = this.processSpaceGlyphs(glyphs, text, start);
+                    while (prevSlicePos > 0 || first) {
+                        first = false;
+                        if (spaceAdvance - sliceAdvance > this.width) {
+                            var tmpAdvance = 0;
+                            for (var j = prevSlicePos; j < glyphs.length; j++) {
+                                if (tmpAdvance + glyphs[j].xAdvance > this.width) {
+                                    slicePos = j + 1;
+                                    if (j + 1 >= glyphs.length) {
+                                        wasSpaceLast = true;
+                                    }
+                                }
+                                tmpAdvance += glyphs[j].xAdvance;
+                            }
+                            numSpaces += slicePos - prevSlicePos - 1;
+                            var newSec = {
+                                startPos: currentAdvance - sliceAdvance, glyphs: glyphs.slice(prevSlicePos, slicePos - 1),
+                                startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                            };
+                            tspanEl.sections.push(newSec);
+                            if (wasSpaceLast) {
+                                slicePos = 0;
+                                insertSpace = !insertSpace;
+                                wordIdx++;
+                                wordNum++;
+                            }
+                            sliceAdvance += tmpAdvance;
+                            lineComplete = true;
+                        }
+                        else {
+                            numSpaces += glyphs.length - prevSlicePos;
+                            var newSec = {
+                                startPos: currentAdvance, glyphs: glyphs.slice(prevSlicePos, glyphs.length),
+                                startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                            };
+                            tspanEl.sections.push(newSec);
+                            currentAdvance += (spaceAdvance - sliceAdvance);
+                            insertSpace = !insertSpace;
+                            wordIdx++;
+                            wordNum++;
+                        }
+                    }
+                }
+                if (!lineComplete) {
+                    tspanEl.justified = false;
+                    if (k == this.lines.length - 1) {
+                        tspanEl.spaceRemoved = false;
+                    }
                 }
             }
-            if (lineCount * 1.5 * this.size > this.height) {
-                this.resize(this.width, lineCount * 1.5 * this.size, new Date());
+            if (lineCount * 2 * this.size > this.height) {
+                this.resize(this.width, lineCount * 2 * this.size, new Date());
                 this.hasResized = true;
             }
-            return childText;
-            var _a, _b, _c, _d, _e, _f, _g, _h;
+            this.textNodes = childText;
+            this.glyphCount = glyphCount;
+            return true;
+            var _a;
+        };
+        Element.prototype.processGlyphs = function (glyphs, style, word, stringStart) {
+            var _this = this;
+            var fontSet = 'NORMAL';
+            if (style.weight == 'bold') {
+                if (style.style == 'italic') {
+                    fontSet = 'BOLDITALIC';
+                }
+                else {
+                    fontSet = 'BOLD';
+                }
+            }
+            else {
+                if (style.style == 'italic') {
+                    fontSet = 'ITALIC';
+                }
+            }
+            var hasHyphen = false;
+            var tempGlyphs;
+            if (fontHelper[fontSet] == null || fontHelper[fontSet] == undefined) {
+                var callback = function () {
+                    if (!_this.isDeleted) {
+                        console.log("Width now is: " + _this.width);
+                        _this.calculateTextLines();
+                        if (_this.isSelected) {
+                            _this.findCursorElems();
+                        }
+                        _this.updateView({
+                            textNodes: _this.textNodes, width: _this.width, height: _this.height,
+                            cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false
+                        });
+                        _this.updateBoardView(_this.currentViewState);
+                    }
+                };
+                if (loadingFonts[fontSet] === true) {
+                    if (this.waitingForFont[fontSet] == null || this.waitingForFont[fontSet] == undefined) {
+                        var callbackID = loadCallbacks[fontSet].length;
+                        loadCallbacks[fontSet][callbackID] = callback;
+                        this.waitingForFont[fontSet] = callbackID;
+                    }
+                }
+                else {
+                    var callbackID = this.getAdditionalFont(fontSet, callback);
+                    this.waitingForFont[fontSet] = callbackID;
+                }
+                tempGlyphs = { glyphs: [], positions: [] };
+                for (var i = 0; i < word.length; i++) {
+                    tempGlyphs.glyphs[i] =
+                        {
+                            id: 0, advanceWidth: 1229, advanceHeight: 2789, isLigature: false, isMark: false, codePoints: [-1],
+                            path: 'M193 1462L1034 1462L1034 0L193 0ZM297 104L930 104L930 1358L297 1358Z', stringPositions: [i]
+                        };
+                    tempGlyphs.positions[i] =
+                        {
+                            xAdvance: 1229, xOffset: 0, yAdvance: 0, yOffset: 0
+                        };
+                }
+            }
+            else {
+                tempGlyphs = fontHelper[fontSet].layout(word);
+            }
+            var currentStyle = style;
+            var startAdvance = 0;
+            for (var i = 0; i < tempGlyphs.glyphs.length; i++) {
+                if (style.end < tempGlyphs.glyphs[i].stringPositions[0] + stringStart) {
+                    var nxtIdx = currentStyle.seq_num + 1;
+                    currentStyle = this.styleSet[nxtIdx];
+                }
+                var isHyph = false;
+                if (tempGlyphs.glyphs[i].codePoints.length == 1 && isHyphen(tempGlyphs.glyphs[i].codePoints[0])) {
+                    isHyph = true;
+                    hasHyphen = true;
+                }
+                var newGlyph = {
+                    isLigature: tempGlyphs.glyphs[i].isLigature, isMark: tempGlyphs.glyphs[i].isMark, startAdvance: startAdvance,
+                    codePoints: tempGlyphs.glyphs[i].codePoints, path: tempGlyphs.glyphs[i].path, stringPositions: tempGlyphs.glyphs[i].stringPositions,
+                    colour: style.colour, uline: style.uline, oline: style.oline, tline: style.tline, xAdvance: tempGlyphs.positions[i].xAdvance,
+                    yAdvance: tempGlyphs.positions[i].yAdvance, xOffset: tempGlyphs.positions[i].xOffset, yOffset: tempGlyphs.positions[i].yOffset,
+                    isSpace: false, isHyphen: isHyph
+                };
+                startAdvance += newGlyph.xAdvance;
+                glyphs[i] = newGlyph;
+                for (var j = 0; j < tempGlyphs.glyphs[i].stringPositions.length; j++) {
+                    tempGlyphs.glyphs[i].stringPositions[j] += stringStart;
+                }
+            }
+            return hasHyphen;
+        };
+        Element.prototype.processSpaceGlyphs = function (glyphs, word, stringStart) {
+            var tempGlyphs = { glyphs: [], positions: [] };
+            var advance = 0;
+            for (var i = 0; i < word.length; i++) {
+                if (word.charAt(i) == '\t') {
+                    glyphs[i] =
+                        {
+                            xAdvance: 2128, xOffset: 0, yAdvance: 0, yOffset: 0, startAdvance: advance,
+                            isLigature: false, isMark: false, codePoints: [9], path: '', stringPositions: [i],
+                            colour: null, uline: null, oline: null, tline: null, isSpace: true, isHyphen: false
+                        };
+                }
+                else {
+                    glyphs[i] =
+                        {
+                            xAdvance: 532, xOffset: 0, yAdvance: 0, yOffset: 0, startAdvance: advance,
+                            isLigature: false, isMark: false, codePoints: [9], path: '', stringPositions: [i],
+                            colour: null, uline: null, oline: null, tline: null, isSpace: true, isHyphen: false
+                        };
+                }
+                for (var j = 0; j < glyphs[i].stringPositions.length; j++) {
+                    glyphs[i].stringPositions[j] += stringStart;
+                }
+                advance += glyphs[i].xAdvance;
+            }
+            return advance;
         };
         Element.prototype.findXHelper = function (isUp, relative) {
             var i;
@@ -1815,150 +3839,167 @@ var WhiteBoardText;
                 }
                 line = this.textNodes[i + 1];
             }
+            if (line.sections.length == 0) {
+                return line.start;
+            }
             i = 0;
-            while (i < line.glyphs.length && this.idealX > line.glyphs[i].startPos) {
+            while (i < line.sections.length && this.idealX >= line.sections[i].startPos) {
+                i++;
+            }
+            var secIdx = i - 1;
+            var sec = line.sections[secIdx];
+            i = 0;
+            while (i < sec.glyphs.length && this.idealX >= (sec.startPos + sec.glyphs[i].startAdvance) * this.size / 1000) {
                 i++;
             }
             var curr = i - 1;
-            var glyph = line.glyphs[i - 1];
+            var glyph = sec.glyphs[curr];
             var selPoint;
-            if (curr + 1 < line.glyphs.length) {
-                if (this.idealX - glyph.startPos > line.glyphs[curr + 1].startPos - this.idealX) {
-                    selPoint = line.start + curr + 1;
-                }
-                else {
-                    selPoint = line.start + i;
-                }
+            var glyphStart = sec.startPos + glyph.startAdvance * this.size / 1000;
+            var glyphEnd = glyphStart + glyph.xAdvance * this.size / 1000;
+            if (this.idealX - glyphStart > glyphEnd - this.idealX) {
+                selPoint = line.start + curr + 1;
             }
             else {
-                if (this.idealX - glyph.startPos > glyph.startPos + glyph.advance - this.idealX) {
-                    selPoint = line.start + curr + 1;
-                }
-                else {
-                    selPoint = line.start + i;
-                }
+                selPoint = line.start + curr;
             }
             return selPoint;
         };
         Element.prototype.isCurrentStyle = function (style, pallete) {
-            if (style.colour == pallete.colour && style.decoration == pallete.getDecoration() &&
-                style.weight == pallete.getWeight() && style.style == pallete.getStyle()) {
+            if (style.colour == pallete.colour && style.oline == pallete.isOverline() && style.uline == pallete.isUnderline() &&
+                style.tline == pallete.isThroughline() && style.weight == pallete.getWeight() && style.style == pallete.getStyle()) {
                 return true;
             }
             else {
                 return false;
             }
         };
-        Element.prototype.removeCharacter = function (index) {
-            this.text = this.text.slice(0, index) + this.text.slice(index, this.text.length);
-            for (var i = 0; i < this.styleSet.length; i++) {
-                if (this.styleSet[i].end >= index) {
-                    this.styleSet[i].end--;
-                }
-                if (this.styleSet[i].start == index && this.styleSet[i].end == index) {
-                    this.styleSet.splice(i, 1);
-                }
-                else if (this.styleSet[i].start > index) {
-                    this.styleSet[i].start--;
-                }
+        Element.prototype.removeSelection = function (sortedSelect) {
+            for (var i = 0; i < sortedSelect.length; i++) {
+                this.removeCharacter(sortedSelect[i]);
             }
         };
-        Element.prototype.insertText = function (text, pallete) {
-            for (var i = 0; i < this.selectedCharacters.length; i++) {
-                this.removeCharacter(this.selectedCharacters[i]);
+        Element.prototype.removeCharacter = function (index) {
+            this.text = this.text.substring(0, index) + this.text.substring(index + 1, this.text.length);
+            var newStyles = [];
+            for (var i = 0; i < this.styleSet.length; i++) {
+                var sty = this.styleSet[i];
+                var styEnd = sty.end;
+                var styStart = sty.start;
+                if (styEnd > index) {
+                    styEnd--;
+                }
+                if (styStart > index) {
+                    styStart--;
+                }
+                if (styStart != index || styEnd != index) {
+                    if (newStyles.length > 0 && this.stylesMatch(newStyles[newStyles.length - 1], sty)
+                        && newStyles[newStyles.length - 1].end - newStyles[newStyles.length - 1].start + styEnd - styStart <= MAX_STYLE_LENGTH) {
+                        newStyles[newStyles.length - 1].end += styEnd - styStart;
+                        newStyles[newStyles.length - 1].text = this.text.slice(newStyles[newStyles.length - 1].start, newStyles[newStyles.length - 1].end);
+                    }
+                    else {
+                        newStyles.push({
+                            start: styStart, end: styEnd, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
+                            style: sty.style, weight: sty.weight, text: this.text.slice(styStart, styEnd), seq_num: newStyles.length
+                        });
+                    }
+                }
             }
+            this.styleSet = newStyles;
+        };
+        Element.prototype.stylesMatch = function (style1, style2) {
+            return style1.colour == style2.colour && style1.oline == style2.oline && style1.uline == style2.uline && style1.tline == style2.tline
+                && style1.weight == style2.weight;
+        };
+        Element.prototype.insertText = function (text, newStyle) {
             var isNew = true;
             var textStart = this.text.slice(0, this.stringStart);
             var textEnd = this.text.slice(this.stringStart, this.text.length);
             var styles = [];
             var fullText = textStart + text + textEnd;
             var hasInserted = false;
+            var newSty = null;
             for (var i = 0; i < this.styleSet.length; i++) {
                 var sty = this.styleSet[i];
                 if (sty.start >= this.stringStart) {
-                    if (hasInserted) {
-                        if (styles.length > 0 && styles[styles.length - 1].colour == sty.colour
-                            && styles[styles.length - 1].decoration == sty.decoration
-                            && styles[styles.length - 1].weight == sty.weight
-                            && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - sty.start <= MAX_STYLE_LENGTH) {
-                            styles[styles.length - 1].end += sty.end - sty.start;
-                            styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
-                        }
-                        else {
-                            styles.push({
-                                start: sty.start + text.length, end: sty.end + text.length, colour: sty.colour, decoration: sty.decoration,
-                                style: sty.style, weight: sty.weight, text: fullText.slice(sty.start + text.length, sty.end + text.length), num: styles.length
-                            });
-                        }
-                    }
-                    else {
+                    if (!hasInserted) {
                         if (text.length <= MAX_STYLE_LENGTH) {
-                            console.log('This stupid thing.');
                             styles.push({
-                                start: this.stringStart, end: this.stringStart + text.length, colour: pallete.getColour(), decoration: pallete.getDecoration(),
-                                style: pallete.getStyle(), weight: pallete.getWeight(), text: fullText.slice(this.stringStart, this.stringStart + text.length),
-                                num: styles.length
+                                start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
+                                uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                                text: fullText.slice(this.stringStart, this.stringStart + text.length), seq_num: styles.length
                             });
                         }
                         else {
                             var splitArray = this.getStyleSplits(text.length);
                             var prevStart = 0;
-                            console.log('This stupid thing1.');
                             for (var j = 0; j < splitArray.length; j++) {
                                 styles.push({
-                                    start: this.stringStart + prevStart, end: this.stringStart + prevStart + splitArray[j], colour: pallete.getColour(),
-                                    decoration: pallete.getDecoration(), style: pallete.getStyle(), weight: pallete.getWeight(),
-                                    text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), num: styles.length
+                                    start: this.stringStart + prevStart, end: this.stringStart + splitArray[j], colour: newStyle.colour,
+                                    oline: newStyle.oline, uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                                    text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), seq_num: styles.length
                                 });
-                                prevStart += splitArray[j];
+                                prevStart = splitArray[j];
                             }
                         }
+                        newSty = styles[styles.length - 1];
                         hasInserted = true;
+                    }
+                    if (styles.length > 0 && this.stylesMatch(styles[styles.length - 1], sty)
+                        && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - sty.start <= MAX_STYLE_LENGTH) {
+                        styles[styles.length - 1].end += sty.end - sty.start;
+                        styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
+                    }
+                    else {
+                        styles.push({
+                            start: sty.start + text.length, end: sty.end + text.length, colour: sty.colour, oline: sty.oline, uline: sty.uline,
+                            tline: sty.tline, style: sty.style, weight: sty.weight, text: fullText.slice(sty.start + text.length, sty.end + text.length),
+                            seq_num: styles.length
+                        });
                     }
                 }
                 else {
                     if (sty.end < this.stringStart) {
-                        console.log('This stupid thing2.');
                         sty.text = fullText.slice(sty.start, sty.end);
                         styles.push({
-                            start: sty.start, end: sty.end, colour: sty.colour, decoration: sty.decoration,
-                            style: sty.style, weight: sty.weight, text: sty.text, num: styles.length
+                            start: sty.start, end: sty.end, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
+                            style: sty.style, weight: sty.weight, text: sty.text, seq_num: styles.length
                         });
                     }
                     else {
-                        if (this.isCurrentStyle(sty, pallete)) {
+                        if (this.stylesMatch(sty, newStyle)) {
                             if (sty.end - sty.start + text.length <= MAX_STYLE_LENGTH) {
-                                console.log('This stupid thing3.');
                                 styles.push({
-                                    start: sty.start, end: sty.end + text.length, colour: sty.colour, decoration: sty.decoration,
-                                    style: sty.style, weight: sty.weight, text: fullText.slice(sty.start, sty.end + text.length), num: styles.length
+                                    start: sty.start, end: sty.end + text.length, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
+                                    style: sty.style, weight: sty.weight, text: fullText.slice(sty.start, sty.end + text.length), seq_num: styles.length
                                 });
                             }
                             else {
                                 var splitArray = this.getStyleSplits(sty.end - sty.start + text.length);
                                 var prevStart = 0;
-                                console.log('This stupid thing4.');
                                 for (var j = 0; j < splitArray.length; j++) {
                                     styles.push({
-                                        start: sty.start + prevStart, end: sty.end + prevStart + splitArray[j], colour: sty.colour,
-                                        decoration: sty.decoration, style: sty.style, weight: sty.weight,
-                                        text: fullText.slice(sty.start + prevStart, sty.start + prevStart + splitArray[j]), num: styles.length
+                                        start: sty.start + prevStart, end: sty.start + splitArray[j], colour: sty.colour,
+                                        oline: sty.oline, uline: sty.uline, tline: sty.tline, style: sty.style, weight: sty.weight,
+                                        text: fullText.slice(sty.start + prevStart, sty.start + prevStart + splitArray[j]), seq_num: styles.length
                                     });
-                                    prevStart += splitArray[j];
+                                    prevStart = splitArray[j];
                                 }
                             }
+                            newSty = styles[styles.length - 1];
+                            hasInserted = true;
                         }
                         else {
-                            console.log('This stupid thing5.');
                             styles.push({
-                                start: sty.start, end: this.stringStart, colour: sty.colour, decoration: sty.decoration,
-                                style: sty.style, weight: sty.weight, text: fullText.slice(sty.start, this.stringStart), num: styles.length
+                                start: sty.start, end: this.stringStart, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
+                                style: sty.style, weight: sty.weight, text: fullText.slice(sty.start, this.stringStart), seq_num: styles.length
                             });
                             if (text.length <= MAX_STYLE_LENGTH) {
                                 styles.push({
-                                    start: this.stringStart, end: this.stringStart + text.length, colour: pallete.getColour(),
-                                    decoration: pallete.getDecoration(), style: pallete.getStyle(), weight: pallete.getWeight(),
-                                    text: fullText.slice(this.stringStart, this.stringStart + text.length), num: styles.length
+                                    start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
+                                    uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                                    text: fullText.slice(this.stringStart, this.stringStart + text.length), seq_num: styles.length
                                 });
                             }
                             else {
@@ -1966,30 +4007,32 @@ var WhiteBoardText;
                                 var prevStart = 0;
                                 for (var j = 0; j < splitArray.length; j++) {
                                     styles.push({
-                                        start: this.stringStart + prevStart, end: this.stringStart + prevStart + splitArray[j], colour: pallete.getColour(),
-                                        decoration: pallete.getDecoration(), style: pallete.getStyle(), weight: pallete.getWeight(),
-                                        text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), num: styles.length
+                                        start: this.stringStart + prevStart, end: this.stringStart + splitArray[j], colour: newStyle.colour,
+                                        oline: newStyle.oline, uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                                        text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), seq_num: styles.length
                                     });
-                                    prevStart += splitArray[j];
+                                    prevStart = splitArray[j];
                                 }
                             }
-                            styles.push({
-                                start: this.stringStart + text.length, end: sty.end + text.length, colour: sty.colour, decoration: sty.decoration,
-                                style: sty.style, weight: sty.weight, text: fullText.slice(this.stringStart + text.length, sty.end + text.length),
-                                num: styles.length
-                            });
+                            newSty = styles[styles.length - 1];
+                            hasInserted = true;
+                            if (this.stringStart != sty.end) {
+                                styles.push({
+                                    start: this.stringStart + text.length, end: sty.end + text.length, colour: sty.colour, oline: sty.oline,
+                                    uline: sty.uline, tline: sty.tline, style: sty.style, weight: sty.weight,
+                                    text: fullText.slice(this.stringStart + text.length, sty.end + text.length), seq_num: styles.length
+                                });
+                            }
                         }
                     }
-                    hasInserted = true;
                 }
             }
             if (!hasInserted) {
-                console.log('This stupid thing6.');
                 if (text.length <= MAX_STYLE_LENGTH) {
                     styles.push({
-                        start: this.stringStart, end: this.stringStart + text.length, colour: pallete.getColour(), decoration: pallete.getDecoration(),
-                        style: pallete.getStyle(), weight: pallete.getWeight(), text: fullText.slice(this.stringStart, this.stringStart + text.length),
-                        num: styles.length
+                        start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
+                        uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                        text: fullText.slice(this.stringStart, this.stringStart + text.length), seq_num: styles.length
                     });
                 }
                 else {
@@ -1997,26 +4040,28 @@ var WhiteBoardText;
                     var prevStart = 0;
                     for (var j = 0; j < splitArray.length; j++) {
                         styles.push({
-                            start: this.stringStart + prevStart, end: this.stringStart + prevStart + splitArray[j], colour: pallete.getColour(),
-                            decoration: pallete.getDecoration(), style: pallete.getStyle(), weight: pallete.getWeight(),
-                            text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), num: styles.length
+                            start: this.stringStart + prevStart, end: this.stringStart + splitArray[j], colour: newStyle.colour,
+                            oline: newStyle.oline, uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
+                            text: fullText.slice(this.stringStart + prevStart, this.stringStart + prevStart + splitArray[j]), seq_num: styles.length
                         });
-                        prevStart += splitArray[j];
+                        prevStart = splitArray[j];
                     }
                 }
+                newSty = styles[styles.length - 1];
             }
             this.text = fullText;
             this.styleSet = styles;
-            this.updateText();
-            return this.newEdit();
+            return newSty;
         };
         Element.prototype.getStyleSplits = function (length) {
             var slices = [];
             var lengthCount = 0;
             while (lengthCount < length) {
-                slices.push(length - lengthCount < MAX_STYLE_LENGTH ? length - lengthCount : MAX_STYLE_LENGTH);
+                slices.push(length - lengthCount < MAX_STYLE_LENGTH ? length : MAX_STYLE_LENGTH);
                 lengthCount += length - lengthCount < MAX_STYLE_LENGTH ? length - lengthCount : MAX_STYLE_LENGTH;
             }
+            console.log("Split array for long style is: ");
+            console.log(slices);
             return slices;
         };
         Element.prototype.newEdit = function () {
@@ -2085,96 +4130,361 @@ var WhiteBoardText;
             }
             this.lines = lines;
         };
-        Element.prototype.completeEdit = function (editId) {
+        Element.prototype.completeEdit = function (userId, editId) {
             var fullText = '';
-            var editData = this.editInBuffer[editId];
+            var editData = this.editInBuffer[userId][editId];
             for (var i = 0; i < editData.styles.length; i++) {
-                this.styleSet[editData[i].num] = editData[i];
+                this.styleSet[editData.styles[i].seq_num] = editData.styles[i];
             }
             for (var i = 0; i < this.styleSet.length; i++) {
                 fullText += this.styleSet[i].text;
             }
             this.text = fullText;
-            this.updateText();
+            this.generateLines();
+            this.calculateTextLines();
+            if (this.isSelected) {
+                this.findCursorElems();
+            }
+            this.updateView({
+                textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
+            });
         };
         Element.prototype.textEdited = function () {
-            this.editOutBuffer = [];
             var editNum = this.editNum++;
+            this.editOutBuffer[editNum] = [];
             for (var i = 0; i < this.styleSet.length; i++) {
                 this.editOutBuffer[editNum].push(this.styleSet[i]);
             }
-            var payload = { bufferId: editNum, num_styles: this.editOutBuffer[editNum].length, styles: this.editOutBuffer[editNum] };
+            var payload = { bufferId: editNum, num_styles: this.editOutBuffer[editNum].length, nodes: this.editOutBuffer[editNum] };
             var msg = { header: MessageTypes.EDIT, payload: payload };
             return msg;
         };
         Element.prototype.findStringPositions = function () {
             this.selectedCharacters = [];
             var found = [];
+            var newStringStart = null;
             if (this.textNodes.length == 0) {
-                return 0;
+                this.stringStart = 0;
+                return;
             }
-            var currGlyphCount = 0;
             for (var i = 0; i < this.textNodes.length; i++) {
                 var line = this.textNodes[i];
-                if (this.cursorEnd < currGlyphCount) {
-                    break;
+                if (this.cursorEnd < line.start) {
+                    this.stringStart = newStringStart;
+                    return;
                 }
-                for (var j = 0; j < line.glyphs.length; j++) {
-                    var glyph = line.glyphs[j];
-                    if (currGlyphCount + j >= this.cursorStart && currGlyphCount + j < this.cursorEnd) {
-                        for (var k = 0; k < glyph.stringPositions.length; k++) {
-                            if (glyph.stringPositions[k] === undefined) {
-                                found[glyph.stringPositions[k]] = true;
-                                this.selectedCharacters.push(glyph.stringPositions[k]);
+                if (line.end >= this.cursorStart) {
+                    var largestStringPos = 0;
+                    if (i > 0) {
+                        largestStringPos = this.textNodes[i - 1].endStringPos;
+                    }
+                    for (var j = 0; j < line.sections.length; j++) {
+                        var sec = line.sections[j];
+                        if (this.cursorStart < line.start + sec.startGlyph + sec.glyphs.length && this.cursorEnd > line.start + sec.startGlyph) {
+                            for (var gPos = this.cursorStart - 1 > line.start ? this.cursorStart - 1 - line.start : 0; gPos < sec.glyphs.length; gPos++) {
+                                var glyph = sec.glyphs[gPos];
+                                if (line.start + sec.startGlyph + j >= this.cursorStart && line.start + sec.startGlyph + j <= this.cursorEnd) {
+                                    for (var k = 0; k < glyph.stringPositions.length; k++) {
+                                        if (newStringStart == null || glyph.stringPositions[k] < newStringStart) {
+                                            newStringStart = glyph.stringPositions[k];
+                                        }
+                                        if (glyph.stringPositions[k] > largestStringPos) {
+                                            largestStringPos = glyph.stringPositions[k];
+                                        }
+                                        if (found[glyph.stringPositions[k]] === undefined && line.start + j != this.cursorEnd) {
+                                            found[glyph.stringPositions[k]] = true;
+                                            this.selectedCharacters.push(glyph.stringPositions[k]);
+                                        }
+                                    }
+                                }
+                                else if (line.start + j == this.cursorStart - 1) {
+                                    for (var k = 0; k < glyph.stringPositions.length; k++) {
+                                        if (glyph.stringPositions[k] > largestStringPos) {
+                                            largestStringPos = glyph.stringPositions[k];
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    if (currGlyphCount + j == this.cursorStart) {
-                        this.stringStart = glyph.stringPositions[0];
+                    if (line.end == this.cursorStart) {
+                        newStringStart = largestStringPos + 1;
+                    }
+                    if (this.cursorEnd > line.end && line.spaceRemoved) {
+                        if (line.sections.length == 0) {
+                            if (found[largestStringPos] === undefined) {
+                                found[largestStringPos] = true;
+                                this.selectedCharacters.push(largestStringPos);
+                            }
+                        }
+                        else {
+                            if (found[largestStringPos + 1] === undefined) {
+                                found[largestStringPos + 1] = true;
+                                this.selectedCharacters.push(largestStringPos + 1);
+                            }
+                        }
                     }
                 }
-                currGlyphCount += line.glyphs.length;
+                else if (i == this.textNodes.length - 1) {
+                    newStringStart = this.text.length;
+                }
             }
+            this.stringStart = newStringStart;
+        };
+        Element.prototype.wordMerger = function (undoStart, undoEnd) {
+            if (this.prevWordStart != null && this.prevWordEnd != null) {
+                var newOp = { undo: this.operationStack[undoStart].undo, redo: this.operationStack[undoEnd - 1].redo };
+                this.cursorUndoPositions[undoStart].end = this.cursorUndoPositions[undoEnd - 1].end;
+                this.cursorUndoPositions[undoStart].bStart = this.cursorUndoPositions[undoEnd - 1].bStart;
+                var diff = 0;
+                for (var i = 1; i < undoEnd - undoStart; i++) {
+                    diff += this.cursorUndoPositions[undoStart + i].prevEnd - this.cursorUndoPositions[undoStart + i].start;
+                }
+                this.cursorUndoPositions[undoStart].prevEnd += diff;
+                this.cursorRedoPositions[undoEnd - 1].start = this.cursorRedoPositions[undoStart].start;
+                this.cursorRedoPositions[undoEnd - 1].bPrevEnd = this.cursorRedoPositions[undoStart].bPrevEnd;
+                this.operationStack.splice(undoStart, undoEnd - undoStart, newOp);
+                this.cursorUndoPositions.splice(undoStart + 1, undoEnd - undoStart - 1);
+                this.cursorRedoPositions.splice(undoStart, undoEnd - undoStart - 1);
+                this.prevWordEnd = this.wordEnd - (undoEnd - undoStart - 1);
+                this.prevWordStart = this.wordStart - (undoEnd - undoStart - 1);
+                this.operationPos -= undoEnd - undoStart - 1;
+                if (this.lastFowardEdit != null) {
+                    this.lastFowardEdit -= undoEnd - undoStart - 1;
+                }
+            }
+            else {
+                this.prevWordEnd = this.wordEnd;
+                this.prevWordStart = this.wordStart;
+            }
+            this.wordStart = this.operationPos;
+            this.wordEnd = this.wordStart;
+        };
+        Element.prototype.getAdditionalFont = function (fontSet, callback) {
+            loadingFonts[fontSet] = true;
+            loadCallbacks[fontSet] = [];
+            var callbackID = loadCallbacks[fontSet].length;
+            if (callback != null) {
+                loadCallbacks[fontSet][callbackID] = callback;
+            }
+            var req = self.indexedDB.open("fonts", 1);
+            req.onsuccess = function (event) {
+                var db = event.target.result;
+                var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+                var normReq = fontObjectStore.get(fontSet);
+                normReq.onerror = function (event) {
+                    console.log("Was error.");
+                };
+                normReq.onsuccess = function (event) {
+                    if (normReq.result == null || normReq.result == undefined) {
+                        var normReqExt_1 = new XMLHttpRequest();
+                        normReqExt_1.open("GET", fontList[fontSet].file, true);
+                        normReqExt_1.responseType = "arraybuffer";
+                        normReqExt_1.onload = function (oEvent) {
+                            var arrayBuffer = normReqExt_1.response;
+                            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+                            fontHelper[fontSet] = fontkit.create(buffer);
+                            for (var i = 0; i < loadCallbacks[fontSet].length; i++) {
+                                loadCallbacks[fontSet][i]();
+                            }
+                            var fontData = { fontName: fontSet, fontBuffer: arrayBuffer };
+                            var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+                            var req = fontObjectStore.put(fontData);
+                            req.onerror = function (event) {
+                                console.log("Was error.");
+                            };
+                        };
+                        normReqExt_1.send(null);
+                    }
+                    else {
+                        var font = normReq.result.fontBuffer;
+                        if (font != null) {
+                            var arrayBuffer = normReq.result.fontBuffer;
+                            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+                            fontHelper[fontSet] = fontkit.create(buffer);
+                            for (var i = 0; i < loadCallbacks[fontSet].length; i++) {
+                                loadCallbacks[fontSet][i]();
+                            }
+                        }
+                        else {
+                            console.log("Was null.");
+                        }
+                    }
+                };
+            };
+            req.onerror = function (event) {
+                console.error("Database error: " + event.target.errorCode);
+            };
+            req.onupgradeneeded = function (event) {
+                console.log("IndexedDB error.");
+            };
+            return callbackID;
         };
         return Element;
     }(BoardElement));
     WhiteBoardText.Element = Element;
 })(WhiteBoardText || (WhiteBoardText = {}));
+var fontList = [];
+fontList['NORMAL'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
+fontList['BOLD'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
+fontList['ITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Italic.ttf", ver: 1, style: "ITALIC" };
+fontList['BOLDITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-BoldItalic.ttf", ver: 1, style: "BOLDITALIC" };
 var fontHelper = [];
-var normReq = new XMLHttpRequest();
-normReq.open("GET", "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Regular.ttf", true);
-normReq.responseType = "arraybuffer";
-normReq.onload = function (oEvent) {
-    var arrayBuffer = normReq.response;
-    var buffer = new NodeBuffer.Buffer(arrayBuffer);
-    fontHelper['NORMAL'] = fontkit.create(buffer);
+var loadCallbacks = [];
+var loadingFonts = [];
+loadingFonts['NORMAL'] = true;
+loadCallbacks['NORMAL'] = [];
+loadingFonts['BOLD'] = true;
+loadCallbacks['BOLD'] = [];
+loadingFonts['ITALIC'] = true;
+loadCallbacks['ITALIC'] = [];
+loadingFonts['BOLDITALIC'] = true;
+loadCallbacks['BOLDITALIC'] = [];
+var getFont = function (fontName, fontObjectStore, db) {
+    var req = fontObjectStore.get(fontName);
+    req.onerror = function (event) {
+        console.log("Was error.");
+    };
+    req.onsuccess = function (event) {
+        if (req.result == null || req.result == undefined) {
+            var normReqExt_2 = new XMLHttpRequest();
+            normReqExt_2.open("GET", fontList[fontName].file, true);
+            normReqExt_2.responseType = "arraybuffer";
+            normReqExt_2.onload = function (oEvent) {
+                var arrayBuffer = normReqExt_2.response;
+                var buffer = new NodeBuffer.Buffer(arrayBuffer);
+                fontHelper[fontName] = fontkit.create(buffer);
+                for (var i = 0; i < loadCallbacks[fontName].length; i++) {
+                    loadCallbacks[fontName][i]();
+                }
+                var fontData = { fontName: fontName, fontBuffer: arrayBuffer };
+                var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+                var req = fontObjectStore.put(fontData);
+                req.onerror = function (event) {
+                    console.log("Was error.");
+                };
+            };
+            normReqExt_2.send(null);
+        }
+        else {
+            var font = req.result.fontBuffer;
+            if (font != null) {
+                var arrayBuffer = req.result.fontBuffer;
+                var buffer = new NodeBuffer.Buffer(arrayBuffer);
+                fontHelper[fontName] = fontkit.create(buffer);
+                for (var i = 0; i < loadCallbacks[fontName].length; i++) {
+                    loadCallbacks[fontName][i]();
+                }
+            }
+            else {
+                console.log("Was null.");
+            }
+        }
+    };
 };
-normReq.send(null);
-var boldReq = new XMLHttpRequest();
-boldReq.open("GET", "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Bold.ttf", true);
-boldReq.responseType = "arraybuffer";
-boldReq.onload = function (oEvent) {
-    var arrayBuffer = boldReq.response;
-    var buffer = new NodeBuffer.Buffer(arrayBuffer);
-    fontHelper['BOLD'] = fontkit.create(buffer);
+var req = self.indexedDB.open("fonts", 1);
+req.onsuccess = function (event) {
+    var db = event.target.result;
+    var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+    getFont("NORMAL", fontObjectStore, db);
+    getFont("BOLD", fontObjectStore, db);
+    getFont("ITALIC", fontObjectStore, db);
+    getFont("BOLDITALIC", fontObjectStore, db);
 };
-boldReq.send(null);
-var italReq = new XMLHttpRequest();
-italReq.open("GET", "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Italic.ttf", true);
-italReq.responseType = "arraybuffer";
-italReq.onload = function (oEvent) {
-    var arrayBuffer = italReq.response;
-    var buffer = new NodeBuffer.Buffer(arrayBuffer);
-    fontHelper['ITALIC'] = fontkit.create(buffer);
+req.onerror = function (event) {
+    console.error("Database error: " + event.target.errorCode);
 };
-italReq.send(null);
-var boldItalReq = new XMLHttpRequest();
-boldItalReq.open("GET", "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-BoldItalic.ttf", true);
-boldItalReq.responseType = "arraybuffer";
-boldItalReq.onload = function (oEvent) {
-    var arrayBuffer = boldItalReq.response;
-    var buffer = new NodeBuffer.Buffer(arrayBuffer);
-    fontHelper['BOLDITALIC'] = fontkit.create(buffer);
+req.onupgradeneeded = function (event) {
+    var db = event.target.result;
+    var objectStore = db.createObjectStore("font-files", { keyPath: "fontName" });
+    objectStore.transaction.oncomplete = function (event) {
+        var normReq = new XMLHttpRequest();
+        normReq.open("GET", fontList['NORMAL'].file, true);
+        normReq.responseType = "arraybuffer";
+        normReq.onload = function (oEvent) {
+            var arrayBuffer = normReq.response;
+            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+            fontHelper['NORMAL'] = fontkit.create(buffer);
+            for (var i = 0; i < loadCallbacks['NORMAL'].length; i++) {
+                loadCallbacks['NORMAL'][i]();
+            }
+            var fontData = { fontName: 'NORMAL', fontBuffer: arrayBuffer };
+            var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+            var req = fontObjectStore.put(fontData);
+            req.onerror = function (event) {
+                console.log("Was error.");
+            };
+            req.onsuccess = function (event) {
+                console.log('Successfully added normal font to database.');
+            };
+        };
+        normReq.send(null);
+        var boldReq = new XMLHttpRequest();
+        boldReq.open("GET", fontList['BOLD'].file, true);
+        boldReq.responseType = "arraybuffer";
+        boldReq.onload = function (oEvent) {
+            var arrayBuffer = boldReq.response;
+            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+            fontHelper['BOLD'] = fontkit.create(buffer);
+            for (var i = 0; i < loadCallbacks['BOLD'].length; i++) {
+                loadCallbacks['BOLD'][i]();
+            }
+            var fontData = { fontName: 'BOLD', fontBuffer: arrayBuffer };
+            var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+            var req = fontObjectStore.put(fontData);
+            req.onerror = function (event) {
+                console.log("Was error.");
+            };
+            req.onsuccess = function (event) {
+                console.log('Successfully added BOLD font to database.');
+            };
+        };
+        boldReq.send(null);
+        var italReq = new XMLHttpRequest();
+        italReq.open("GET", fontList['ITALIC'].file, true);
+        italReq.responseType = "arraybuffer";
+        italReq.onload = function (oEvent) {
+            var arrayBuffer = italReq.response;
+            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+            fontHelper['ITALIC'] = fontkit.create(buffer);
+            for (var i = 0; i < loadCallbacks['ITALIC'].length; i++) {
+                loadCallbacks['ITALIC'][i]();
+            }
+            var fontData = { fontName: 'ITALIC', fontBuffer: arrayBuffer };
+            var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+            var req = fontObjectStore.put(fontData);
+            req.onerror = function (event) {
+                console.log("Was error.");
+            };
+            req.onsuccess = function (event) {
+                console.log('Successfully added ITALIC font to database.');
+            };
+        };
+        italReq.send(null);
+        var boldItalReq = new XMLHttpRequest();
+        boldItalReq.open("GET", fontList['BOLDITALIC'].file, true);
+        boldItalReq.responseType = "arraybuffer";
+        boldItalReq.onload = function (oEvent) {
+            var arrayBuffer = boldItalReq.response;
+            var buffer = new NodeBuffer.Buffer(arrayBuffer);
+            fontHelper['BOLDITALIC'] = fontkit.create(buffer);
+            for (var i = 0; i < loadCallbacks['BOLDITALIC'].length; i++) {
+                loadCallbacks['BOLDITALIC'][i]();
+            }
+            var fontData = { fontName: 'BOLDITALIC', fontBuffer: arrayBuffer };
+            var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
+            var req = fontObjectStore.put(fontData);
+            req.onerror = function (event) {
+                console.log("Was error.");
+            };
+            req.onsuccess = function (event) {
+                console.log('Successfully added BOLDITALIC font to database.');
+            };
+        };
+        boldItalReq.send(null);
+    };
 };
-boldItalReq.send(null);
+req.onblocked = function () {
+    console.error("Database is locked but needs upgrading.");
+};
 registerComponent(WhiteBoardText.MODENAME, WhiteBoardText.Element, WhiteBoardText.Pallete);

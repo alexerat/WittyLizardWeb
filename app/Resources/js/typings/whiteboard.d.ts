@@ -47,7 +47,9 @@ interface ElementCallbacks {
     createAlert: (header: string, message: string) => void;
     createInfo: (x: number, y: number, width: number, height: number, header: string, message: string) => number;
     removeInfo: (id: number) => void;
+    updatePallete: (changes: Array<BoardPalleteChange>) => void;
     updateBoardView: (newView: ComponentViewState) => void;
+    deleteElement: () => void;
     getAudioStream: (id: number) => void;
     getVideoStream: (id: number) => void;
 }
@@ -102,6 +104,7 @@ interface PalleteChangeReturn {
     cursor: string;
     cursorURL: Array<string>;
 }
+
 interface HoverMessage {
     header: string;
     message: string;
@@ -132,7 +135,7 @@ interface CreationData {
     pasteEvent?: ClipboardEvent;
     dropEvent?: DragEvent;
 
-    serverMsg?: ServerPayload;
+    serverMsg?: ServerMessagePayload;
     serverId?: number;
 
     audio?;
@@ -147,30 +150,40 @@ interface ComponentViewState {
     y: number;
     width: number;
     height: number;
+
+    isEditing: boolean;
+    isMoving: boolean;
+    isResizing: boolean;
+    remLock: boolean;
+    getLock: boolean;
 }
 interface ComponentDispatcher {
-    mouseOver:   (e: MouseEvent, component?: number, subComp?: number) => void;
-    mouseOut:   (e: MouseEvent, component?: number, subComp?: number) => void;
-    mouseDown:   (e: MouseEvent, component?: number, subComp?: number) => void;
-    mouseMove:   (e: MouseEvent, component?: number, subComp?: number) => void;
-    mouseUp:     (e: MouseEvent, component?: number, subComp?: number) => void;
-    mouseClick:  (e: MouseEvent, component?: number, subComp?: number) => void;
-    doubleClick: (e: MouseEvent, component?: number, subComp?: number) => void;
+    mouseOver:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseOut:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseDown:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseMove:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseUp:     (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseClick:  (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    doubleClick: (e: React.MouseEvent, component?: number, subComp?: number) => void;
 
-    touchStart: (e: TouchEvent, component?: number, subComp?: number) => void;
-    touchMove: (e: TouchEvent, component?: number, subComp?: number) => void;
-    touchEnd: (e: TouchEvent, component?: number, subComp?: number) => void;
-    touchCancel: (e: TouchEvent, component?: number, subComp?: number) => void;
+    touchStart: (e: React.TouchEvent, component?: number, subComp?: number) => void;
+    touchMove: (e: React.TouchEvent, component?: number, subComp?: number) => void;
+    touchEnd: (e: React.TouchEvent, component?: number, subComp?: number) => void;
+    touchCancel: (e: React.TouchEvent, component?: number, subComp?: number) => void;
 
-    dragOver: (e: DragEvent, component?: number, subComp?: number) => void;
-    drop: (e: DragEvent, component?: number, subComp?: number) => void;
+    dragOver: (e: React.DragEvent, component?: number, subComp?: number) => void;
+    drop: (e: React.DragEvent, component?: number, subComp?: number) => void;
 }
 interface ComponentProp {
     state: ComponentViewState;
     dispatcher: ComponentDispatcher;
     mode: string;
-    viewScale: number;
     eraseSize: number;
+    viewScale: number;
+    viewX: number;
+    viewY: number;
+    viewWidth: number;
+    viewHeight: number;
 }
 interface ModeProp {
     mode: string;
@@ -208,10 +221,23 @@ interface InfoMessage {
     message: string;
 }
 
+interface ClipBoardItem {
+    format: string;
+    data: string;
+}
 
-
-interface Highlight extends BoardElement {
-    colour: number;
+interface ClipboardEventData {
+    isInternal: boolean;
+    wasCut: boolean;
+    files: FileList;
+    url: string;
+    urlList: string;
+    plainText: string;
+    htmlText: string;
+    enrichedText: string;
+    csv: string;
+    xml: string;
+    image: string;
 }
 
 
@@ -231,9 +257,9 @@ interface ServerMessageContainer {
 }
 interface ServerMessage {
     header: number;
-    payload: ServerPayload;
+    payload: ServerMessagePayload;
 }
-interface ServerPayload {
+interface ServerMessagePayload {
 
 }
 
@@ -246,36 +272,24 @@ interface ServerBoardJoinMessage {
     userId: number;
     colour: number;
 }
-interface ServeBaseMessage extends ServerPayload {
-    serverId: number;
-}
 interface ServerIdMessage {
     serverId: number;
     localId: number;
 }
-interface ServerMoveElementMessage extends ServeBaseMessage {
+interface ServerMoveElementMessage extends ServerMessagePayload {
     x: number;
     y: number;
     editTime: Date;
 }
-
-
-interface ServerHighLightMessage extends ServerMessage {
-    x: number;
-    y: number;
+interface ServerResizeElementMessage extends ServerMessagePayload {
     width: number;
     height: number;
+    editTime: Date;
+}
+interface ServerLockElementMessage extends ServerMessagePayload {
     userId: number;
-    colour: number;
 }
 
-/***************************************************************************************************************************************************************
- *
- *
- *
- *
- *
- **************************************************************************************************************************************************************/
 
 interface UserMessagePayload {
 
@@ -290,6 +304,7 @@ interface UserNewElementPayload extends UserMessagePayload {
     y: number;
     width: number;
     height: number;
+    editLock: boolean;
 }
 interface UserNewElementMessage {
     type: string;
@@ -309,11 +324,7 @@ interface UserMoveElementMessage extends UserMessagePayload {
     x: number;
     y: number;
 }
-
-
-interface UserHighLightMessage extends UserMessage {
-    x: number;
-    y: number;
+interface UserResizeElementMessage extends UserMessagePayload {
     width: number;
     height: number;
 }

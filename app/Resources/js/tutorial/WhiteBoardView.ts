@@ -143,39 +143,40 @@ render: function()
     {
         let dispater: ComponentDispatcher =
         {
-            mouseOver:   (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseOver:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseOver(id, e, component, subComp); }; })(element.id),
-            mouseOut:   (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseOut:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseOut(id, e, component, subComp); }; })(element.id),
-            mouseDown:   (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseDown:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseDown(id, e, component, subComp); }; })(element.id),
-            mouseMove:   (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseMove:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseMove(id, e, component, subComp); }; })(element.id),
-            mouseUp:   (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseUp:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseUp(id, e, component, subComp); }; })(element.id),
-            mouseClick:  (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            mouseClick:  (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseClick(id, e, component, subComp); }; })(element.id),
-            doubleClick: (function(id) { return (e: MouseEvent, component?: number, subComp?: number) =>
+            doubleClick: (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseDoubleClick(id, e, component, subComp); }; })(element.id),
 
-            touchStart: (function(id) { return (e: TouchEvent, component?: number, subComp?: number) =>
+            touchStart: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchStart(id, e, component, subComp); }; })(element.id),
-            touchMove: (function(id) { return (e: TouchEvent, component?: number, subComp?: number) =>
+            touchMove: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchMove(id, e, component, subComp); }; })(element.id),
-            touchEnd: (function(id) { return (e: TouchEvent, component?: number, subComp?: number) =>
+            touchEnd: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchEnd(id, e, component, subComp); }; })(element.id),
-            touchCancel: (function(id) { return (e: TouchEvent, component?: number, subComp?: number) =>
+            touchCancel: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchCancel(id, e, component, subComp); }; })(element.id),
 
-            dragOver: (function(id) { return (e: DragEvent, component?: number, subComp?: number) =>
+            dragOver: (function(id) { return (e: React.DragEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementDragOver(id, e, component, subComp); }; })(element.id),
-            drop: (function(id) { return (e: DragEvent, component?: number, subComp?: number) =>
+            drop: (function(id) { return (e: React.DragEvent, component?: number, subComp?: number) =>
                 { dispatcher.elementDrop(id, e, component, subComp); }; })(element.id),
         };
 
         displayElements.push(React.createElement(state.components.get(element.mode).ElementView,
         {
-            key: element.id, mode: state.mode, state: element, dispatcher: dispater, viewScale: state.viewScale, eraseSize: state.eraseSize
+            key: element.id, mode: state.mode, state: element, dispatcher: dispater, eraseSize: state.eraseSize, viewScale: state.viewScale,
+            viewX: state.viewX, viewY: state.viewY, viewWidth: state.viewWidth, viewHeight: state.viewHeight
         }));
     });
 
@@ -323,41 +324,45 @@ getInitialState: function()
         {
             palleteChange:           (change: BoardPalleteChange) => {},
             changeEraseSize:         (newSize: number)            => {},
-            elementMouseOver:        (id: number, e: MouseEvent)  => {},
-            elementMouseOut:         (id: number, e: MouseEvent)  => {},
-            elementMouseDown:        (id: number, e: MouseEvent)  => {},
-            elementMouseMove:        (id: number, e: MouseEvent)  => {},
-            elementMouseUp:          (id: number, e: MouseEvent)  => {},
-            elementMouseClick:       (id: number, e: MouseEvent)  => {},
-            elementMouseDoubleClick: (id: number, e: MouseEvent)  => {},
-            elementTouchStart:       (id: number, e: TouchEvent)  => {},
-            elementTouchMove:        (id: number, e: TouchEvent)  => {},
-            elementTouchEnd:         (id: number, e: TouchEvent)  => {},
-            elementTouchCancel:      (id: number, e: TouchEvent)  => {},
-            elementDragOver:         (id: number, e: DragEvent)   => {},
-            elementDrop:             (id: number, e: DragEvent)   => {},
+            elementMouseOver:        (id: number, e: React.MouseEvent)  => {},
+            elementMouseOut:         (id: number, e: React.MouseEvent)  => {},
+            elementMouseDown:        (id: number, e: React.MouseEvent)  => {},
+            elementMouseMove:        (id: number, e: React.MouseEvent)  => {},
+            elementMouseUp:          (id: number, e: React.MouseEvent)  => {},
+            elementMouseClick:       (id: number, e: React.MouseEvent)  => {},
+            elementMouseDoubleClick: (id: number, e: React.MouseEvent)  => {},
+            elementTouchStart:       (id: number, e: React.TouchEvent)  => {},
+            elementTouchMove:        (id: number, e: React.TouchEvent)  => {},
+            elementTouchEnd:         (id: number, e: React.TouchEvent)  => {},
+            elementTouchCancel:      (id: number, e: React.TouchEvent)  => {},
+            elementDragOver:         (id: number, e: React.DragEvent)   => {},
+            elementDrop:             (id: number, e: React.DragEvent)   => {},
             clearAlert:              (id: number)                 => {},
             modeChange:              (newMode: string)            => {},
-            onCopy:                  (e: ClipboardEvent)          => {},
-            onCut:                   (e: ClipboardEvent)          => {},
-            onPaste:                 (e: ClipboardEvent)          => {},
-            contextCopy:             (e: MouseEvent)              => {},
-            contextCut:              (e: MouseEvent)              => {},
-            contextPaste:            (e: MouseEvent)              => {},
-            mouseDown:               (e: MouseEvent)              => {},
-            mouseWheel:              (e: MouseEvent)              => {},
-            mouseMove:               (e: MouseEvent)              => {},
-            mouseUp:                 (e: MouseEvent)              => {},
-            mouseClick:              (e: MouseEvent)              => {},
-            touchStart:              (e: TouchEvent)              => {},
-            touchMove:               (e: TouchEvent)              => {},
-            touchEnd:                (e: TouchEvent)              => {},
-            touchCancel:             (e: TouchEvent)              => {},
-            dragOver:                (e: DragEvent)               => {},
-            drop:                    (e: DragEvent)               => {}
+            onCopy:                  (e: React.ClipboardEvent)          => {},
+            onCut:                   (e: React.ClipboardEvent)          => {},
+            onPaste:                 (e: React.ClipboardEvent)          => {},
+            contextCopy:             (e: React.MouseEvent)              => {},
+            contextCut:              (e: React.MouseEvent)              => {},
+            contextPaste:            (e: React.MouseEvent)              => {},
+            mouseDown:               (e: React.MouseEvent)              => {},
+            mouseWheel:              (e: React.WheelEvent)              => {},
+            mouseMove:               (e: React.MouseEvent)              => {},
+            mouseUp:                 (e: React.MouseEvent)              => {},
+            mouseClick:              (e: React.MouseEvent)              => {},
+            touchStart:              (e: React.TouchEvent)              => {},
+            touchMove:               (e: React.TouchEvent)              => {},
+            touchEnd:                (e: React.TouchEvent)              => {},
+            touchCancel:             (e: React.TouchEvent)              => {},
+            dragOver:                (e: React.DragEvent)               => {},
+            drop:                    (e: React.DragEvent)               => {}
         }
 
     } as WhiteBoardViewState;
+},
+componentDidMount: function()
+{
+
 },
 storeUpdate: function(newState: WhiteBoardViewState)
 {
@@ -367,10 +372,8 @@ render: function()
 {
     let state: WhiteBoardViewState = this.state as WhiteBoardViewState;
     let dispatcher: WhiteBoardDispatcher = state.dispatcher as WhiteBoardDispatcher;
-    let inElem = React.createElement('canvas', {className: 'inputSpace', id: 'whiteBoard-input'});
+    let inElem = React.createElement('canvas', { className: 'inputSpace', id: 'whiteBoard-input' });
 
-    document.body.addEventListener('mouseup', this.mouseUp, false);
-    //document.body.addEventListener('touchcancel', this.touchUp, false);
 
     let outElem = React.createElement(SVGComponent,
     {
@@ -381,7 +384,7 @@ render: function()
     {
         className: "large-11 small-10 columns", id: "whiteboard-container", key: 'whiteboard', onMouseDown: dispatcher.mouseDown, onDrop: dispatcher.drop,
         onDragOver: dispatcher.dragOver, onMouseMove: dispatcher.mouseMove, onMouseUp: dispatcher.mouseUp, onClick: dispatcher.mouseClick,
-        onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel, onCopy: dispatcher.onCopy, onPaste: dispatcher.onPaste, onCut: dispatcher.onCut,
+        onMouseLeave: dispatcher.mouseUp, onWheel: dispatcher.mouseWheel,
         contextMenu: 'whiteboard-context'
     }, outElem, inElem);
 
@@ -392,12 +395,17 @@ render: function()
         dispatcher: { modeChange: dispatcher.modeChange, palleteChange: dispatcher.palleteChange, changeEraseSize: dispatcher.changeEraseSize }
     });
 
+    /* TODO: Paste does not currently work in context.
     let contextMenu = React.createElement('menu',
         { type: 'context', id: 'whiteboard-context', key: 'context' },
         React.createElement('menuitem', { label: 'Copy',  onClick: dispatcher.contextCopy }),
         React.createElement('menuitem', { label: 'Cut',   onClick: dispatcher.contextCut }),
         React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
-
+    */
+    let contextMenu = React.createElement('menu',
+        { type: 'context', id: 'whiteboard-context', key: 'context' },
+        React.createElement('menuitem', { label: 'Copy',  onClick: dispatcher.contextCopy }),
+        React.createElement('menuitem', { label: 'Cut',   onClick: dispatcher.contextCut }));
 
     let infoElems = [];
 
@@ -417,7 +425,7 @@ render: function()
     {
         let alertMsg : AlertElement = state.alertElements.first();
 
-        let alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: dispatcher.clearAlert },
+        let alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: (e: React.MouseEvent) => { dispatcher.clearAlert(0); } },
             React.createElement('h5', null, alertMsg.type), React.createElement('p', null, alertMsg.message));
 
         return  (React.createElement("div", {className: "expanded row", id: "whiteboard-row"}, whitElem, contElem, alertElem, infoElems, contextMenu));

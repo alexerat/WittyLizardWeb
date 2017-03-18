@@ -99,16 +99,10 @@ namespace FreeCurve {
      * Message types that can be sent between the user and server.
      */
     const MessageTypes = {
-        NEW: 0,
-        DELETE: 1,
-        RESTORE: 2,
-        IGNORE: 3,
-        COMPLETE: 4,
-        DROPPED: 5,
-        MOVE: 6,
-        POINT: 7,
-        POINTMISSED: 8,
-        MISSINGPOINT: 9
+        IGNORE: 1,
+        POINT: 2,
+        POINTMISSED: 3,
+        MISSINGPOINT: 4
     };
 
     interface PointContainer extends Point {
@@ -132,12 +126,12 @@ namespace FreeCurve {
         seq_num: number;
     }
 
-    interface ServerNewPointMessage extends ServerPayload {
+    interface ServerNewPointMessage extends ServerMessagePayload {
         num: number;
         x: number;
         y: number;
     }
-    interface ServerNewCurvePayload extends ServerPayload {
+    interface ServerNewCurvePayload extends ServerMessagePayload {
         x: number;
         y: number;
         width: number;
@@ -149,7 +143,7 @@ namespace FreeCurve {
         editTime: Date;
         points: Array<PointContainer>;
     }
-    interface ServerMissedPointMessage extends ServerPayload {
+    interface ServerMissedPointMessage extends ServerMessagePayload {
         num: number;
     }
 
@@ -276,12 +270,6 @@ namespace FreeCurve {
         pointInTimeout;
         numRecieved: number = 0;
         numPoints: number = 0;
-
-        isMoving: boolean = false;
-        moveStartX: number = 0;
-        moveStartY: number = 0;
-        hasMoved: boolean = false;
-        startTime: Date;
 
         /**   Create the element from the creation data, return null if not valid.
         *
@@ -450,7 +438,8 @@ namespace FreeCurve {
                 console.log('Empty curve set.');
                 newCurveView = {
                     mode: MODENAME, type: 'empty', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, updateTime: this.updateTime,
-                    isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height, isEditing: false, isResizing: false,
+                    remLock: false, getLock: false
                 };
             }
             else if(this.curveSet.length > 1)
@@ -458,7 +447,8 @@ namespace FreeCurve {
                 let pathText = this.createCurveText();
                 newCurveView = {
                     mode: MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
-                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height, isEditing: false,
+                    isResizing: false, remLock: false, getLock: false
                 };
                 this.isComplete = true;
             }
@@ -466,7 +456,8 @@ namespace FreeCurve {
             {
                 newCurveView = {
                     mode: MODENAME, type: 'circle', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, point: this.curveSet[0],
-                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height, isEditing: false,
+                    isResizing: false, remLock: false, getLock: false
                 };
                 this.isComplete = true;
             }
@@ -498,106 +489,48 @@ namespace FreeCurve {
             let msg: UserNewCurveMessage =
             {
                 localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height, colour: this.colour, size: this.size,
-                num_points: this.numPoints, points: pointMessages
+                num_points: this.numPoints, points: pointMessages, editLock: false
             };
 
             return msg;
         }
 
+        /**   Generate the clipboard data that this element should produce when copied, either as a single selected item or whilst editing.
+         *
+         *    This should be a set of different clipboard data formats.
+         *
+         *    @return {Array<ClipBoardItem>} The clipboard items.
+         */
+        public getClipboardData()
+        {
+            // TODO:
+            return null;
+        }
+
+        /**   Generate the SVG string description of this objects display to be copied  when user copies multiple items.
+         *
+         *    This should be a string containing the svg description to display this item.
+         *
+         *    @return {string} The clipboard items.
+         */
+        public getClipboardSVG()
+        {
+            // TODO:
+            return null;
+        }
+
         /**   Sets the serverId of this element and returns a list of server messages to send.
          *
-         *    @return Array<UserMessage> The set of messages to send to the communication server.
+         *    @param {number} id - The server ID for this element.
+         *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
          */
         public setServerId(id: number)
         {
-            this.serverId = id;
+            super.setServerId(id);
 
             let messages: Array<UserMessage> = [];
 
             return messages;
-        }
-
-        /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
-         *
-         *    Change only when sub-components require updating.
-         *
-         *    @return {ElementUndoRedoReturn} The new view state of this element.
-         */
-        public elementErase()
-        {
-            let retMsgs: Array<UserMessage> = [];
-            let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-
-            let message: UserMessage = { header: MessageTypes.DELETE, payload: null };
-
-            this.erase();
-
-            let retVal: ElementUndoRedoReturn =
-            {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: { message: message },
-                wasRestore: null, move: null
-            };
-
-            let msg: UserMessage = { header: MessageTypes.DELETE, payload: null };
-            retMsgs.push(msg);
-
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-
-            return retVal;
-        }
-
-        /**   Sets this item as not deleted and process any sub-components as required, returning the new view state.
-         *
-         *    Change only when sub-components require updating.
-         *
-         *    @return {ElementUndoRedoReturn} The new view state of this element.
-         */
-        public elementRestore()
-        {
-            let retMsgs: Array<UserMessage> = [];
-            let centrePos: Point = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-
-            let message: UserMessage = { header: MessageTypes.RESTORE, payload: null };
-
-            this.restore();
-
-            let retVal: ElementUndoRedoReturn =
-            {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                wasRestore: { message: message }, move: null
-            };
-
-            let msg: UserMessage = { header: MessageTypes.RESTORE, payload: null };
-            retMsgs.push(msg);
-
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        }
-
-        /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
-         *
-         *    Change only when sub-components require updating.
-         *
-         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
-         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
-         */
-        public handleErase()
-        {
-            let serverMsgs: Array<UserMessage> = [];
-            let retVal = this.getDefaultInputReturn();
-
-            let eraseRet = this.elementErase();
-
-            retVal.serverMessages = eraseRet.serverMessages;
-            retVal.newView = eraseRet.newView;
-
-            let undoOp = this.elementRestore;
-            let redoOp = this.elementErase;
-
-            retVal.undoOp = undoOp.bind(this);
-            retVal.redoOp = redoOp.bind(this);
-
-            return retVal;
         }
 
         /**   Handle a mouse down event on this element or one of it's sub-components. Only called when board is in SELECT mode.
@@ -871,6 +804,7 @@ namespace FreeCurve {
 
             if(this.isMoving)
             {
+                console.log('Should have moved.');
                 this.move(changeX, changeY, new Date());
                 this.hasMoved = true;
             }
@@ -904,7 +838,7 @@ namespace FreeCurve {
                 let changeY = this.y - this.moveStartY;
 
                 let msgPayload: UserMoveElementMessage = { x: this.x, y: this.y };
-                let msg: UserMessage = { header: MessageTypes.MOVE, payload: msgPayload };
+                let msg: UserMessage = { header: BaseMessageTypes.MOVE, payload: msgPayload };
 
                 serverMsgs.push(msg);
 
@@ -1064,7 +998,7 @@ namespace FreeCurve {
             this.updateView({ isMoving: false });
 
             let msgPayload: UserMoveElementMessage = { x: this.x, y: this.y };
-            let serverMsg: UserMessage = { header: MessageTypes.MOVE, payload: msgPayload };
+            let serverMsg: UserMessage = { header: BaseMessageTypes.MOVE, payload: msgPayload };
             let serverMsgs = [];
             let retVal : ElementMoveReturn = { newView: this.currentViewState, serverMessages: [], move: { x: this.x, y: this.y, message: serverMsg } };
 
@@ -1099,7 +1033,7 @@ namespace FreeCurve {
          *
          *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
          */
-        public handleServerMessage(message: ServerMessage)
+        public handleElementServerMessage(message: ServerMessage)
         {
             let newView: ViewState = this.currentViewState as ViewState;
             let retMsgs: Array<UserMessage> = [];
@@ -1130,7 +1064,8 @@ namespace FreeCurve {
                                 let pathText = this.createCurveText();
                                 newView = {
                                     mode: MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
-                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             else if(this.curveSet.length == 1)
@@ -1138,14 +1073,16 @@ namespace FreeCurve {
                                 newView = {
                                     mode: MODENAME, type: 'circle', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour,
                                     point: this.curveSet[0], updateTime: this.updateTime, isSelected: false,
-                                    x: this.x, y: this.y, width: this.width, height: this.height
+                                    x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             else
                             {
                                 newView = {
                                     mode: MODENAME, type: 'empty', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour,
-                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             this.updateView(newView);
@@ -1157,40 +1094,12 @@ namespace FreeCurve {
                     clearInterval(this.pointInTimeout);
                     wasDelete = true;
                     break;
-                case MessageTypes.COMPLETE:
-                    while(this.opBuffer.length > 0)
-                    {
-                        let opMsg: UserMessage;
-                        let op = this.opBuffer.shift();
-                        opMsg = { header: op.header, payload: op.payload };
-                        retMsgs.push(opMsg);
-                    }
-                    break;
                 case MessageTypes.POINTMISSED:
                     let msdata = message.payload as ServerMissedPointMessage;
                     let point = this.curveSet[msdata.num];
                     let msg : UserNewPointMessage = { num: msdata.num, x: point.x, y: point.y};
                     let msgCont : UserMessage =  { header:  MessageTypes.POINT, payload: msg };
                     retMsgs.push(msgCont);
-                    break;
-                case MessageTypes.DROPPED:
-                    alertMessage = { header: 'CONNECTION ERROR', message: 'Unable to send data to server due to connection problems.' };
-                    wasDelete = true;
-                    break;
-                case MessageTypes.MOVE:
-                    let mvdata = message.payload as ServerMoveElementMessage;
-                    this.move(mvdata.x - this.x, mvdata.y - this.y, mvdata.editTime);
-                    this.updateTime = mvdata.editTime;
-                    newView = this.currentViewState as ViewState;
-                    break;
-                case MessageTypes.DELETE:
-                    wasDelete = true;
-                    this.erase();
-                    newView = this.currentViewState as ViewState;
-                    break;
-                case MessageTypes.RESTORE:
-                    this.restore();
-                    newView = this.currentViewState as ViewState;
                     break;
                 default:
                     break;
@@ -1202,6 +1111,8 @@ namespace FreeCurve {
             };
             return retVal;
         }
+
+
 
         /**   Handle the selecting and starting of editing of this element that has not been induced by this elements input handles.
          *
@@ -1251,13 +1162,15 @@ namespace FreeCurve {
 
         /**   Handle the pasting of data into this element.
          *
-         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
+         *    @param {number} localX - The x position of the mouse with respect to this element.
+         *    @param {number} localY - The y position of the mouse with respect to this element.
+         *    @param {ClipboardEventData} data - The clipboard data to be pasted.
          *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
          */
-        public handlePaste(e: ClipboardEvent, palleteState: Pallete)
+        public handlePaste(localX: number, localY: number, data: ClipboardEventData, palleteState: Pallete)
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1270,13 +1183,11 @@ namespace FreeCurve {
 
         /**  Handle the cutting of data from this element.
          *
-         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
-         *    @param {Pallete} palleteState - The current state of the pallete for this component.
          *
          *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
          *    required changes to the pallete state, whether to set this element as selected
          */
-        public handleCut(e: ClipboardEvent, palleteState: Pallete)
+        public handleCut()
         {
             let serverMsgs: Array<UserMessage> = [];
             let retVal = this.getDefaultInputReturn();
@@ -1355,27 +1266,6 @@ namespace FreeCurve {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // INTERNAL FUNCTIONS
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /** Handle a move operation and provide view and message updates.
-         * TODO: This should probably be in the BoardElement class definition. Problem is the message type.
-         * This is used to handle undo and redo operations.
-         *
-         */
-        private moveOperation(changeX: number, changeY: number, updateTime: Date)
-        {
-            this.move(changeX, changeY, updateTime);
-
-            let msgPayload: UserMoveElementMessage = { x: this.x, y: this.y };
-            let serverMsg: UserMessage = { header: MessageTypes.MOVE, payload: msgPayload };
-
-            let retVal: ElementUndoRedoReturn =
-            {
-                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
-                wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
-            };
-
-            return retVal;
-        }
 
         /** Convert the list of points describing the Bezier curve into a string.
          *

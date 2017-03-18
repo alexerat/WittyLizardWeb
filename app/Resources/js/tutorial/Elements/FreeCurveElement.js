@@ -32,16 +32,10 @@ var FreeCurve;
     (function (CustomContextItems) {
     })(CustomContextItems || (CustomContextItems = {}));
     var MessageTypes = {
-        NEW: 0,
-        DELETE: 1,
-        RESTORE: 2,
-        IGNORE: 3,
-        COMPLETE: 4,
-        DROPPED: 5,
-        MOVE: 6,
-        POINT: 7,
-        POINTMISSED: 8,
-        MISSINGPOINT: 9
+        IGNORE: 1,
+        POINT: 2,
+        POINTMISSED: 3,
+        MISSINGPOINT: 4
     };
     var Pallete = (function (_super) {
         __extends(Pallete, _super);
@@ -120,10 +114,6 @@ var FreeCurve;
             _this.pointBuffer = [];
             _this.numRecieved = 0;
             _this.numPoints = 0;
-            _this.isMoving = false;
-            _this.moveStartX = 0;
-            _this.moveStartY = 0;
-            _this.hasMoved = false;
             _this.numRecieved = 0;
             if (serverId != null && serverId != undefined) {
                 for (var i = 0; i < numPoints; i++) {
@@ -161,21 +151,24 @@ var FreeCurve;
                 console.log('Empty curve set.');
                 newCurveView = {
                     mode: FreeCurve.MODENAME, type: 'empty', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, updateTime: _this.updateTime,
-                    isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
+                    isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height, isEditing: false, isResizing: false,
+                    remLock: false, getLock: false
                 };
             }
             else if (_this.curveSet.length > 1) {
                 var pathText = _this.createCurveText();
                 newCurveView = {
                     mode: FreeCurve.MODENAME, type: 'path', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, param: pathText,
-                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
+                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height, isEditing: false,
+                    isResizing: false, remLock: false, getLock: false
                 };
                 _this.isComplete = true;
             }
             else if (_this.curveSet.length == 1) {
                 newCurveView = {
                     mode: FreeCurve.MODENAME, type: 'circle', id: _this.id, size: _this.size, isMoving: _this.isMoving, colour: _this.colour, point: _this.curveSet[0],
-                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height
+                    updateTime: _this.updateTime, isSelected: false, x: _this.x, y: _this.y, width: _this.width, height: _this.height, isEditing: false,
+                    isResizing: false, remLock: false, getLock: false
                 };
                 _this.isComplete = true;
             }
@@ -259,54 +252,20 @@ var FreeCurve;
             }
             var msg = {
                 localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height, colour: this.colour, size: this.size,
-                num_points: this.numPoints, points: pointMessages
+                num_points: this.numPoints, points: pointMessages, editLock: false
             };
             return msg;
         };
+        Element.prototype.getClipboardData = function () {
+            return null;
+        };
+        Element.prototype.getClipboardSVG = function () {
+            return null;
+        };
         Element.prototype.setServerId = function (id) {
-            this.serverId = id;
+            _super.prototype.setServerId.call(this, id);
             var messages = [];
             return messages;
-        };
-        Element.prototype.elementErase = function () {
-            var retMsgs = [];
-            var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            var message = { header: MessageTypes.DELETE, payload: null };
-            this.erase();
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: { message: message },
-                wasRestore: null, move: null
-            };
-            var msg = { header: MessageTypes.DELETE, payload: null };
-            retMsgs.push(msg);
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        };
-        Element.prototype.elementRestore = function () {
-            var retMsgs = [];
-            var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
-            var message = { header: MessageTypes.RESTORE, payload: null };
-            this.restore();
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: [], wasDelete: null,
-                wasRestore: { message: message }, move: null
-            };
-            var msg = { header: MessageTypes.RESTORE, payload: null };
-            retMsgs.push(msg);
-            retVal.serverMessages = this.checkForServerId(retMsgs);
-            return retVal;
-        };
-        Element.prototype.handleErase = function () {
-            var serverMsgs = [];
-            var retVal = this.getDefaultInputReturn();
-            var eraseRet = this.elementErase();
-            retVal.serverMessages = eraseRet.serverMessages;
-            retVal.newView = eraseRet.newView;
-            var undoOp = this.elementRestore;
-            var redoOp = this.elementErase;
-            retVal.undoOp = undoOp.bind(this);
-            retVal.redoOp = redoOp.bind(this);
-            return retVal;
         };
         Element.prototype.handleMouseDown = function (e, localX, localY, palleteState, component, subId) {
             var cursorType;
@@ -389,6 +348,7 @@ var FreeCurve;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             if (this.isMoving) {
+                console.log('Should have moved.');
                 this.move(changeX, changeY, new Date());
                 this.hasMoved = true;
             }
@@ -405,7 +365,7 @@ var FreeCurve;
                 var changeX_1 = this.x - this.moveStartX;
                 var changeY_1 = this.y - this.moveStartY;
                 var msgPayload = { x: this.x, y: this.y };
-                var msg = { header: MessageTypes.MOVE, payload: msgPayload };
+                var msg = { header: BaseMessageTypes.MOVE, payload: msgPayload };
                 serverMsgs.push(msg);
                 retVal.undoOp = function () { return _this.moveOperation(-changeX_1, -changeY_1, _this.startTime); };
                 retVal.redoOp = function () { return _this.moveOperation(changeX_1, changeY_1, _this.updateTime); };
@@ -462,7 +422,7 @@ var FreeCurve;
             this.isMoving = false;
             this.updateView({ isMoving: false });
             var msgPayload = { x: this.x, y: this.y };
-            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
+            var serverMsg = { header: BaseMessageTypes.MOVE, payload: msgPayload };
             var serverMsgs = [];
             var retVal = { newView: this.currentViewState, serverMessages: [], move: { x: this.x, y: this.y, message: serverMsg } };
             retVal.serverMessages = this.checkForServerId(serverMsgs);
@@ -474,7 +434,7 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleServerMessage = function (message) {
+        Element.prototype.handleElementServerMessage = function (message) {
             var newView = this.currentViewState;
             var retMsgs = [];
             var alertMessage = null;
@@ -496,20 +456,23 @@ var FreeCurve;
                                 var pathText = this.createCurveText();
                                 newView = {
                                     mode: FreeCurve.MODENAME, type: 'path', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour, param: pathText,
-                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             else if (this.curveSet.length == 1) {
                                 newView = {
                                     mode: FreeCurve.MODENAME, type: 'circle', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour,
                                     point: this.curveSet[0], updateTime: this.updateTime, isSelected: false,
-                                    x: this.x, y: this.y, width: this.width, height: this.height
+                                    x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             else {
                                 newView = {
                                     mode: FreeCurve.MODENAME, type: 'empty', id: this.id, size: this.size, isMoving: this.isMoving, colour: this.colour,
-                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height
+                                    updateTime: this.updateTime, isSelected: false, x: this.x, y: this.y, width: this.width, height: this.height,
+                                    isEditing: false, isResizing: false, remLock: false, getLock: false
                                 };
                             }
                             this.updateView(newView);
@@ -521,39 +484,12 @@ var FreeCurve;
                     clearInterval(this.pointInTimeout);
                     wasDelete = true;
                     break;
-                case MessageTypes.COMPLETE:
-                    while (this.opBuffer.length > 0) {
-                        var opMsg = void 0;
-                        var op = this.opBuffer.shift();
-                        opMsg = { header: op.header, payload: op.payload };
-                        retMsgs.push(opMsg);
-                    }
-                    break;
                 case MessageTypes.POINTMISSED:
                     var msdata = message.payload;
                     var point = this.curveSet[msdata.num];
                     var msg = { num: msdata.num, x: point.x, y: point.y };
                     var msgCont = { header: MessageTypes.POINT, payload: msg };
                     retMsgs.push(msgCont);
-                    break;
-                case MessageTypes.DROPPED:
-                    alertMessage = { header: 'CONNECTION ERROR', message: 'Unable to send data to server due to connection problems.' };
-                    wasDelete = true;
-                    break;
-                case MessageTypes.MOVE:
-                    var mvdata = message.payload;
-                    this.move(mvdata.x - this.x, mvdata.y - this.y, mvdata.editTime);
-                    this.updateTime = mvdata.editTime;
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.DELETE:
-                    wasDelete = true;
-                    this.erase();
-                    newView = this.currentViewState;
-                    break;
-                case MessageTypes.RESTORE:
-                    this.restore();
-                    newView = this.currentViewState;
                     break;
                 default:
                     break;
@@ -583,13 +519,13 @@ var FreeCurve;
         };
         Element.prototype.handleCopy = function (e, palleteState) {
         };
-        Element.prototype.handlePaste = function (e, palleteState) {
+        Element.prototype.handlePaste = function (localX, localY, data, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
-        Element.prototype.handleCut = function (e, palleteState) {
+        Element.prototype.handleCut = function () {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             retVal.serverMessages = this.checkForServerId(serverMsgs);
@@ -614,16 +550,6 @@ var FreeCurve;
         Element.prototype.audioStream = function (stream) {
         };
         Element.prototype.videoStream = function (stream) {
-        };
-        Element.prototype.moveOperation = function (changeX, changeY, updateTime) {
-            this.move(changeX, changeY, updateTime);
-            var msgPayload = { x: this.x, y: this.y };
-            var serverMsg = { header: MessageTypes.MOVE, payload: msgPayload };
-            var retVal = {
-                id: this.id, newView: this.currentViewState, serverMessages: [], palleteChanges: [], newViewCentre: null, wasDelete: null,
-                wasRestore: null, move: { x: changeX, y: changeY, message: serverMsg }
-            };
-            return retVal;
         };
         Element.prototype.createCurveText = function () {
             var param = "M" + this.curveSet[0].x + "," + this.curveSet[0].y;

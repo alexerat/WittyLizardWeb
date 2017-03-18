@@ -1,8 +1,13 @@
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var WhiteBoardTextView;
 (function (WhiteBoardTextView) {
     WhiteBoardTextView.MODENAME = 'TEXT';
@@ -34,6 +39,7 @@ var WhiteBoardTextView;
         ViewComponents[ViewComponents["View"] = 0] = "View";
         ViewComponents[ViewComponents["Resize"] = 1] = "Resize";
         ViewComponents[ViewComponents["Interaction"] = 2] = "Interaction";
+        ViewComponents[ViewComponents["TextArea"] = 3] = "TextArea";
     })(ViewComponents || (ViewComponents = {}));
     var ResizeComponents;
     (function (ResizeComponents) {
@@ -53,49 +59,74 @@ var WhiteBoardTextView;
     var ElementView = (function (_super) {
         __extends(ElementView, _super);
         function ElementView() {
-            var _this = _super.apply(this, arguments) || this;
+            var _this = _super !== null && _super.apply(this, arguments) || this;
             _this.propTypes = {};
             return _this;
         }
         ElementView.prototype.shouldComponentUpdate = function (nextProps, nextState) {
-            return this.props.state !== nextProps.state || this.props.mode != nextProps.mode;
+            return this.props.state !== nextProps.state || this.props.mode !== nextProps.mode;
         };
         ElementView.prototype.render = function () {
             var state = this.props.state;
             var dispatcher = this.props.dispatcher;
+            var mode = this.props.mode;
             var hightLightBoxes = [];
             var borderBoxes = [];
             var selCount = 0;
             var displayElement;
             var self = this;
             var lineElems = state.textNodes.map(function (textElem) {
-                var glyphs = [];
-                for (var i_1 = 0; i_1 < textElem.glyphs.length; i_1++) {
-                    var glyph = textElem.glyphs[i_1];
-                    var glyphArgs = {
-                        key: i_1, d: glyph.path, stroke: 'none', fill: 'black', transform: 'translate(' + glyph.startPos + ',' + 0 + ')' + 'scale(1, -1)'
-                    };
-                    glyphs.push(React.createElement('path', glyphArgs));
+                var sections = [];
+                for (var j = 0; j < textElem.sections.length; j++) {
+                    var sectionData = textElem.sections[j];
+                    var glyphs = [];
+                    for (var i_1 = 0; i_1 < sectionData.glyphs.length; i_1++) {
+                        var glyph = sectionData.glyphs[i_1];
+                        var glyphArgs = {
+                            key: i_1, d: glyph.path, stroke: 'none', fill: glyph.colour,
+                            transform: 'translate(' + glyph.startAdvance + ',' + 0 + ')' + 'scale(1, -1)'
+                        };
+                        glyphs.push(React.createElement('path', glyphArgs));
+                        if (glyph.uline) {
+                            glyphs.push(React.createElement('line', {
+                                x1: glyph.startAdvance, y1: 300,
+                                x2: glyph.startAdvance + glyph.xAdvance, y2: 300,
+                                stroke: glyph.colour, strokeWidth: 150, key: 'underline' + i_1
+                            }));
+                        }
+                        if (glyph.oline) {
+                            glyphs.push(React.createElement('line', {
+                                x1: glyph.startAdvance, y1: -1300,
+                                x2: glyph.startAdvance + glyph.xAdvance, y2: -1300,
+                                stroke: glyph.colour, strokeWidth: 150, key: 'overline' + i_1
+                            }));
+                        }
+                        if (glyph.tline) {
+                            glyphs.push(React.createElement('line', {
+                                x1: glyph.startAdvance, y1: -500,
+                                x2: glyph.startAdvance + glyph.xAdvance, y2: -500,
+                                stroke: glyph.colour, strokeWidth: 150, key: 'throughline' + i_1
+                            }));
+                        }
+                    }
+                    var newElem = React.createElement('g', {
+                        key: textElem.lineNum, transform: 'scale(' + state.size / 1000 + ',' + state.size / 1000 + ')' +
+                            'translate(' + sectionData.startPos + ', 0)'
+                    }, glyphs);
+                    sections.push(newElem);
                 }
                 return React.createElement('g', {
-                    key: textElem.lineNum, transform: 'translate(' + 0 + ',' + (textElem.lineNum + 1) * (20) + ')' + 'scale(0.01,0.01)'
-                }, glyphs);
+                    key: textElem.lineNum, transform: 'translate(' + 0 + ',' + (textElem.lineNum + 1) * (2 * state.size) + ')'
+                }, sections);
             });
-            if (state.mode == 'SELECT' && !state.isMoving && !state.isResizing && !state.remLock) {
+            if (mode == BoardModes.SELECT && !state.isMoving && !state.isResizing && !state.remLock) {
                 borderBoxes.push(React.createElement('rect', {
                     key: 'move', x: 0, y: 0, width: state.width, height: state.height,
                     fill: 'none', strokeWidth: state.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
                     onMouseDown: function (e) { dispatcher.mouseDown(e, 2); }
                 }));
-                borderBoxes.push(React.createElement('rect', {
-                    key: 'selBox', x: 0, y: 0, width: state.width, height: state.height, fill: 'none',
-                    opacity: 0, pointerEvents: 'fill',
-                    onClick: function (e) { if (e.detail == 2) {
-                        dispatcher.doubleClick(e);
-                    } }
-                }));
             }
-            if (state.cursor) {
+            if (state.cursor != null) {
                 hightLightBoxes.push(React.createElement('line', {
                     x1: state.cursor.x, y1: state.cursor.y,
                     x2: state.cursor.x, y2: state.cursor.y + state.cursor.height,
@@ -160,6 +191,14 @@ var WhiteBoardTextView;
                     fill: 'none', stroke: 'red', strokeWidth: 2, strokeDasharray: '5,5', className: 'blinking'
                 }));
             }
+            borderBoxes.push(React.createElement('rect', {
+                key: 'selBox', x: 0, y: 0, width: state.width, height: state.height, fill: 'none',
+                opacity: 0, pointerEvents: 'fill',
+                onMouseDown: function (e) { dispatcher.mouseDown(e, 3); },
+                onClick: function (e) { if (e.detail == 2) {
+                    dispatcher.doubleClick(e);
+                } }
+            }));
             return React.createElement('g', { transform: 'translate(' + state.x + ',' + state.y + ')' }, hightLightBoxes, lineElems, borderBoxes);
         };
         return ElementView;
@@ -168,7 +207,7 @@ var WhiteBoardTextView;
     var ModeView = (function (_super) {
         __extends(ModeView, _super);
         function ModeView() {
-            return _super.apply(this, arguments) || this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         ModeView.prototype.render = function () {
             var _this = this;
@@ -190,7 +229,7 @@ var WhiteBoardTextView;
     var PalleteView = (function (_super) {
         __extends(PalleteView, _super);
         function PalleteView() {
-            return _super.apply(this, arguments) || this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         PalleteView.prototype.render = function () {
             var state = this.props.state;
@@ -249,17 +288,17 @@ var WhiteBoardTextView;
                     className: 'button colour-button pressed-colour', id: 'green-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 });
             }
-            if (state.size == 0) {
+            if (state.size == PalleteSize.SMALL) {
                 smallButt = React.createElement('button', {
                     className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'S');
             }
-            else if (state.size == 1) {
+            else if (state.size == PalleteSize.MEDIUM) {
                 medButt = React.createElement('button', {
                     className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'M');
             }
-            else if (state.size == 2) {
+            else if (state.size == PalleteSize.LARGE) {
                 largeButt = React.createElement('button', {
                     className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'L');
@@ -345,7 +384,7 @@ var WhiteBoardTextView;
             var styleCont = React.createElement('div', {
                 className: 'whiteboard-controlgroup', id: 'whiteboard-stylegroup'
             }, boldButt, italButt, ulineButt, tlineButt, olineButt, justButt);
-            return React.createElement('div', null, colourCont, sizeCont);
+            return React.createElement('div', null, colourCont, sizeCont, styleCont);
         };
         return PalleteView;
     }(React.Component));
@@ -353,7 +392,7 @@ var WhiteBoardTextView;
     var CustomContextView = (function (_super) {
         __extends(CustomContextView, _super);
         function CustomContextView() {
-            var _this = _super.apply(this, arguments) || this;
+            var _this = _super !== null && _super.apply(this, arguments) || this;
             _this.propTypes = {};
             return _this;
         }
