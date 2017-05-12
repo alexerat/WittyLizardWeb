@@ -1,3 +1,7 @@
+/// <reference path="../typings/lib.webworker.d.ts" />
+/**
+ * Message types that can be sent between the user and server.
+ */
 var BaseMessageTypes = {
     DELETE: -1,
     RESTORE: -2,
@@ -18,7 +22,27 @@ var UploadViewTypes = {
     FILE: 'FILE',
     IFRAME: 'IFRAME'
 };
+/** The base class for whiteboard elements.
+  *
+  * Whiteboard components will inherit this to produce addins that allow specific 'draw' functionality.
+  * This is the portion that is run on the worker thread and not the UI thread. This definition is nat availible to the UI thread.
+  */
 var BoardElement = (function () {
+    /** Constructor for the base board elements.
+     *
+     * This should be called by derived classes.
+     *
+     * @param {string} type - The typename for this element, this is defined as a constant in components.
+     * @param {number} id - The local id for this element (This is provided by the controller).
+     * @param {number} x - The minimum horizontal position of this element within the whiteboard.
+     * @param {number} y - The minimum vertical position of this element within the whiteboard.
+     * @param {number} width - The maxium horizontal extent of this element.
+     * @param {number} height - The maxium vertical extent of this element.
+     * @param {number} userId - The ID of the user who created (owns) this element. Current users ID if it was drawn here or will be provided by server.
+     * @param {ElementCallbacks} callbacks - The controller callbacks provided to this element, these allow for internal element induced updates.
+     * @param {number} [serverId] - The server ID for this element. This will be provided when this element is created from a server message.
+     * @param {Date} [updateTime] - The last update time for this element. This will be provided when this element is created from a server message.
+     */
     function BoardElement(type, id, x, y, width, height, userId, callbacks, serverId, updateTime) {
         this.isResizing = false;
         this.resizeHorz = false;
@@ -67,6 +91,11 @@ var BoardElement = (function () {
             this.updateTime = new Date();
         }
     }
+    /**   Sets the serverId of this element and returns a list of server messages to send.
+     *
+     *    @param {number} id - The server ID for this element.
+     *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
+     */
     BoardElement.prototype.setServerId = function (id) {
         this.serverId = id;
         clearTimeout(this.idTimeout);
@@ -78,17 +107,37 @@ var BoardElement = (function () {
         this.sendServerMsg(msg);
         this.deleteElement();
     };
+    /** Update the view state of this object.
+     *
+     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
+     *
+     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
+     *
+     * @return {ComponentViewState} The new view state
+     */
     BoardElement.prototype.updateView = function (updatedParams) {
         this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
         return this.currentViewState;
     };
+    /**   Get the current view state for this element.
+     *
+     *    @return {ComponentViewState} The view state of this element given it's current internal state
+     */
     BoardElement.prototype.getCurrentViewState = function () {
         return this.currentViewState;
     };
+    /** Handle internal element behaviour after another user edits this element.
+     *
+     * This will remove the internal undo/redo buffer to preserve integrity.
+     */
     BoardElement.prototype.remoteEdit = function () {
         this.operationPos = 0;
         this.operationStack = [];
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.getDefaultInputReturn = function () {
         var retVal = {
             newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: this.isSelected,
@@ -96,6 +145,10 @@ var BoardElement = (function () {
         };
         return retVal;
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.checkForServerId = function (messages) {
         if (!this.serverId) {
             for (var i = 0; i < messages.length; i++) {
@@ -108,34 +161,66 @@ var BoardElement = (function () {
             return messages;
         }
     };
+    /**   Undo the last internal state edit
+     *
+     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server,
+     *    required changes to the pallete state
+     */
     BoardElement.prototype.handleUndo = function () {
         var retVal = null;
+        // Undo item operation at current stack position
         if (this.operationPos > 0) {
             retVal = this.operationStack[--this.operationPos].undo();
         }
         return retVal;
     };
+    /**   Redo the last undone internal state edit.
+     *
+     *    @return {ElementUndoRedoReturn} An object containing: the new view state, messages to be sent to the comm server
+     *    required changes to the pallete state
+     */
     BoardElement.prototype.handleRedo = function () {
         var retVal = null;
+        // Redo operation at current stack position
         if (this.operationPos < this.operationStack.length) {
             retVal = this.operationStack[this.operationPos++].redo();
         }
         return retVal;
     };
+    /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ComponentViewState} The new view state of this element.
+     */
     BoardElement.prototype.erase = function () {
         this.isDeleted = true;
         return this.currentViewState;
     };
+    /**   Sets this item as not deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ComponentViewState} The new view state of this element.
+     */
     BoardElement.prototype.restore = function () {
         this.isDeleted = false;
         return this.currentViewState;
     };
+    /** Handle the basic move behaviour.
+     *
+     *
+     */
     BoardElement.prototype.move = function (changeX, changeY, updateTime) {
         this.x += changeX;
         this.y += changeY;
         this.updateTime = updateTime;
         this.updateView({ x: this.x, y: this.y, updateTime: updateTime });
     };
+    /** Handle the basic resize behaviour.
+     *
+     *
+     */
     BoardElement.prototype.resize = function (width, height, updateTime) {
         this.updateTime = updateTime;
         this.height = height;
@@ -143,6 +228,10 @@ var BoardElement = (function () {
             width: this.width, height: this.height
         });
     };
+    /** Handle a move operation and provide view and message updates.
+     * This is used to handle undo and redo operations.
+     *
+     */
     BoardElement.prototype.moveOperation = function (changeX, changeY, updateTime) {
         this.move(changeX, changeY, updateTime);
         var msgPayload = { x: this.x, y: this.y };
@@ -153,6 +242,10 @@ var BoardElement = (function () {
         };
         return retVal;
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.resizeOperation = function (width, height, updateTime) {
         var serverMessages = [];
         this.resize(width, height, updateTime);
@@ -166,6 +259,12 @@ var BoardElement = (function () {
         retVal.serverMessages = this.checkForServerId(serverMessages);
         return retVal;
     };
+    /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementUndoRedoReturn} The new view state of this element.
+     */
     BoardElement.prototype.elementErase = function () {
         var retMsgs = [];
         var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
@@ -180,6 +279,12 @@ var BoardElement = (function () {
         retVal.serverMessages = this.checkForServerId(retMsgs);
         return retVal;
     };
+    /**   Sets this item as not deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementUndoRedoReturn} The new view state of this element.
+     */
     BoardElement.prototype.elementRestore = function () {
         var retMsgs = [];
         var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
@@ -194,6 +299,13 @@ var BoardElement = (function () {
         retVal.serverMessages = this.checkForServerId(retMsgs);
         return retVal;
     };
+    /**   Sets this item as deleted and process any sub-components as required, returning the new view state.
+     *
+     *    Change only when sub-components require updating.
+     *
+     *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+     *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+     */
     BoardElement.prototype.handleErase = function () {
         var serverMsgs = [];
         var retVal = this.getDefaultInputReturn();
@@ -206,21 +318,39 @@ var BoardElement = (function () {
         retVal.redoOp = redoOp.bind(this);
         return retVal;
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.setEdit = function () {
         this.gettingLock = false;
         this.isEditing = true;
         this.updateView({ getLock: false, isEditing: true });
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.setLock = function (userId) {
         this.lockedBy = userId;
         this.editLock = true;
         this.updateView({ remLock: true });
     };
+    /**
+     *
+     *
+     */
     BoardElement.prototype.setUnLock = function () {
         this.lockedBy = null;
         this.editLock = false;
         this.updateView({ remLock: false });
     };
+    /**   Handle a messages sent from the server to this element.
+     *
+     *    @param {} message - The server message that was sent.
+     *
+     *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
+     */
     BoardElement.prototype.handleServerMessage = function (message) {
         var newView = this.currentViewState;
         var retMsgs = [];
@@ -291,12 +421,20 @@ var BoardElement = (function () {
         };
         return retVal;
     };
+    /**   Handle the selecting of this element that has not been induced by this elements input handles.
+     *
+     *    @return {ComponentViewState} An object containing: the new view state
+     */
     BoardElement.prototype.handleSelect = function () {
         this.isSelected = true;
         this.updateView({ isSelected: true });
         var retVal = this.currentViewState;
         return retVal;
     };
+    /**   Handle the deselect this element.
+     *
+     *    @return {ComponentViewState} An object containing: the new view state
+     */
     BoardElement.prototype.handleDeselect = function () {
         this.isSelected = false;
         this.updateView({ isSelected: false });
@@ -305,85 +443,56 @@ var BoardElement = (function () {
     };
     return BoardElement;
 }());
+/**
+ *
+ *
+ */
 var BoardPallete = (function () {
     function BoardPallete() {
     }
+    /** Update the view state of this object.
+     *
+     * This creates a new view state object with the paramaters supplied in the JSON object, all other parameters are set from the previous state.
+     *
+     * @param {JSON Object} updatedParams - The parameters to be updated and their new values supplied as { x: newX, etc... }
+     *
+     * @return {ComponentViewState} The new view state
+     */
     BoardPallete.prototype.updateView = function (updatedParams) {
         this.currentViewState = Object.assign({}, this.currentViewState, updatedParams);
         return this.currentViewState;
     };
     return BoardPallete;
 }());
+/** Local namespace abstraction.
+  * This is to keep typescript happy, enum definitions must be kept on the worker and main UI thread. Typescript sees this as a conflict.
+  * Hence this namespace will keep these definitions separate for the compiler.
+  */
 var LocalAbstraction;
 (function (LocalAbstraction) {
+    /**
+     *
+     *
+     */
     var BoardModes = {
         SELECT: 'SELECT',
         ERASE: 'ERASE'
     };
-    var WorkerMessageTypes;
-    (function (WorkerMessageTypes) {
-        WorkerMessageTypes[WorkerMessageTypes["UPDATEVIEW"] = 0] = "UPDATEVIEW";
-        WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 1] = "SETVBOX";
-        WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 2] = "AUDIOSTREAM";
-        WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 3] = "VIDEOSTREAM";
-        WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 4] = "NEWVIEWCENTRE";
-        WorkerMessageTypes[WorkerMessageTypes["SETSELECT"] = 5] = "SETSELECT";
-        WorkerMessageTypes[WorkerMessageTypes["ELEMENTMESSAGE"] = 6] = "ELEMENTMESSAGE";
-        WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 7] = "ELEMENTVIEW";
-        WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 8] = "ELEMENTDELETE";
-        WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 9] = "NEWALERT";
-        WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 10] = "REMOVEALERT";
-        WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 11] = "NEWINFO";
-        WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 12] = "REMOVEINFO";
-    })(WorkerMessageTypes || (WorkerMessageTypes = {}));
-    var ControllerMessageTypes;
-    (function (ControllerMessageTypes) {
-        ControllerMessageTypes[ControllerMessageTypes["START"] = 0] = "START";
-        ControllerMessageTypes[ControllerMessageTypes["SETOPTIONS"] = 1] = "SETOPTIONS";
-        ControllerMessageTypes[ControllerMessageTypes["REGISTER"] = 2] = "REGISTER";
-        ControllerMessageTypes[ControllerMessageTypes["MODECHANGE"] = 3] = "MODECHANGE";
-        ControllerMessageTypes[ControllerMessageTypes["AUDIOSTREAM"] = 4] = "AUDIOSTREAM";
-        ControllerMessageTypes[ControllerMessageTypes["VIDEOSTREAM"] = 5] = "VIDEOSTREAM";
-        ControllerMessageTypes[ControllerMessageTypes["NEWELEMENT"] = 6] = "NEWELEMENT";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTID"] = 7] = "ELEMENTID";
-        ControllerMessageTypes[ControllerMessageTypes["BATCHMOVE"] = 8] = "BATCHMOVE";
-        ControllerMessageTypes[ControllerMessageTypes["BATCHDELETE"] = 9] = "BATCHDELETE";
-        ControllerMessageTypes[ControllerMessageTypes["BATCHRESTORE"] = 10] = "BATCHRESTORE";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMESSAGE"] = 11] = "ELEMENTMESSAGE";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOVER"] = 12] = "ELEMENTMOUSEOVER";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOUT"] = 13] = "ELEMENTMOUSEOUT";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDOWN"] = 14] = "ELEMENTMOUSEDOWN";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTERASE"] = 15] = "ELEMENTERASE";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEMOVE"] = 16] = "ELEMENTMOUSEMOVE";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEUP"] = 17] = "ELEMENTMOUSEUP";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSECLICK"] = 18] = "ELEMENTMOUSECLICK";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDBLCLICK"] = 19] = "ELEMENTMOUSEDBLCLICK";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHSTART"] = 20] = "ELEMENTTOUCHSTART";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHMOVE"] = 21] = "ELEMENTTOUCHMOVE";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHEND"] = 22] = "ELEMENTTOUCHEND";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHCANCEL"] = 23] = "ELEMENTTOUCHCANCEL";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTDRAG"] = 24] = "ELEMENTDRAG";
-        ControllerMessageTypes[ControllerMessageTypes["ELEMENTDROP"] = 25] = "ELEMENTDROP";
-        ControllerMessageTypes[ControllerMessageTypes["MOUSEDOWN"] = 26] = "MOUSEDOWN";
-        ControllerMessageTypes[ControllerMessageTypes["MOUSEMOVE"] = 27] = "MOUSEMOVE";
-        ControllerMessageTypes[ControllerMessageTypes["MOUSEUP"] = 28] = "MOUSEUP";
-        ControllerMessageTypes[ControllerMessageTypes["MOUSECLICK"] = 29] = "MOUSECLICK";
-        ControllerMessageTypes[ControllerMessageTypes["TOUCHSTART"] = 30] = "TOUCHSTART";
-        ControllerMessageTypes[ControllerMessageTypes["TOUCHMOVE"] = 31] = "TOUCHMOVE";
-        ControllerMessageTypes[ControllerMessageTypes["TOUCHEND"] = 32] = "TOUCHEND";
-        ControllerMessageTypes[ControllerMessageTypes["TOUCHCANCEL"] = 33] = "TOUCHCANCEL";
-        ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 34] = "KEYBOARDINPUT";
-        ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 35] = "UNDO";
-        ControllerMessageTypes[ControllerMessageTypes["REDO"] = 36] = "REDO";
-        ControllerMessageTypes[ControllerMessageTypes["DRAG"] = 37] = "DRAG";
-        ControllerMessageTypes[ControllerMessageTypes["DROP"] = 38] = "DROP";
-        ControllerMessageTypes[ControllerMessageTypes["PASTE"] = 39] = "PASTE";
-        ControllerMessageTypes[ControllerMessageTypes["CUT"] = 40] = "CUT";
-        ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 41] = "PALLETECHANGE";
-        ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 42] = "LEAVE";
-        ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 43] = "ERROR";
-    })(ControllerMessageTypes || (ControllerMessageTypes = {}));
+    /** The controller class for the whiteboard that runs on the worker thread.
+     *
+     * This handles the whiteboard elements by managing messages between threads and handling basic behaviours.
+     */
     var WhiteBoardWorker = (function () {
+        /** Construct the whiteboard controller.
+         *
+         * This is a singleton within the application.
+         *
+         * @param {boolean} isHost - A value indicating whether this user is the session host. Provided by the server on page load.
+         * @param {number} userId - The user ID for this user.
+         * @param {boolean} allEdit - A value indicating whether all users may edit all the elements in this session.
+         * @param {boolean} userEdit - A value indicating whether this user may edit any elements in this session.
+         * @param {Scope} workerContext - The global context for this web worker.
+         */
         function WhiteBoardWorker(isHost, userId, allEdit, userEdit, workerContext) {
             this.isHost = false;
             this.userId = 0;
@@ -432,12 +541,28 @@ var LocalAbstraction;
             this.controller = workerContext;
             console.log('Room options: allowAllEdit: ' + allEdit + ', allowUserEdit: ' + userEdit + ', isHost: ' + isHost);
         }
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //                                                                                                                                                    //
+        //                                                                                                                                                    //
+        // STATE MODIFIERS (INTERNAL)                                                                                                                         //
+        //                                                                                                                                                    //
+        //                                                                                                                                                    //
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /** Update the view state, updates will be put into a buffer ready to be posted to the UI thread as one update.
+         *
+         * @param {Object} updates - A JSON object containing the view state parameters to be updated.
+         */
         WhiteBoardWorker.prototype.updateView = function (updates) {
             if (this.viewUpdateBuffer == null) {
                 this.viewUpdateBuffer = {};
             }
             Object.assign(this.viewUpdateBuffer, updates);
         };
+        /** Update the view state of an element, updates will be put into a buffer ready to be posted to the UI thread as one update.
+         *
+         * @param {number} id - The local id for this element.
+         * @param {ComponentViewState} newView - The new view for this element.
+         */
         WhiteBoardWorker.prototype.setElementView = function (id, newView) {
             if (newView == null) {
                 throw "NULL ELEMENT VIEW GIVEN";
@@ -452,6 +577,7 @@ var LocalAbstraction;
         WhiteBoardWorker.prototype.endCallback = function () {
             var clipData = [];
             if (controller.currSelect.length > 1) {
+                // TODO: Parse svg items into single image and push to clipData.
             }
             else {
                 for (var i = 0; i < controller.clipboardItems.length; i++) {
@@ -483,11 +609,13 @@ var LocalAbstraction;
             this.audioRequests.push(id);
         };
         WhiteBoardWorker.prototype.setAudioStream = function (id) {
+            /* TODO */
         };
         WhiteBoardWorker.prototype.getVideoStream = function (id) {
             this.videoRequests.push(id);
         };
         WhiteBoardWorker.prototype.setVideoStream = function (id) {
+            /* TODO */
         };
         WhiteBoardWorker.prototype.newAlert = function (type, message) {
             var newMsg = { type: type, message: message };
@@ -681,8 +809,10 @@ var LocalAbstraction;
         };
         WhiteBoardWorker.prototype.handleRemoteEdit = function (id) {
             var _this = this;
+            // Remove all operations related to this item from operation buffer
             for (var i = 0; i < this.operationStack.length; i++) {
                 if (this.operationStack[i].ids.indexOf(id) != -1) {
+                    // Replace operation with one that will just select the item (better user interation that removing or doing nothing)
                     var newOp = {
                         ids: this.operationStack[i].ids,
                         undos: [(function (elemIds) {
@@ -697,6 +827,7 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.handleInfoMessage = function (data) {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.handleAlertMessage = function (msg) {
             if (msg) {
@@ -714,6 +845,7 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.moveGroup = function (x, y, editTime) {
+            // Loop over currently selected items, determine type and use appropriate method
             for (var i = 0; i < this.currSelect.length; i++) {
                 var elem = this.getBoardElement(this.currSelect[i]);
                 var elemView = elem.handleMove(x, y);
@@ -780,7 +912,9 @@ var LocalAbstraction;
                 undoOpList.push(undoOp);
                 redoOpList.push(redoOp);
             }
+            // Remove redo operations ahead of current position
             this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+            // Add new operation to the stack
             var newOp = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
             this.operationStack[this.operationPos++] = newOp;
         };
@@ -919,6 +1053,15 @@ var LocalAbstraction;
         WhiteBoardWorker.prototype.setViewBox = function (panX, panY, scaleF) {
             this.newViewBox = { panX: panX, panY: panY, scaleF: scaleF };
         };
+        /***********************************************************************************************************************************************************
+         *
+         *
+         *
+         * INTERNAL FUNCTIONS
+         *
+         *
+         *
+         **********************************************************************************************************************************************************/
         WhiteBoardWorker.prototype.getBoardElement = function (id) {
             if (this.boardElems[id]) {
                 return this.boardElems[id];
@@ -932,6 +1075,7 @@ var LocalAbstraction;
             return this.infoElems[id];
         };
         WhiteBoardWorker.prototype.undo = function () {
+            // Undo operation at current stack position
             if (this.operationPos > 0) {
                 var operation = this.operationStack[--this.operationPos];
                 for (var i = 0; i < operation.undos.length; i++) {
@@ -974,6 +1118,7 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.redo = function () {
+            // Redo operation at current stack position
             if (this.operationPos < this.operationStack.length) {
                 var operation = this.operationStack[this.operationPos++];
                 for (var i = 0; i < operation.redos.length; i++) {
@@ -1016,12 +1161,15 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.newOperation = function (itemId, undoOp, redoOp) {
+            // Remove redo operations ahead of current position
             this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+            // Add new operation to the stack
             var newOp = { ids: [itemId], undos: [undoOp], redos: [redoOp] };
             this.operationStack[this.operationPos++] = newOp;
         };
         WhiteBoardWorker.prototype.undoItemEdit = function (id) {
             var elem = this.getBoardElement(id);
+            // Undo item operation at current stack position
             if (!elem.isDeleted) {
                 var retVal = elem.handleUndo();
                 if (retVal) {
@@ -1061,6 +1209,7 @@ var LocalAbstraction;
         };
         WhiteBoardWorker.prototype.redoItemEdit = function (id) {
             var elem = this.getBoardElement(id);
+            // Redo operation at current stack position
             if (!elem.isDeleted) {
                 var retVal = elem.handleRedo();
                 if (retVal) {
@@ -1152,6 +1301,15 @@ var LocalAbstraction;
                 }
             }
         };
+        /***********************************************************************************************************************************************************
+         *
+         *
+         *
+         * CONTROLLER MESSAGE METHODS
+         *
+         *
+         *
+         **********************************************************************************************************************************************************/
         WhiteBoardWorker.prototype.newElement = function (data) {
             var _this = this;
             if (this.elementDict[data.serverId] == undefined || this.elementDict[data.serverId] == null) {
@@ -1230,6 +1388,7 @@ var LocalAbstraction;
                 this.handleAlertMessage(retVal.alertMessage);
                 if (retVal.wasDelete) {
                     this.deleteElement(elem.id);
+                    // Remove from current selection
                     if (this.currSelect.indexOf(elem.id)) {
                         this.currSelect.splice(this.currSelect.indexOf(elem.id), 1);
                     }
@@ -1243,10 +1402,13 @@ var LocalAbstraction;
                                 if (i <= this.operationPos) {
                                     this.operationPos--;
                                 }
+                                // Decrement i to account fot the removal of this item.
                                 this.operationStack.splice(i--, 1);
                             }
                             else {
+                                // Remove the deleted item from the selection.
                                 this.operationStack[i].ids.splice(this.operationStack[i].ids.indexOf(elem.id), 1);
+                                // Replace operation with one that will just select the remaining items.
                                 var newOp = {
                                     ids: this.operationStack[i].ids,
                                     undos: [(function (elemIds) {
@@ -1300,6 +1462,7 @@ var LocalAbstraction;
                 var prevElem = this.getBoardElement(this.currentHover);
                 clearTimeout(prevElem.hoverTimer);
             }
+            /* TODO: Allow Element To Set cursor, i.e. pass function. Only do this if mode is SELECT */
         };
         WhiteBoardWorker.prototype.elementMouseOut = function (id, e) {
             var elem = this.getBoardElement(id);
@@ -1307,6 +1470,7 @@ var LocalAbstraction;
                 clearTimeout(elem.hoverTimer);
                 this.removeHoverInfo(this.currentHover);
             }
+            /* TODO: Reset cursor */
         };
         WhiteBoardWorker.prototype.elementMouseDown = function (id, e, mouseX, mouseY, componenet, subId) {
             var elem = this.getBoardElement(id);
@@ -1483,17 +1647,21 @@ var LocalAbstraction;
             }
             else {
                 if (this.currSelect.length == 0 || e.ctrlKey) {
+                    // Add this item to currently selected items.
                     this.currSelect.push(elem.id);
                     this.selectElement(elem.id);
                 }
                 else {
+                    // Deselect everything currently selected.
                     for (var i = 0; i < this.currSelect.length; i++) {
                         this.deselectElement(this.currSelect[i]);
                     }
                     this.currSelect = [];
                     this.clipboardItems = [];
+                    // Add this item to currently selected items.
                     this.currSelect.push(elem.id);
                     this.selectElement(elem.id);
+                    /* TODO: Pass through, this will give text selection behaviour without edit */
                 }
             }
         };
@@ -1544,6 +1712,7 @@ var LocalAbstraction;
             }
             else {
                 if (this.currSelect.length != 0) {
+                    // Deselect everything currently selected.
                     for (var i = 0; i < this.currSelect.length; i++) {
                         this.deselectElement(this.currSelect[i]);
                     }
@@ -1551,17 +1720,21 @@ var LocalAbstraction;
                     this.clipboardItems = [];
                 }
                 if (this.isHost || this.allowAllEdit || (this.allowUserEdit && elem.user == this.userId)) {
+                    // Start edit mode
                     this.startEditElement(elem.id);
                 }
                 else {
+                    // Add this item to currently selected items.
                     this.currSelect.push(elem.id);
                     this.selectElement(elem.id);
+                    /* TODO: Pass through, this will give text selection behaviour without edit */
                 }
             }
         };
         WhiteBoardWorker.prototype.elementTouchStart = function (id, e, boardTouches, componenet, subId) {
             var elem = this.getBoardElement(id);
             if (this.currSelect.length > 1 && elem.isSelected) {
+                // this.startMove(mouseX, mouseY);
             }
             else if (this.isHost || this.allowAllEdit || (this.allowUserEdit && elem.user == this.userId)) {
                 var localTouches = [];
@@ -1613,6 +1786,7 @@ var LocalAbstraction;
                 var elem = this.getBoardElement(id);
                 if (this.isHost || this.allowAllEdit || (this.allowUserEdit && elem.user == this.userId)) {
                     var localToucheMoves = [];
+                    /* TODO: Create array */
                     var elem_1 = this.getBoardElement(id);
                     var retVal = elem_1.handleTouchMove(e, localToucheMoves, this.components[elem_1.type].pallete, componenet, subId);
                     this.handleElementOperation(id, retVal.undoOp, retVal.redoOp);
@@ -1736,11 +1910,14 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.elementDragOver = function (id, e, componenet, subId) {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.elementDrop = function (id, e, mouseX, mouseY, componenet, subId) {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.mouseDown = function (e, mouseX, mouseY, mode) {
             if (this.currentEdit != -1) {
+                // Pass this to currently edited item.
                 var elem = this.getBoardElement(this.currentEdit);
                 var retVal = elem.handleBoardMouseDown(e, mouseX, mouseY, this.components[elem.type].pallete);
                 this.handleElementOperation(elem.id, retVal.undoOp, retVal.redoOp);
@@ -1785,6 +1962,7 @@ var LocalAbstraction;
             }
             else {
                 if (this.currSelect.length > 0) {
+                    // Deselect currently selected items
                     for (var i = 0; i < this.currSelect.length; i++) {
                         this.deselectElement(this.currSelect[i]);
                     }
@@ -1871,6 +2049,7 @@ var LocalAbstraction;
                     }
                 }
             }
+            // Can only have a current edit in a mode other than SELECT or ERASE
             if (this.currentEdit != -1) {
                 var elem = this.getBoardElement(this.currentEdit);
                 var retVal = elem.handleBoardMouseMove(e, changeX, changeY, mouseX, mouseY, this.components[elem.type].pallete);
@@ -1945,6 +2124,7 @@ var LocalAbstraction;
                 var width = rectWidth;
                 var height = rectHeight;
                 if (mode == BoardModes.SELECT) {
+                    // Cycle through board elements and select those within the rectangle
                     this.boardElems.forEach(function (elem) {
                         if (!elem.isDeleted && elem.isComplete) {
                             if (elem.x >= rectLeft && elem.y >= rectTop) {
@@ -1989,6 +2169,7 @@ var LocalAbstraction;
                         };
                         var newElem = this.components[mode].Element.createElement(data);
                         if (newElem) {
+                            /* TODO: Store this mode in the 'prevMode' variable to ensure proper reversion on edit completion. */
                             var undoOp = (function (elem) { return elem.elementErase.bind(elem); })(newElem);
                             var redoOp = (function (elem) { return elem.elementRestore.bind(elem); })(newElem);
                             this.boardElems[localId] = newElem;
@@ -1998,6 +2179,7 @@ var LocalAbstraction;
                             var msg = { type: newElem.type, payload: payload };
                             if (newElem.isEditing) {
                                 this.currentEdit = localId;
+                                // Deselect currently selected items
                                 for (var i = 0; i < this.currSelect.length; i++) {
                                     this.deselectElement(this.currSelect[i]);
                                 }
@@ -2012,6 +2194,7 @@ var LocalAbstraction;
                                 this.currSelect.push(localId);
                             }
                             else if (newElem.isSelected) {
+                                // Deselect currently selected items
                                 for (var i = 0; i < this.currSelect.length; i++) {
                                     this.deselectElement(this.currSelect[i]);
                                 }
@@ -2029,6 +2212,7 @@ var LocalAbstraction;
                             this.sendNewElement(msg);
                         }
                         else {
+                            // Failed to create element, remove place holder.
                             this.boardElems.splice(localId, 1);
                         }
                     }
@@ -2126,6 +2310,7 @@ var LocalAbstraction;
             this.selectDrag = false;
         };
         WhiteBoardWorker.prototype.mouseClick = function (e, mouseX, mouseY, mode) {
+            // Stop editing when the board is double clicked.
             if (e.detail == 2) {
                 if (this.currentEdit != -1) {
                     var elem = this.getBoardElement(this.currentEdit);
@@ -2141,14 +2326,19 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.touchStart = function () {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.touchMove = function (e) {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.touchEnd = function () {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.touchCancel = function () {
+            /* TODO: */
         };
         WhiteBoardWorker.prototype.handleUndo = function () {
+            // If there is an item being edited pass this as an internal undo.
             if (this.currentEdit != -1) {
                 var elem = this.getBoardElement(this.currentEdit);
                 this.undoItemEdit(this.currentEdit);
@@ -2165,6 +2355,7 @@ var LocalAbstraction;
             }
         };
         WhiteBoardWorker.prototype.handleRedo = function () {
+            // If there is an item being edited pass this as an internal redo.
             if (this.currentEdit != -1) {
                 var elem = this.getBoardElement(this.currentEdit);
                 this.redoItemEdit(this.currentEdit);
@@ -2253,7 +2444,9 @@ var LocalAbstraction;
                     undoOpList.push(undoOp);
                     redoOpList.push(redoOp);
                 }
+                // Remove redo operations ahead of current position
                 this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                // Add new operation to the stack
                 var newOp = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
                 this.operationStack[this.operationPos++] = newOp;
             }
@@ -2261,6 +2454,7 @@ var LocalAbstraction;
         WhiteBoardWorker.prototype.paste = function (mouseX, mouseY, data, mode) {
             var _this = this;
             console.log('PASTE EVENT WORKER');
+            /* TODO: If we have an edit open, pass to that. Otherwise determing type and respond accordingly (maybe mode dependant). */
             if (this.currentEdit != -1) {
                 var elem = this.getBoardElement(this.currSelect[0]);
                 var retVal = elem.handlePaste(mouseX - elem.x, mouseY - elem.y, data, this.components[elem.type].pallete);
@@ -2306,11 +2500,14 @@ var LocalAbstraction;
             else {
                 if (data.isInternal) {
                     if (data.wasCut) {
+                        // TODO: Move and restore items in internal clipboard
                     }
                     else {
+                        // TODO: Clone items in internal clipbaord
                     }
                 }
                 else {
+                    // TODO: Add external pasted item.
                 }
                 var undoOpList = [];
                 var redoOpList = [];
@@ -2340,11 +2537,16 @@ var LocalAbstraction;
                     undoOpList.push(undoOp);
                     redoOpList.push(redoOp);
                 }
+                // TODO: Insert new item.
                 if (mode == BoardModes.SELECT || mode == BoardModes.ERASE) {
+                    // General handler.
                 }
                 else {
+                    // Component specific handler.
                 }
+                // Remove redo operations ahead of current position
                 this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                // Add new operation to the stack
                 var newOp = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
                 this.operationStack[this.operationPos++] = newOp;
             }
@@ -2423,14 +2625,18 @@ var LocalAbstraction;
                     undoOpList.push(undoOp);
                     redoOpList.push(redoOp);
                 }
+                // Remove redo operations ahead of current position
                 this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
+                // Add new operation to the stack
                 var newOp = { ids: this.currSelect.slice(), undos: undoOpList, redos: redoOpList };
                 this.operationStack[this.operationPos++] = newOp;
             }
         };
         WhiteBoardWorker.prototype.dragOver = function (e, mode) {
+            /* TODO: Pass to elements as necessary. Note above items. */
         };
         WhiteBoardWorker.prototype.drop = function (e, plainData, mouseX, mouseY, scaleF, mode) {
+            /* TODO: Determine if this is necessary or if the element will automatically take the drop. */
             if (!this.dropToElement) {
                 if (this.components['UPLOAD'] == null || this.components['UPLOAD'] == undefined) {
                     console.log('UPLOAD COMPONENT NOT READY.');
@@ -2483,6 +2689,7 @@ var LocalAbstraction;
                 }
             }
             if (fType == null) {
+                // Unable to determine type, server will resolve and inform the type.
                 newElem = new this.components['UPLOAD'].Element(localId, this.userId, x, y, width, height, callbacks, file, url, fType, fSize, fDesc, fExt, null);
             }
             else {
@@ -2512,6 +2719,7 @@ var LocalAbstraction;
             var msg = { type: newElem.type, payload: payload };
             if (newElem.isEditing) {
                 this.currentEdit = localId;
+                // Deselect currently selected items
                 for (var i = 0; i < this.currSelect.length; i++) {
                     this.deselectElement(this.currSelect[i]);
                 }
@@ -2526,6 +2734,7 @@ var LocalAbstraction;
                 this.currSelect.push(localId);
             }
             else if (newElem.isSelected) {
+                // Deselect currently selected items
                 for (var i = 0; i < this.currSelect.length; i++) {
                     this.deselectElement(this.currSelect[i]);
                 }
@@ -2559,6 +2768,8 @@ var LocalAbstraction;
                     width = 150 * scaleF;
                 }
                 if (file.size < MAXSIZE) {
+                    //let localId = this.addFile(x, y, width, height, this.userId, isImage, file.name, file.type, fType, 0, undefined, new Date());
+                    //this.sendLocalFile(x, y, width, height, file, localId);
                     this.addFile(mouseX, mouseY, width, height, file.type, file.size, '', fExt, file, '');
                 }
                 else {
@@ -2581,6 +2792,7 @@ var LocalAbstraction;
                     var type = request.getResponseHeader('Content-Type');
                     var size = parseInt(request.getResponseHeader('Content-Length'));
                     if (type == null || type == undefined) {
+                        // Cross origin blocked request so let server work it out for us.
                         self.addFile(mouseX, mouseY, width, height, null, null, '', fExt, null, url);
                         return;
                     }
@@ -2635,128 +2847,135 @@ var LocalAbstraction;
     };
     LocalAbstraction.inititalize = function () {
         onmessage = function (e) {
+            // Redirect the browser message to worker function.
             switch (e.data.type) {
-                case 0:
+                case 0 /* START */:
                     controller = new WhiteBoardWorker(e.data.isHost, e.data.userId, e.data.allEdit, e.data.userEdit, self);
                     for (var i = 0; i < e.data.componentFiles.length; i++) {
                         importScripts(e.data.componentFiles[i]);
                     }
                     break;
-                case 1:
+                case 1 /* SETOPTIONS */:
                     controller.setRoomOptions(e.data.allowAllEdit, e.data.allowUserEdit);
                     break;
-                case 3:
+                case 3 /* MODECHANGE */:
                     controller.modeChange(e.data.newMode);
                     break;
-                case 4:
+                case 4 /* AUDIOSTREAM */:
+                    /* TODO */
                     break;
-                case 5:
+                case 5 /* VIDEOSTREAM */:
+                    /* TODO */
                     break;
-                case 6:
+                case 6 /* NEWELEMENT */:
                     controller.newElement(e.data.data);
                     break;
-                case 7:
+                case 7 /* ELEMENTID */:
                     controller.elementID(e.data.data);
                     break;
-                case 11:
+                case 11 /* ELEMENTMESSAGE */:
                     controller.elementMessage(e.data.data);
                     break;
-                case 8:
+                case 8 /* BATCHMOVE */:
                     controller.batchMove(e.data.data);
                     break;
-                case 9:
+                case 9 /* BATCHDELETE */:
                     controller.batchDelete(e.data.data);
                     break;
-                case 10:
+                case 10 /* BATCHRESTORE */:
                     controller.batchRestore(e.data.data);
                     break;
-                case 15:
+                case 15 /* ELEMENTERASE */:
                     controller.eraseElement(e.data.id);
                     break;
-                case 12:
+                case 12 /* ELEMENTMOUSEOVER */:
                     controller.elementMouseOver(e.data.id, e.data.e);
                     break;
-                case 13:
+                case 13 /* ELEMENTMOUSEOUT */:
                     controller.elementMouseOut(e.data.id, e.data.e);
                     break;
-                case 14:
+                case 14 /* ELEMENTMOUSEDOWN */:
                     controller.elementMouseDown(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 16:
+                case 16 /* ELEMENTMOUSEMOVE */:
                     controller.elementMouseMove(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 17:
+                case 17 /* ELEMENTMOUSEUP */:
                     controller.elementMouseUp(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 18:
+                case 18 /* ELEMENTMOUSECLICK */:
                     controller.elementMouseClick(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 19:
+                case 19 /* ELEMENTMOUSEDBLCLICK */:
                     controller.elementMouseDoubleClick(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 20:
+                case 20 /* ELEMENTTOUCHSTART */:
                     controller.elementTouchStart(e.data.id, e.data.e, e.data.localTouches, e.data.componenet, e.data.subId);
                     break;
-                case 21:
+                case 21 /* ELEMENTTOUCHMOVE */:
                     controller.elementTouchMove(e.data.id, e.data.e, e.data.touchMoves, e.data.componenet, e.data.subId);
                     break;
-                case 22:
+                case 22 /* ELEMENTTOUCHEND */:
                     controller.elementTouchEnd(e.data.id, e.data.e, e.data.localTouches, e.data.componenet, e.data.subId);
                     break;
-                case 23:
+                case 23 /* ELEMENTTOUCHCANCEL */:
                     controller.elementTouchCancel(e.data.id, e.data.e, e.data.localTouches, e.data.componenet, e.data.subId);
                     break;
-                case 24:
+                case 24 /* ELEMENTDRAG */:
                     controller.elementDragOver(e.data.id, e.data.e, e.data.componenet, e.data.subId);
                     break;
-                case 25:
+                case 25 /* ELEMENTDROP */:
                     controller.elementDrop(e.data.id, e.data.e, e.data.mouseX, e.data.mouseY, e.data.componenet, e.data.subId);
                     break;
-                case 26:
+                case 26 /* MOUSEDOWN */:
                     controller.mouseDown(e.data.e, e.data.mouseX, e.data.mouseY, e.data.mode);
                     break;
-                case 27:
+                case 27 /* MOUSEMOVE */:
                     controller.mouseMove(e.data.e, e.data.mouseX, e.data.mouseY, e.data.mode);
                     break;
-                case 28:
+                case 28 /* MOUSEUP */:
                     controller.mouseUp(e.data.e, e.data.mouseX, e.data.mouseY, e.data.downX, e.data.downY, e.data.pointList, e.data.mode, e.data.scaleF, e.data.panX, e.data.panY);
                     break;
-                case 29:
+                case 29 /* MOUSECLICK */:
                     controller.mouseClick(e.data.e, e.data.mouseX, e.data.mouseY, e.data.mode);
                     break;
-                case 30:
+                case 30 /* TOUCHSTART */:
+                    /* TODO */
                     break;
-                case 31:
+                case 31 /* TOUCHMOVE */:
+                    /* TODO */
                     break;
-                case 32:
+                case 32 /* TOUCHEND */:
+                    /* TODO */
                     break;
-                case 33:
+                case 33 /* TOUCHCANCEL */:
+                    /* TODO */
                     break;
-                case 34:
+                case 34 /* KEYBOARDINPUT */:
                     controller.keyBoardInput(e.data.e, e.data.inputChar, e.data.mode);
                     break;
-                case 35:
+                case 35 /* UNDO */:
                     controller.handleUndo();
                     break;
-                case 36:
+                case 36 /* REDO */:
                     controller.handleRedo();
                     break;
-                case 37:
+                case 37 /* DRAG */:
                     controller.dragOver(e.data.e, e.data.mode);
                     break;
-                case 38:
+                case 38 /* DROP */:
                     controller.drop(e.data.e, e.data.plainData, e.data.mouseX, e.data.mouseY, e.data.scaleF, e.data.mode);
                     break;
-                case 39:
+                case 39 /* PASTE */:
                     controller.paste(e.data.mouseX, e.data.mouseY, e.data.data, e.data.mode);
                     break;
-                case 40:
+                case 40 /* CUT */:
                     controller.cut();
                     break;
-                case 41:
+                case 41 /* PALLETECHANGE */:
                     controller.palleteChange(e.data.change, e.data.mode);
                     break;
-                case 43:
+                case 43 /* ERROR */:
                     controller.serverError(e.data.error);
                     break;
                 default:
@@ -2764,6 +2983,7 @@ var LocalAbstraction;
             }
             var clipData = [];
             if (controller.currSelect.length > 1) {
+                // TODO: Parse svg items into single image and push to clipData.
             }
             else {
                 for (var i = 0; i < controller.clipboardItems.length; i++) {
@@ -2805,5 +3025,6 @@ var LocalAbstraction;
         };
     };
 })(LocalAbstraction || (LocalAbstraction = {}));
+// Resolve the worker interface functions to the global worker namespace.
 LocalAbstraction.inititalize();
 var registerComponent = LocalAbstraction.registerComponent;

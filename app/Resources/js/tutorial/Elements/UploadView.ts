@@ -19,6 +19,8 @@ namespace UploadView
         LINK: 'LINK'
     };
 
+    const BUCKETURL = 'https://wittylizard-162000.appspot.com/whiteboard_storage';
+
     /**
      * A description of the view state for elements in this component.
      * This will be passed from the element controller to the view.
@@ -116,15 +118,15 @@ namespace UploadView
             let state = this.props.state as ViewState;
             let dispatcher = this.props.dispatcher;
 
-            var loadBar = null;
-            var waitSpin = null;
-            var borderBoxes = [];
-            var displayElement;
+            let loadBar = null;
+            let waitSpin = null;
+            let borderBoxes = [];
+            let displayElement;
 
             let actWidth = state.rotation == 90 || state.rotation == 270 ? state.height : state.width;
             let actHeight = state.rotation == 90 || state.rotation == 270 ? state.width : state.height;
 
-            var self = this;
+            let self = this;
 
             if(state.isSelected)
             {
@@ -195,7 +197,7 @@ namespace UploadView
                         displayElement = React.createElement('image',
                         {
                             x: state.x, y: state.y, width: state.width, height: state.height,
-                            xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg',
+                            xlinkHref: BUCKETURL + '/file_image.svg',
                             pointerEvents: 'none', cursor: 'move', className: 'noselect', preserveAspectRatio: 'none'
                         });
                     }
@@ -204,7 +206,7 @@ namespace UploadView
                         displayElement = React.createElement('rect',
                         {
                             x: state.x, y: state.y, width: state.width, height: state.height,
-                            xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/link_image.svg',
+                            xlinkHref: BUCKETURL + '/link_image.svg',
                             cursor: 'pointer', pointerEvents: 'fill',
                             onMouseClick: (e) => { window.open(state.URL); }
                         });
@@ -296,7 +298,7 @@ namespace UploadView
                         displayElement = React.createElement('image',
                         {
                             x: state.x, y: state.y, width: state.width, height: state.height,
-                            xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg', preserveAspectRatio: 'none',
+                            xlinkHref: BUCKETURL + '/file_image.svg', preserveAspectRatio: 'none',
                             onClick: dispatcher.mouseClick, onMouseMove: dispatcher.mouseMove, onMouseDown: function(e) { e.preventDefault() }
                         });
                     }
@@ -356,7 +358,7 @@ namespace UploadView
                         displayElement = React.createElement('image',
                         {
                             x: state.x, y: state.y, width: state.width, height: state.height,
-                            xlinkHref: 'https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/file_image.svg', preserveAspectRatio: 'none',
+                            xlinkHref: BUCKETURL + '/file_image.svg', preserveAspectRatio: 'none',
                             onMouseDown: function(e) { e.preventDefault() }
                         });
                     }

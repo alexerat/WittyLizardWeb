@@ -1,3 +1,13 @@
+/// <reference path="./WhiteBoardView.ts"/>
+/***************************************************************************************************************************************************************
+ *
+ *
+ *
+ * POLYFILLS
+ *
+ *
+ *
+ **************************************************************************************************************************************************************/
 if (typeof Object.assign != 'function') {
     (function () {
         Object.assign = function (target) {
@@ -24,11 +34,16 @@ if (typeof Object.assign != 'function') {
     var nativeKeyboardEvent = ('KeyboardEvent' in global);
     if (!nativeKeyboardEvent)
         global.KeyboardEvent = function KeyboardEvent() { throw TypeError('Illegal constructor'); };
-    global.KeyboardEvent.DOM_KEY_LOCATION_STANDARD = 0x00;
-    global.KeyboardEvent.DOM_KEY_LOCATION_LEFT = 0x01;
-    global.KeyboardEvent.DOM_KEY_LOCATION_RIGHT = 0x02;
-    global.KeyboardEvent.DOM_KEY_LOCATION_NUMPAD = 0x03;
+    global.KeyboardEvent.DOM_KEY_LOCATION_STANDARD = 0x00; // Default or unknown location
+    global.KeyboardEvent.DOM_KEY_LOCATION_LEFT = 0x01; // e.g. Left Alt key
+    global.KeyboardEvent.DOM_KEY_LOCATION_RIGHT = 0x02; // e.g. Right Alt key
+    global.KeyboardEvent.DOM_KEY_LOCATION_NUMPAD = 0x03; // e.g. Numpad 0 or +
     var STANDARD = window.KeyboardEvent.DOM_KEY_LOCATION_STANDARD, LEFT = window.KeyboardEvent.DOM_KEY_LOCATION_LEFT, RIGHT = window.KeyboardEvent.DOM_KEY_LOCATION_RIGHT, NUMPAD = window.KeyboardEvent.DOM_KEY_LOCATION_NUMPAD;
+    //--------------------------------------------------------------------
+    //
+    // Utilities
+    //
+    //--------------------------------------------------------------------
     function contains(s, ss) { return String(s).indexOf(ss) !== -1; }
     var os = (function () {
         if (contains(navigator.platform, 'Win')) {
@@ -91,13 +106,33 @@ if (typeof Object.assign != 'function') {
         });
         return r;
     }
+    //--------------------------------------------------------------------
+    //
+    // Generic Mappings
+    //
+    //--------------------------------------------------------------------
+    // "keyInfo" is a dictionary:
+    //   code: string - name from UI Events KeyboardEvent code Values
+    //     https://w3c.github.io/uievents-code/
+    //   location (optional): number - one of the DOM_KEY_LOCATION values
+    //   keyCap (optional): string - keyboard label in en-US locale
+    // USB code Usage ID from page 0x07 unless otherwise noted (Informative)
+    // Map of keyCode to keyInfo
     var keyCodeToInfoTable = {
+        // 0x01 - VK_LBUTTON
+        // 0x02 - VK_RBUTTON
         0x03: { code: 'Cancel' },
+        // 0x04 - VK_MBUTTON
+        // 0x05 - VK_XBUTTON1
+        // 0x06 - VK_XBUTTON2
         0x06: { code: 'Help' },
+        // 0x07 - undefined
         0x08: { code: 'Backspace' },
         0x09: { code: 'Tab' },
+        // 0x0A-0x0B - reserved
         0X0C: { code: 'Clear' },
         0X0D: { code: 'Enter' },
+        // 0x0E-0x0F - undefined
         0x10: { code: 'Shift' },
         0x11: { code: 'Control' },
         0x12: { code: 'Alt' },
@@ -105,7 +140,10 @@ if (typeof Object.assign != 'function') {
         0x14: { code: 'CapsLock' },
         0x15: { code: 'KanaMode' },
         0x16: { code: 'Lang1' },
+        // 0x17: VK_JUNJA
+        // 0x18: VK_FINAL
         0x19: { code: 'Lang2' },
+        // 0x1A - undefined
         0x1B: { code: 'Escape' },
         0x1C: { code: 'Convert' },
         0x1D: { code: 'NonConvert' },
@@ -137,6 +175,7 @@ if (typeof Object.assign != 'function') {
         0x37: { code: 'Digit7', keyCap: '7' },
         0x38: { code: 'Digit8', keyCap: '8' },
         0x39: { code: 'Digit9', keyCap: '9' },
+        // 0x3A-0x40 - undefined
         0x41: { code: 'KeyA', keyCap: 'a' },
         0x42: { code: 'KeyB', keyCap: 'b' },
         0x43: { code: 'KeyC', keyCap: 'c' },
@@ -166,6 +205,7 @@ if (typeof Object.assign != 'function') {
         0x5B: { code: 'MetaLeft', location: LEFT },
         0x5C: { code: 'MetaRight', location: RIGHT },
         0x5D: { code: 'ContextMenu' },
+        // 0x5E - reserved
         0x5F: { code: 'Standby' },
         0x60: { code: 'Numpad0', keyCap: '0', location: NUMPAD },
         0x61: { code: 'Numpad1', keyCap: '1', location: NUMPAD },
@@ -207,8 +247,12 @@ if (typeof Object.assign != 'function') {
         0x85: { code: 'F22' },
         0x86: { code: 'F23' },
         0x87: { code: 'F24' },
+        // 0x88-0x8F - unassigned
         0x90: { code: 'NumLock', location: NUMPAD },
         0x91: { code: 'ScrollLock' },
+        // 0x92-0x96 - OEM specific
+        // 0x97-0x9F - unassigned
+        // NOTE: 0xA0-0xA5 usually mapped to 0x10-0x12 in browsers
         0xA0: { code: 'ShiftLeft', location: LEFT },
         0xA1: { code: 'ShiftRight', location: RIGHT },
         0xA2: { code: 'ControlLeft', location: LEFT },
@@ -233,6 +277,7 @@ if (typeof Object.assign != 'function') {
         0xB5: { code: 'MediaSelect' },
         0xB6: { code: 'LaunchApp1' },
         0xB7: { code: 'LaunchApp2' },
+        // 0xB8-0xB9 - reserved
         0xBA: { code: 'Semicolon', keyCap: ';' },
         0xBB: { code: 'Equal', keyCap: '=' },
         0xBC: { code: 'Comma', keyCap: ',' },
@@ -240,62 +285,90 @@ if (typeof Object.assign != 'function') {
         0xBE: { code: 'Period', keyCap: '.' },
         0xBF: { code: 'Slash', keyCap: '/' },
         0xC0: { code: 'Backquote', keyCap: '`' },
+        // 0xC1-0xCF - reserved
+        // 0xD0-0xD7 - reserved
+        // 0xD8-0xDA - unassigned
         0xDB: { code: 'BracketLeft', keyCap: '[' },
         0xDC: { code: 'Backslash', keyCap: '\\' },
         0xDD: { code: 'BracketRight', keyCap: ']' },
         0xDE: { code: 'Quote', keyCap: '\'' },
+        // 0xDF - miscellaneous/varies
+        // 0xE0 - reserved
+        // 0xE1 - OEM specific
         0xE2: { code: 'IntlBackslash', keyCap: '\\' },
+        // 0xE3-0xE4 - OEM specific
         0xE5: { code: 'Process' },
+        // 0xE6 - OEM specific
+        // 0xE7 - VK_PACKET
+        // 0xE8 - unassigned
+        // 0xE9-0xEF - OEM specific
+        // 0xF0-0xF5 - OEM specific
         0xF6: { code: 'Attn' },
         0xF7: { code: 'CrSel' },
         0xF8: { code: 'ExSel' },
         0xF9: { code: 'EraseEof' },
         0xFA: { code: 'Play' },
         0xFB: { code: 'ZoomToggle' },
-        0xFE: { code: 'Clear' }
+        // 0xFC - VK_NONAME - reserved
+        // 0xFD - VK_PA1
+        0xFE: { code: 'Clear' } // [USB: 0x9c] (Not in D3E)
     };
+    //--------------------------------------------------------------------
+    //
+    // Browser/OS Specific Mappings
+    //
+    //--------------------------------------------------------------------
     mergeIf(keyCodeToInfoTable, 'moz', {
         0x3B: { code: 'Semicolon', keyCap: ';' },
         0x3D: { code: 'Equal', keyCap: '=' },
         0x6B: { code: 'Equal', keyCap: '=' },
         0x6D: { code: 'Minus', keyCap: '-' },
         0xBB: { code: 'NumpadAdd', keyCap: '+', location: NUMPAD },
-        0xBD: { code: 'NumpadSubtract', keyCap: '-', location: NUMPAD }
+        0xBD: { code: 'NumpadSubtract', keyCap: '-', location: NUMPAD } // [USB: 0x56]
     });
     mergeIf(keyCodeToInfoTable, 'moz-mac', {
         0x0C: { code: 'NumLock', location: NUMPAD },
-        0xAD: { code: 'Minus', keyCap: '-' }
+        0xAD: { code: 'Minus', keyCap: '-' } // [USB: 0x2d] -_
     });
     mergeIf(keyCodeToInfoTable, 'moz-win', {
-        0xAD: { code: 'Minus', keyCap: '-' }
+        0xAD: { code: 'Minus', keyCap: '-' } // [USB: 0x2d] -_
     });
     mergeIf(keyCodeToInfoTable, 'chrome-mac', {
-        0x5D: { code: 'MetaRight', location: RIGHT }
+        0x5D: { code: 'MetaRight', location: RIGHT } // [USB: 0xe7]
     });
+    // Windows via Bootcamp (!)
     if (0) {
         mergeIf(keyCodeToInfoTable, 'chrome-win', {
             0xC0: { code: 'Quote', keyCap: '\'' },
             0xDE: { code: 'Backslash', keyCap: '\\' },
-            0xDF: { code: 'Backquote', keyCap: '`' }
+            0xDF: { code: 'Backquote', keyCap: '`' } // [USB: 0x35] `~ (US Standard 101)
         });
         mergeIf(keyCodeToInfoTable, 'ie', {
             0xC0: { code: 'Quote', keyCap: '\'' },
             0xDE: { code: 'Backslash', keyCap: '\\' },
-            0xDF: { code: 'Backquote', keyCap: '`' }
+            0xDF: { code: 'Backquote', keyCap: '`' } // [USB: 0x35] `~ (US Standard 101)
         });
     }
     mergeIf(keyCodeToInfoTable, 'safari', {
         0x03: { code: 'Enter' },
-        0x19: { code: 'Tab' }
+        0x19: { code: 'Tab' } // [USB: 0x2b] old Safari for Shift+Tab
     });
     mergeIf(keyCodeToInfoTable, 'ios', {
-        0x0A: { code: 'Enter', location: STANDARD }
+        0x0A: { code: 'Enter', location: STANDARD } // [USB: 0x28]
     });
     mergeIf(keyCodeToInfoTable, 'safari-mac', {
         0x5B: { code: 'MetaLeft', location: LEFT },
         0x5D: { code: 'MetaRight', location: RIGHT },
-        0xE5: { code: 'KeyQ', keyCap: 'Q' }
+        0xE5: { code: 'KeyQ', keyCap: 'Q' } // [USB: 0x14] On alternate presses, Ctrl+Q sends this
     });
+    //--------------------------------------------------------------------
+    //
+    // Identifier Mappings
+    //
+    //--------------------------------------------------------------------
+    // Cases where newer-ish browsers send keyIdentifier which can be
+    // used to disambiguate keys.
+    // keyIdentifierTable[keyIdentifier] -> keyInfo
     var keyIdentifierTable = {};
     if ('cros' === os) {
         keyIdentifierTable['U+00A0'] = { code: 'ShiftLeft', location: LEFT };
@@ -312,57 +385,77 @@ if (typeof Object.assign != 'function') {
         keyIdentifierTable['U+0010'] = { code: 'ContextMenu' };
     }
     if ('ios' === os) {
+        // These only generate keyup events
         keyIdentifierTable['U+0010'] = { code: 'Function' };
         keyIdentifierTable['U+001C'] = { code: 'ArrowLeft' };
         keyIdentifierTable['U+001D'] = { code: 'ArrowRight' };
         keyIdentifierTable['U+001E'] = { code: 'ArrowUp' };
         keyIdentifierTable['U+001F'] = { code: 'ArrowDown' };
-        keyIdentifierTable['U+0001'] = { code: 'Home' };
-        keyIdentifierTable['U+0004'] = { code: 'End' };
-        keyIdentifierTable['U+000B'] = { code: 'PageUp' };
-        keyIdentifierTable['U+000C'] = { code: 'PageDown' };
+        keyIdentifierTable['U+0001'] = { code: 'Home' }; // [USB: 0x4a] Fn + ArrowLeft
+        keyIdentifierTable['U+0004'] = { code: 'End' }; // [USB: 0x4d] Fn + ArrowRight
+        keyIdentifierTable['U+000B'] = { code: 'PageUp' }; // [USB: 0x4b] Fn + ArrowUp
+        keyIdentifierTable['U+000C'] = { code: 'PageDown' }; // [USB: 0x4e] Fn + ArrowDown
     }
+    //--------------------------------------------------------------------
+    //
+    // Location Mappings
+    //
+    //--------------------------------------------------------------------
+    // Cases where newer-ish browsers send location/keyLocation which
+    // can be used to disambiguate keys.
+    // locationTable[location][keyCode] -> keyInfo
     var locationTable = [];
     locationTable[LEFT] = {
         0x10: { code: 'ShiftLeft', location: LEFT },
         0x11: { code: 'ControlLeft', location: LEFT },
-        0x12: { code: 'AltLeft', location: LEFT }
+        0x12: { code: 'AltLeft', location: LEFT } // [USB: 0xe2]
     };
     locationTable[RIGHT] = {
         0x10: { code: 'ShiftRight', location: RIGHT },
         0x11: { code: 'ControlRight', location: RIGHT },
-        0x12: { code: 'AltRight', location: RIGHT }
+        0x12: { code: 'AltRight', location: RIGHT } // [USB: 0xe6]
     };
     locationTable[NUMPAD] = {
-        0x0D: { code: 'NumpadEnter', location: NUMPAD }
+        0x0D: { code: 'NumpadEnter', location: NUMPAD } // [USB: 0x58]
     };
     mergeIf(locationTable[NUMPAD], 'moz', {
         0x6D: { code: 'NumpadSubtract', location: NUMPAD },
-        0x6B: { code: 'NumpadAdd', location: NUMPAD }
+        0x6B: { code: 'NumpadAdd', location: NUMPAD } // [USB: 0x57]
     });
     mergeIf(locationTable[LEFT], 'moz-mac', {
-        0xE0: { code: 'MetaLeft', location: LEFT }
+        0xE0: { code: 'MetaLeft', location: LEFT } // [USB: 0xe3]
     });
     mergeIf(locationTable[RIGHT], 'moz-mac', {
-        0xE0: { code: 'MetaRight', location: RIGHT }
+        0xE0: { code: 'MetaRight', location: RIGHT } // [USB: 0xe7]
     });
     mergeIf(locationTable[RIGHT], 'moz-win', {
-        0x5B: { code: 'MetaRight', location: RIGHT }
+        0x5B: { code: 'MetaRight', location: RIGHT } // [USB: 0xe7]
     });
     mergeIf(locationTable[RIGHT], 'mac', {
-        0x5D: { code: 'MetaRight', location: RIGHT }
+        0x5D: { code: 'MetaRight', location: RIGHT } // [USB: 0xe7]
     });
     mergeIf(locationTable[NUMPAD], 'chrome-mac', {
-        0x0C: { code: 'NumLock', location: NUMPAD }
+        0x0C: { code: 'NumLock', location: NUMPAD } // [USB: 0x53]
     });
     mergeIf(locationTable[NUMPAD], 'safari-mac', {
         0x0C: { code: 'NumLock', location: NUMPAD },
         0xBB: { code: 'NumpadAdd', location: NUMPAD },
         0xBD: { code: 'NumpadSubtract', location: NUMPAD },
         0xBE: { code: 'NumpadDecimal', location: NUMPAD },
-        0xBF: { code: 'NumpadDivide', location: NUMPAD }
+        0xBF: { code: 'NumpadDivide', location: NUMPAD } // [USB: 0x54]
     });
+    //--------------------------------------------------------------------
+    //
+    // Key Values
+    //
+    //--------------------------------------------------------------------
+    // Mapping from `code` values to `key` values. Values defined at:
+    // https://w3c.github.io/uievents-key/
+    // Entries are only provided when `key` differs from `code`. If
+    // printable, `shiftKey` has the shifted printable character. This
+    // assumes US Standard 101 layout
     var codeToKeyTable = {
+        // Modifier Keys
         ShiftLeft: { key: 'Shift' },
         ShiftRight: { key: 'Shift' },
         ControlLeft: { key: 'Control' },
@@ -371,8 +464,10 @@ if (typeof Object.assign != 'function') {
         AltRight: { key: 'Alt' },
         MetaLeft: { key: 'Meta' },
         MetaRight: { key: 'Meta' },
+        // Whitespace Keys
         NumpadEnter: { key: 'Enter' },
         Space: { key: ' ' },
+        // Printable Keys
         Digit0: { key: '0', shiftKey: ')' },
         Digit1: { key: '1', shiftKey: '!' },
         Digit2: { key: '2', shiftKey: '@' },
@@ -442,6 +537,8 @@ if (typeof Object.assign != 'function') {
         MetaLeft: { key: 'Meta' },
         MetaRight: { key: 'Meta' }
     });
+    // Corrections for 'key' names in older browsers (e.g. FF36-)
+    // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent.key#Key_values
     var keyFixTable = {
         Esc: 'Escape',
         Nonconvert: 'NonConvert',
@@ -461,6 +558,11 @@ if (typeof Object.assign != 'function') {
         Exsel: 'ExSel',
         Zoom: 'ZoomToggle'
     };
+    //--------------------------------------------------------------------
+    //
+    // Exported Functions
+    //
+    //--------------------------------------------------------------------
     var codeTable = remap(keyCodeToInfoTable, 'code');
     try {
         var nativeLocation = nativeKeyboardEvent && ('location' in new KeyboardEvent(''));
@@ -483,7 +585,11 @@ if (typeof Object.assign != 'function') {
             }
             return null;
         }());
+        // TODO: Track these down and move to general tables
         if (0) {
+            // TODO: Map these for newerish browsers?
+            // TODO: iOS only?
+            // TODO: Override with more common keyIdentifier name?
             switch (event.keyIdentifier) {
                 case 'U+0010':
                     keyInfo = { code: 'Function' };
@@ -537,6 +643,7 @@ if (typeof Object.assign != 'function') {
                     var keyInfo = keyInfoForEvent(this);
                     return keyInfo ? keyInfo.code : '';
                 } });
+            // Fix for nonstandard `key` values (FF36-)
             if ('key' in KeyboardEvent.prototype) {
                 var desc = Object.getOwnPropertyDescriptor(KeyboardEvent.prototype, 'key');
                 Object.defineProperty(KeyboardEvent.prototype, 'key', { get: function () {
@@ -559,6 +666,7 @@ if (typeof Object.assign != 'function') {
     }
     if (!('queryKeyCap' in global.KeyboardEvent))
         global.KeyboardEvent.queryKeyCap = queryKeyCap;
+    // Helper for IE8-
     global.identifyKey = function (event) {
         if ('code' in event)
             return;
@@ -580,71 +688,6 @@ var ElementMessageTypes = {
     RESTORE: 1,
     MOVE: 2
 };
-var WorkerMessageTypes;
-(function (WorkerMessageTypes) {
-    WorkerMessageTypes[WorkerMessageTypes["UPDATEVIEW"] = 0] = "UPDATEVIEW";
-    WorkerMessageTypes[WorkerMessageTypes["SETVBOX"] = 1] = "SETVBOX";
-    WorkerMessageTypes[WorkerMessageTypes["AUDIOSTREAM"] = 2] = "AUDIOSTREAM";
-    WorkerMessageTypes[WorkerMessageTypes["VIDEOSTREAM"] = 3] = "VIDEOSTREAM";
-    WorkerMessageTypes[WorkerMessageTypes["STOREITEM"] = 4] = "STOREITEM";
-    WorkerMessageTypes[WorkerMessageTypes["GETITEM"] = 5] = "GETITEM";
-    WorkerMessageTypes[WorkerMessageTypes["NEWVIEWCENTRE"] = 6] = "NEWVIEWCENTRE";
-    WorkerMessageTypes[WorkerMessageTypes["SETSELECT"] = 7] = "SETSELECT";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTMESSAGE"] = 8] = "ELEMENTMESSAGE";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTVIEW"] = 9] = "ELEMENTVIEW";
-    WorkerMessageTypes[WorkerMessageTypes["ELEMENTDELETE"] = 10] = "ELEMENTDELETE";
-    WorkerMessageTypes[WorkerMessageTypes["NEWALERT"] = 11] = "NEWALERT";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEALERT"] = 12] = "REMOVEALERT";
-    WorkerMessageTypes[WorkerMessageTypes["NEWINFO"] = 13] = "NEWINFO";
-    WorkerMessageTypes[WorkerMessageTypes["REMOVEINFO"] = 14] = "REMOVEINFO";
-})(WorkerMessageTypes || (WorkerMessageTypes = {}));
-var ControllerMessageTypes;
-(function (ControllerMessageTypes) {
-    ControllerMessageTypes[ControllerMessageTypes["START"] = 0] = "START";
-    ControllerMessageTypes[ControllerMessageTypes["SETOPTIONS"] = 1] = "SETOPTIONS";
-    ControllerMessageTypes[ControllerMessageTypes["REGISTER"] = 2] = "REGISTER";
-    ControllerMessageTypes[ControllerMessageTypes["MODECHANGE"] = 3] = "MODECHANGE";
-    ControllerMessageTypes[ControllerMessageTypes["AUDIOSTREAM"] = 4] = "AUDIOSTREAM";
-    ControllerMessageTypes[ControllerMessageTypes["VIDEOSTREAM"] = 5] = "VIDEOSTREAM";
-    ControllerMessageTypes[ControllerMessageTypes["NEWELEMENT"] = 6] = "NEWELEMENT";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTID"] = 7] = "ELEMENTID";
-    ControllerMessageTypes[ControllerMessageTypes["BATCHMOVE"] = 8] = "BATCHMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["BATCHDELETE"] = 9] = "BATCHDELETE";
-    ControllerMessageTypes[ControllerMessageTypes["BATCHRESTORE"] = 10] = "BATCHRESTORE";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMESSAGE"] = 11] = "ELEMENTMESSAGE";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOVER"] = 12] = "ELEMENTMOUSEOVER";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEOUT"] = 13] = "ELEMENTMOUSEOUT";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDOWN"] = 14] = "ELEMENTMOUSEDOWN";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTERASE"] = 15] = "ELEMENTERASE";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEMOVE"] = 16] = "ELEMENTMOUSEMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEUP"] = 17] = "ELEMENTMOUSEUP";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSECLICK"] = 18] = "ELEMENTMOUSECLICK";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTMOUSEDBLCLICK"] = 19] = "ELEMENTMOUSEDBLCLICK";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHSTART"] = 20] = "ELEMENTTOUCHSTART";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHMOVE"] = 21] = "ELEMENTTOUCHMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHEND"] = 22] = "ELEMENTTOUCHEND";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTTOUCHCANCEL"] = 23] = "ELEMENTTOUCHCANCEL";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTDRAG"] = 24] = "ELEMENTDRAG";
-    ControllerMessageTypes[ControllerMessageTypes["ELEMENTDROP"] = 25] = "ELEMENTDROP";
-    ControllerMessageTypes[ControllerMessageTypes["MOUSEDOWN"] = 26] = "MOUSEDOWN";
-    ControllerMessageTypes[ControllerMessageTypes["MOUSEMOVE"] = 27] = "MOUSEMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["MOUSEUP"] = 28] = "MOUSEUP";
-    ControllerMessageTypes[ControllerMessageTypes["MOUSECLICK"] = 29] = "MOUSECLICK";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHSTART"] = 30] = "TOUCHSTART";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHMOVE"] = 31] = "TOUCHMOVE";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHEND"] = 32] = "TOUCHEND";
-    ControllerMessageTypes[ControllerMessageTypes["TOUCHCANCEL"] = 33] = "TOUCHCANCEL";
-    ControllerMessageTypes[ControllerMessageTypes["KEYBOARDINPUT"] = 34] = "KEYBOARDINPUT";
-    ControllerMessageTypes[ControllerMessageTypes["UNDO"] = 35] = "UNDO";
-    ControllerMessageTypes[ControllerMessageTypes["REDO"] = 36] = "REDO";
-    ControllerMessageTypes[ControllerMessageTypes["DRAG"] = 37] = "DRAG";
-    ControllerMessageTypes[ControllerMessageTypes["DROP"] = 38] = "DROP";
-    ControllerMessageTypes[ControllerMessageTypes["PASTE"] = 39] = "PASTE";
-    ControllerMessageTypes[ControllerMessageTypes["CUT"] = 40] = "CUT";
-    ControllerMessageTypes[ControllerMessageTypes["PALLETECHANGE"] = 41] = "PALLETECHANGE";
-    ControllerMessageTypes[ControllerMessageTypes["LEAVE"] = 42] = "LEAVE";
-    ControllerMessageTypes[ControllerMessageTypes["ERROR"] = 43] = "ERROR";
-})(ControllerMessageTypes || (ControllerMessageTypes = {}));
 var components = Immutable.Map();
 var registerComponentView = function (componentName, ElementView, PalleteView, ModeView, DrawHandle) {
     console.log('Registering view for: ' + componentName);
@@ -654,6 +697,15 @@ var registerComponentView = function (componentName, ElementView, PalleteView, M
     components = components.set(componentName, newComp);
     console.log('View Regisered.');
 };
+/**************************************************************************************************************************************************************
+ *
+ *
+ *
+ * START OF CLASS
+ *
+ *
+ *
+ **************************************************************************************************************************************************************/
 var WhiteBoardController = (function () {
     function WhiteBoardController(isHost, userId, allEdit, userEdit, workerUrl, componentFiles) {
         var _this = this;
@@ -682,6 +734,7 @@ var WhiteBoardController = (function () {
         this.fileUploads = [];
         this.fileReaders = [];
         document.body.addEventListener('mouseup', this.mouseUp, false);
+        //document.body.addEventListener('touchcancel', this.touchUp, false);
         document.addEventListener('copy', this.onCopy.bind(this));
         document.addEventListener('paste', this.onPaste.bind(this));
         document.addEventListener('cut', this.onCut.bind(this));
@@ -806,7 +859,7 @@ var WhiteBoardController = (function () {
             }
         };
         var message = {
-            type: 0, userId: this.userId, isHost: this.isHost, componentFiles: componentFiles,
+            type: 0 /* START */, userId: this.userId, isHost: this.isHost, componentFiles: componentFiles,
             allEdit: this.allowAllEdit, userEdit: this.allowUserEdit
         };
         this.worker.postMessage(message);
@@ -817,38 +870,39 @@ var WhiteBoardController = (function () {
         this.socket.on('JOIN', function (data) {
         });
         this.socket.on('OPTIONS', function (data) {
+            /* TODO: Implement room options */
         });
         this.socket.on('NEW-ELEMENT', function (data) {
-            var message = { type: 6, data: data };
+            var message = { type: 6 /* NEWELEMENT */, data: data };
             self.worker.postMessage(message);
         });
         this.socket.on('ELEMENT-ID', function (data) {
-            var message = { type: 7, data: data };
+            var message = { type: 7 /* ELEMENTID */, data: data };
             self.worker.postMessage(message);
         });
         this.socket.on('MSG-COMPONENT', function (data) {
             if (data.type == 'ANY' && data.serverId == null) {
                 if (data.payload.header == ElementMessageTypes.MOVE) {
-                    var message = { type: 8, data: data.payload.payload };
+                    var message = { type: 8 /* BATCHMOVE */, data: data.payload.payload };
                     self.worker.postMessage(message);
                 }
                 else if (data.payload.header == ElementMessageTypes.DELETE) {
-                    var message = { type: 9, data: data.payload.payload };
+                    var message = { type: 9 /* BATCHDELETE */, data: data.payload.payload };
                     self.worker.postMessage(message);
                 }
                 else if (data.payload.header == ElementMessageTypes.RESTORE) {
-                    var message = { type: 10, data: data.payload.payload };
+                    var message = { type: 10 /* BATCHRESTORE */, data: data.payload.payload };
                     self.worker.postMessage(message);
                 }
             }
             else {
-                var message = { type: 11, data: data };
+                var message = { type: 11 /* ELEMENTMESSAGE */, data: data };
                 self.worker.postMessage(message);
             }
         });
         this.socket.on('ERROR', function (message) {
             console.log('SERVER: ' + message);
-            var errMsg = { type: 43, error: message };
+            var errMsg = { type: 43 /* ERROR */, error: message };
             self.worker.postMessage(errMsg);
         });
     };
@@ -858,7 +912,7 @@ var WhiteBoardController = (function () {
     WhiteBoardController.prototype.setRoomOptions = function (allowAllEdit, allowUserEdit) {
         this.allowAllEdit = allowAllEdit;
         this.allowUserEdit = allowUserEdit;
-        var message = { type: 1, allowAllEdit: this.allowAllEdit, allowUserEdit: this.allowUserEdit };
+        var message = { type: 1 /* SETOPTIONS */, allowAllEdit: this.allowAllEdit, allowUserEdit: this.allowUserEdit };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.setView = function (view) {
@@ -880,6 +934,15 @@ var WhiteBoardController = (function () {
         this.view = view;
         view.setState(this.viewState);
     };
+    /***********************************************************************************************************************************************************
+     *
+     *
+     *
+     * STATE MODIFIERS (INTERNAL)
+     *
+     *
+     *
+     **********************************************************************************************************************************************************/
     WhiteBoardController.prototype.updateView = function (viewState) {
         this.viewState = viewState;
         this.view.storeUpdate(this.viewState);
@@ -901,9 +964,11 @@ var WhiteBoardController = (function () {
         this.clipboardItems = clipBoardItems;
     };
     WhiteBoardController.prototype.getAudioStream = function (id) {
+        /* TODO */
         return null;
     };
     WhiteBoardController.prototype.getVideoStream = function (id) {
+        /* TODO */
         return null;
     };
     WhiteBoardController.prototype.newAlert = function (alertView) {
@@ -963,8 +1028,18 @@ var WhiteBoardController = (function () {
         this.panX = panX;
         this.panY = panY;
         var newVBox = '' + panX + ' ' + panY + ' ' + vBoxW + ' ' + vBoxH;
+        // console.log('Updating Viewbox to: ' + newView);
         this.setViewState({ viewBox: newVBox, viewX: panX, viewY: panY, viewWidth: vBoxW, viewHeight: vBoxH, viewScale: scaleF });
     };
+    /***********************************************************************************************************************************************************
+     *
+     *
+     *
+     * INTERNAL FUNCTIONS
+     *
+     *
+     *
+     **********************************************************************************************************************************************************/
     WhiteBoardController.prototype.compareUpdateTime = function (elem1, elem2) {
         if (elem1.updateTime.getTime() > elem2.updateTime.getTime()) {
             return 1;
@@ -976,11 +1051,20 @@ var WhiteBoardController = (function () {
             return 0;
         }
     };
+    /***********************************************************************************************************************************************************
+     *
+     *
+     *
+     * DISPATCHER METHODS
+     *
+     *
+     *
+     **********************************************************************************************************************************************************/
     WhiteBoardController.prototype.modeChange = function (newMode) {
         var whitElem = document.getElementById("whiteBoard-input");
         var context = whitElem.getContext('2d');
         context.clearRect(0, 0, whitElem.width, whitElem.height);
-        var message = { type: 3, newMode: newMode };
+        var message = { type: 3 /* MODECHANGE */, newMode: newMode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.changeEraseSize = function (newSize) {
@@ -991,7 +1075,7 @@ var WhiteBoardController = (function () {
             altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
             buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         };
-        var message = { type: 12, id: id, e: eventCopy };
+        var message = { type: 12 /* ELEMENTMOUSEOVER */, id: id, e: eventCopy };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.elementMouseOut = function (id, e) {
@@ -999,7 +1083,7 @@ var WhiteBoardController = (function () {
             altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
             buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         };
-        var message = { type: 13, id: id, e: eventCopy };
+        var message = { type: 13 /* ELEMENTMOUSEOUT */, id: id, e: eventCopy };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.elementMouseDown = function (id, e, componenet, subId) {
@@ -1015,7 +1099,7 @@ var WhiteBoardController = (function () {
             altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
             buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         };
-        var message = { type: 14, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId };
+        var message = { type: 14 /* ELEMENTMOUSEDOWN */, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.elementMouseMove = function (id, e, componenet, subId) {
@@ -1027,7 +1111,7 @@ var WhiteBoardController = (function () {
         var mouseY = Math.round(e.clientY - offsetY) * this.scaleF + this.panX;
         if (this.viewState.mode == BoardModes.ERASE) {
             if (this.lMousePress) {
-                var message = { type: 15, id: id };
+                var message = { type: 15 /* ELEMENTERASE */, id: id };
                 this.worker.postMessage(message);
             }
         }
@@ -1038,7 +1122,7 @@ var WhiteBoardController = (function () {
                     buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
                 };
                 var message = {
-                    type: 16, id: id, e: eventCopy, mouseX: mouseX, mouseY: mouseY, componenet: componenet, subId: subId
+                    type: 16 /* ELEMENTMOUSEMOVE */, id: id, e: eventCopy, mouseX: mouseX, mouseY: mouseY, componenet: componenet, subId: subId
                 };
                 this.worker.postMessage(message);
                 this.prevX = e.clientX;
@@ -1059,7 +1143,7 @@ var WhiteBoardController = (function () {
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
             };
             var message = {
-                type: 17, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+                type: 17 /* ELEMENTMOUSEUP */, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
             };
             this.worker.postMessage(message);
         }
@@ -1072,7 +1156,7 @@ var WhiteBoardController = (function () {
         var xPos = (e.clientX - offsetX) * this.scaleF + this.panX;
         var yPos = (e.clientY - offsetY) * this.scaleF + this.panY;
         if (this.viewState.mode == BoardModes.ERASE) {
-            var message = { type: 15, id: id };
+            var message = { type: 15 /* ELEMENTERASE */, id: id };
             this.worker.postMessage(message);
         }
         else if (this.viewState.mode == BoardModes.SELECT) {
@@ -1081,7 +1165,7 @@ var WhiteBoardController = (function () {
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
             };
             var message = {
-                type: 18, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+                type: 18 /* ELEMENTMOUSECLICK */, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
             };
             this.worker.postMessage(message);
         }
@@ -1099,7 +1183,7 @@ var WhiteBoardController = (function () {
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
             };
             var message = {
-                type: 19, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
+                type: 19 /* ELEMENTMOUSEDBLCLICK */, id: id, e: eventCopy, mouseX: xPos, mouseY: yPos, componenet: componenet, subId: subId
             };
             this.worker.postMessage(message);
             e.stopPropagation();
@@ -1117,14 +1201,14 @@ var WhiteBoardController = (function () {
             var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
             localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
         }
-        var message = { type: 20, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+        var message = { type: 20 /* ELEMENTTOUCHSTART */, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
         this.worker.postMessage(message);
         this.prevTouch = e.touches;
     };
     WhiteBoardController.prototype.elementTouchMove = function (id, e, componenet, subId) {
         var touchMoves;
         if (this.viewState.mode == BoardModes.ERASE) {
-            var message = { type: 15, id: id };
+            var message = { type: 15 /* ELEMENTERASE */, id: id };
             this.worker.postMessage(message);
         }
         else if (this.viewState.mode == BoardModes.SELECT) {
@@ -1139,7 +1223,7 @@ var WhiteBoardController = (function () {
                     }
                 }
             }
-            var message = { type: 21, id: id, e: e, touchMoves: touchMoves, componenet: componenet, subId: subId };
+            var message = { type: 21 /* ELEMENTTOUCHMOVE */, id: id, e: e, touchMoves: touchMoves, componenet: componenet, subId: subId };
             this.worker.postMessage(message);
             this.prevTouch = e.touches;
         }
@@ -1157,7 +1241,7 @@ var WhiteBoardController = (function () {
                 var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
             }
-            var message = { type: 22, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            var message = { type: 22 /* ELEMENTTOUCHEND */, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
             this.worker.postMessage(message);
         }
     };
@@ -1174,14 +1258,16 @@ var WhiteBoardController = (function () {
                 var yPos = (touch.clientY - offsetY) * this.scaleF + this.panY;
                 localTouches.push({ x: xPos, y: yPos, identifer: touch.identifier });
             }
-            var message = { type: 23, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
+            var message = { type: 23 /* ELEMENTTOUCHCANCEL */, id: id, e: e, localTouches: localTouches, componenet: componenet, subId: subId };
             this.worker.postMessage(message);
         }
     };
     WhiteBoardController.prototype.elementDragOver = function (id, e, componenet, subId) {
+        /* TODO: */
         e.stopPropagation();
     };
     WhiteBoardController.prototype.elementDrop = function (id, e, componenet, subId) {
+        /* TODO: */
         e.stopPropagation();
     };
     WhiteBoardController.prototype.mouseDown = function (e) {
@@ -1223,7 +1309,7 @@ var WhiteBoardController = (function () {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
             };
-            var message = { type: 26, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+            var message = { type: 26 /* MOUSEDOWN */, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
             this.worker.postMessage(message);
         }
     };
@@ -1280,7 +1366,7 @@ var WhiteBoardController = (function () {
             context.strokeStyle = 'black';
             context.strokeRect(rectLeft, rectTop, rectWidth, rectHeight);
         }
-        var message = { type: 27, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
+        var message = { type: 27 /* MOUSEMOVE */, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode };
         this.worker.postMessage(message);
         if (e.buttons == 1 && this.viewState.mode != BoardModes.SELECT && this.viewState.mode != BoardModes.ERASE) {
             var newPoint = { x: 0, y: 0 };
@@ -1337,7 +1423,7 @@ var WhiteBoardController = (function () {
                 buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
             };
             var message = {
-                type: 28, e: eventCopy, mouseX: mouseX, mouseY: mouseY, downX: downX, downY: downY,
+                type: 28 /* MOUSEUP */, e: eventCopy, mouseX: mouseX, mouseY: mouseY, downX: downX, downY: downY,
                 mode: this.viewState.mode, scaleF: this.scaleF, panX: this.panX, panY: this.panY, pointList: this.pointList
             };
             this.worker.postMessage(message);
@@ -1364,21 +1450,25 @@ var WhiteBoardController = (function () {
             buttons: e.buttons, clientX: e.clientX, clientY: e.clientY
         };
         var message = {
-            type: 29, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode
+            type: 29 /* MOUSECLICK */, e: eventCopy, mouseX: mouseX, mouseY: mouseY, mode: this.viewState.mode
         };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.touchStart = function (e) {
         this.touchPress = true;
+        /* TODO: */
     };
     WhiteBoardController.prototype.touchMove = function (e) {
+        /* TODO: */
         if (this.touchPress) {
         }
     };
     WhiteBoardController.prototype.touchEnd = function (e) {
+        /* TODO: */
         this.touchPress = false;
     };
     WhiteBoardController.prototype.touchCancel = function (e) {
+        /* TODO: */
     };
     WhiteBoardController.prototype.keyDown = function (e) {
         if (e.keyCode === 8) {
@@ -1386,7 +1476,7 @@ var WhiteBoardController = (function () {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 keyCode: e.keyCode, charCode: e.charCode
             };
-            var message = { type: 34, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
+            var message = { type: 34 /* KEYBOARDINPUT */, e: eventCopy, inputChar: 'Backspace', mode: this.viewState.mode };
             this.worker.postMessage(message);
             e.preventDefault();
         }
@@ -1395,7 +1485,7 @@ var WhiteBoardController = (function () {
                 altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, detail: e.detail,
                 keyCode: e.keyCode, charCode: e.charCode
             };
-            var message = { type: 34, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
+            var message = { type: 34 /* KEYBOARDINPUT */, e: eventCopy, inputChar: 'Del', mode: this.viewState.mode };
             this.worker.postMessage(message);
             e.preventDefault();
         }
@@ -1409,13 +1499,13 @@ var WhiteBoardController = (function () {
         if (e.ctrlKey) {
             if (inputChar == 'z') {
                 e.preventDefault();
-                var message = { type: 35 };
+                var message = { type: 35 /* UNDO */ };
                 this.worker.postMessage(message);
                 return;
             }
             else if (inputChar == 'y') {
                 e.preventDefault();
-                var message = { type: 36 };
+                var message = { type: 36 /* REDO */ };
                 this.worker.postMessage(message);
                 return;
             }
@@ -1432,7 +1522,7 @@ var WhiteBoardController = (function () {
         }
         else {
             e.preventDefault();
-            var message = { type: 34, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
+            var message = { type: 34 /* KEYBOARDINPUT */, e: eventCopy, inputChar: inputChar, mode: this.viewState.mode };
             this.worker.postMessage(message);
             return;
         }
@@ -1503,7 +1593,8 @@ var WhiteBoardController = (function () {
             files: fileList, url: url, urlList: urlList, plainText: text, htmlText: htmlText, enrichedText: enriched, csv: csv, xml: xml, image: img,
             isInternal: isInternal, wasCut: wasCut
         };
-        var message = { type: 39, mouseX: mouseX, mouseY: mouseY, data: data, mode: this.viewState.mode };
+        // Support text, urls, images and files.
+        var message = { type: 39 /* PASTE */, mouseX: mouseX, mouseY: mouseY, data: data, mode: this.viewState.mode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.onCut = function (e) {
@@ -1514,10 +1605,11 @@ var WhiteBoardController = (function () {
         for (var i = 0; i < this.clipboardItems.length; i++) {
             e.clipboardData.setData(this.clipboardItems[i].format, this.clipboardItems[i].data);
         }
-        var message = { type: 40, mode: this.viewState.mode };
+        var message = { type: 40 /* CUT */, mode: this.viewState.mode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.dragOver = function (e) {
+        /* TODO: Pass to elements as necessary. */
         e.preventDefault();
     };
     WhiteBoardController.prototype.drop = function (e) {
@@ -1541,13 +1633,13 @@ var WhiteBoardController = (function () {
         console.log('Drop was: ' + e.dataTransfer.getData('text/plain'));
         var path = loc.pathname;
         var message = {
-            type: 38, e: eventCopy, mouseX: mouseX, mouseY: mouseY,
+            type: 38 /* DROP */, e: eventCopy, mouseX: mouseX, mouseY: mouseY,
             scaleF: this.scaleF, mode: this.viewState.mode, plainData: e.dataTransfer.getData('text/plain')
         };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.palleteChange = function (change) {
-        var message = { type: 41, change: change, mode: this.viewState.mode };
+        var message = { type: 41 /* PALLETECHANGE */, change: change, mode: this.viewState.mode };
         this.worker.postMessage(message);
     };
     WhiteBoardController.prototype.windowResize = function (e) {
@@ -1590,10 +1682,13 @@ var WhiteBoardController = (function () {
         var vBoxH = whitElem.clientHeight * newScale;
         if (move) {
             if (e.deltaY < 0) {
+                // Zoom in behaviour.
                 newPanX = this.panX + (this.scaleF - newScale) * (e.clientX - offsetX);
                 newPanY = this.panY + (this.scaleF - newScale) * (e.clientY - offsetY);
             }
             else {
+                // Zoom out behaviour.
+                /* TODO: Fix. */
                 newPanX = this.panX - (this.scaleF - newScale) * (e.clientX - offsetX);
                 newPanY = this.panY - (this.scaleF - newScale) * (e.clientY - offsetY);
             }

@@ -8,6 +8,10 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+/** A helper function to determine if a codepoint should be treated as a grammatical hyphen.
+ *
+ *
+ */
 var isHyphen = function (codePoint) {
     switch (codePoint) {
         case 45:
@@ -39,49 +43,47 @@ var isHyphen = function (codePoint) {
             return false;
     }
 };
+/** Whiteboard Text Component.
+*
+* This allows the user to write text and have it rendered as SVG text.
+*
+*/
 var WhiteBoardText;
 (function (WhiteBoardText) {
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    // MODEL                                                                                                                                                  //
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * The name of the mode associated with this component.
+     */
     WhiteBoardText.MODENAME = 'TEXT';
-    var PalleteChangeType;
-    (function (PalleteChangeType) {
-        PalleteChangeType[PalleteChangeType["COLOUR"] = 0] = "COLOUR";
-        PalleteChangeType[PalleteChangeType["SIZE"] = 1] = "SIZE";
-        PalleteChangeType[PalleteChangeType["BOLD"] = 2] = "BOLD";
-        PalleteChangeType[PalleteChangeType["ITALIC"] = 3] = "ITALIC";
-        PalleteChangeType[PalleteChangeType["UNDERLINE"] = 4] = "UNDERLINE";
-        PalleteChangeType[PalleteChangeType["THROUGHLINE"] = 5] = "THROUGHLINE";
-        PalleteChangeType[PalleteChangeType["OVERLINE"] = 6] = "OVERLINE";
-        PalleteChangeType[PalleteChangeType["JUSTIFIED"] = 7] = "JUSTIFIED";
-        PalleteChangeType[PalleteChangeType["TEXTCHANGE"] = 8] = "TEXTCHANGE";
-    })(PalleteChangeType || (PalleteChangeType = {}));
+    /**
+     * The set of possible colours for free curves.
+     * Used in interfacing between component view and state.
+     */
     var PalleteColour = {
         BLACK: 'black',
         BLUE: 'blue',
         RED: 'red',
         GREEN: 'green'
     };
+    /**
+     * The set of possible sizes for free curves.
+     * Used in interfacing between component view and state.
+     */
     var PalleteSize = {
         XSMALL: 2.0,
         SMALL: 5.0,
         MEDIUM: 10.0,
         LARGE: 20.0
     };
-    var ViewComponents;
-    (function (ViewComponents) {
-        ViewComponents[ViewComponents["View"] = 0] = "View";
-        ViewComponents[ViewComponents["Resize"] = 1] = "Resize";
-        ViewComponents[ViewComponents["Interaction"] = 2] = "Interaction";
-        ViewComponents[ViewComponents["TextArea"] = 3] = "TextArea";
-    })(ViewComponents || (ViewComponents = {}));
-    var ResizeComponents;
-    (function (ResizeComponents) {
-        ResizeComponents[ResizeComponents["Corner"] = 0] = "Corner";
-        ResizeComponents[ResizeComponents["Right"] = 1] = "Right";
-        ResizeComponents[ResizeComponents["Bottom"] = 2] = "Bottom";
-    })(ResizeComponents || (ResizeComponents = {}));
-    var CustomContextItems;
-    (function (CustomContextItems) {
-    })(CustomContextItems || (CustomContextItems = {}));
+    /**
+     * Message types that can be sent between the user and server.
+     */
     var MessageTypes = {
         NODE: 1,
         MISSED: 2,
@@ -94,6 +96,18 @@ var WhiteBoardText;
     };
     var MAX_STYLE_LENGTH = 200;
     var MAX_SEGEMENT_LENGTH = 63;
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    // CONTROLLER                                                                                                                                             //
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /** Text Whiteboard Pallete.
+    *
+    * This is the class that will be used to store the state and control the pallete for this component.
+    *
+    */
     var Pallete = (function (_super) {
         __extends(Pallete, _super);
         function Pallete() {
@@ -136,39 +150,39 @@ var WhiteBoardText;
             return this.isTLine;
         };
         Pallete.prototype.handleChange = function (change) {
-            if (change.type == 0) {
+            if (change.type == 0 /* COLOUR */) {
                 this.colour = change.data;
                 this.updateView({ colour: change.data });
             }
-            else if (change.type == 1) {
+            else if (change.type == 1 /* SIZE */) {
                 this.baseSize = change.data;
                 this.updateView({ size: change.data });
             }
-            else if (change.type == 2) {
+            else if (change.type == 2 /* BOLD */) {
                 this.isBold = change.data;
                 this.updateView({ isBold: change.data });
             }
-            else if (change.type == 3) {
+            else if (change.type == 3 /* ITALIC */) {
                 this.isItalic = change.data;
                 this.updateView({ isItalic: change.data });
             }
-            else if (change.type == 4) {
+            else if (change.type == 4 /* UNDERLINE */) {
                 this.isULine = change.data;
                 this.updateView({ isULine: change.data });
             }
-            else if (change.type == 6) {
+            else if (change.type == 6 /* OVERLINE */) {
                 this.isOLine = change.data;
                 this.updateView({ isOLine: change.data });
             }
-            else if (change.type == 5) {
+            else if (change.type == 5 /* THROUGHLINE */) {
                 this.isTLine = change.data;
                 this.updateView({ isTLine: change.data });
             }
-            else if (change.type == 7) {
+            else if (change.type == 7 /* JUSTIFIED */) {
                 this.isJustified = change.data;
                 this.updateView({ isJustified: change.data });
             }
-            else if (change.type == 8) {
+            else if (change.type == 8 /* TEXTCHANGE */) {
                 var dataIn = change.data;
                 this.colour = dataIn.colour;
                 this.isBold = dataIn.isBold;
@@ -189,8 +203,17 @@ var WhiteBoardText;
         return Pallete;
     }(BoardPallete));
     WhiteBoardText.Pallete = Pallete;
+    /** Free Curve Whiteboard Element.
+    *
+    * This is the class that will be used to store the state and control elements of this component.
+    *
+    */
     var Element = (function (_super) {
         __extends(Element, _super);
+        /**   Create the element as per the supplied parameters.
+        *
+        *     @return Element The new element created as per the supplied parameters
+        */
         function Element(id, userId, x, y, width, height, callbacks, size, isJustified, num_styles, styles, editLock, lockedBy, isEditing, serverId, updateTime) {
             var _this = _super.call(this, WhiteBoardText.MODENAME, id, x, y, width, height, userId, callbacks, serverId, updateTime) || this;
             _this.textSelecting = false;
@@ -210,6 +233,7 @@ var WhiteBoardText;
             _this.editCount = 0;
             _this.textDown = 0;
             _this.idealX = 0;
+            // Undo Redo Buffers for merging.
             _this.wordStart = null;
             _this.wordEnd = null;
             _this.prevWordStart = null;
@@ -238,6 +262,7 @@ var WhiteBoardText;
             var buffer = _this.editInBuffer[0][0];
             for (var i = 0; i < styles.length; i++) {
                 var style = styles[i];
+                // Check for integrity.
                 if (style != null && style != undefined && style.text != null && style.text != undefined && style.seq_num != null && style.seq_num != undefined
                     && style.start != null && style.start != undefined && style.end != null && style.end != undefined && style.style != null
                     && style.style != undefined && style.weight != null && style.weight != undefined && style.colour != null && style.colour != undefined
@@ -281,6 +306,10 @@ var WhiteBoardText;
             _this.currentViewState = newView;
             return _this;
         }
+        /**   Create the element from the creation data, return null if not valid.
+        *
+        *     @return Element The element.
+        */
         Element.createElement = function (data) {
             if (data.serverId != null && data.serverId != undefined && data.serverMsg != null && data.serverMsg != undefined) {
                 var msg = data.serverMsg;
@@ -304,6 +333,15 @@ var WhiteBoardText;
             }
             return null;
         };
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // EXPOSED FUNCTIONS
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /**   Generate the message that would be sent to the server to generate this element.
+         *
+         *    This should be a single message, more messages can be sent once serverId is returned. (see setServerId)
+         *
+         *    @return {UserMessage} The message to generate this element.
+         */
         Element.prototype.getNewMsg = function () {
             var msg = {
                 localId: this.id, x: this.x, y: this.y, width: this.width, height: this.height,
@@ -311,7 +349,14 @@ var WhiteBoardText;
             };
             return msg;
         };
+        /**   Generate the clipboard data that this element should produce when copied, either as a single selected item or whilst editing.
+         *
+         *    This should be a set of different clipboard data formats.
+         *
+         *    @return {Array<ClipBoardItem>} The clipboard items.
+         */
         Element.prototype.getClipboardData = function () {
+            // TODO: Create enriched and html text.
             var plainText = '';
             for (var i = 0; i < this.selectedCharacters.length; i++) {
                 plainText += this.text.substring(this.selectedCharacters[i], this.selectedCharacters[i] + 1);
@@ -320,39 +365,63 @@ var WhiteBoardText;
             clipData.push({ format: 'text/plain', data: plainText });
             return clipData;
         };
+        /**   Generate the SVG string description of this objects display to be copied  when user copies multiple items.
+         *
+         *    This should be a string containing the svg description to display this item.
+         *
+         *    @return {string} The clipboard items.
+         */
         Element.prototype.getClipboardSVG = function () {
+            // TODO:
             return null;
         };
+        /**   Sets the serverId of this element and returns a list of server messages to send.
+         *
+         *    @param {number} id - The server ID for this element.
+         *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
+         */
         Element.prototype.setServerId = function (id) {
             _super.prototype.setServerId.call(this, id);
             var messages = [];
             return messages;
         };
+        /**   Handle a mouse down event on this element or one of it's sub-components. Only called when board is in SELECT mode.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseDown = function (e, localX, localY, palleteState, component, subId) {
             var cursorType;
-            if (component == 1) {
+            if (component == 1 /* Resize */) {
                 this.isResizing = true;
                 this.oldWidth = this.width;
                 this.oldHeight = this.height;
                 this.startTime = this.updateTime;
-                if (subId == 1) {
+                if (subId == 1 /* Right */) {
                     this.resizeHorz = true;
                     this.resizeVert = false;
                     cursorType = { cursor: 'ew-resize', url: [], offset: { x: 0, y: 0 } };
                 }
-                else if (subId == 2) {
+                else if (subId == 2 /* Bottom */) {
                     this.resizeHorz = false;
                     this.resizeVert = true;
                     cursorType = { cursor: 'ns-resize', url: [], offset: { x: 0, y: 0 } };
                 }
-                else if (subId == 0) {
+                else if (subId == 0 /* Corner */) {
                     this.resizeHorz = true;
                     this.resizeVert = true;
                     cursorType = { cursor: 'nwse-resize', url: [], offset: { x: 0, y: 0 } };
                 }
                 this.updateView({ isResizing: true });
             }
-            else if (component == 2) {
+            else if (component == 2 /* Interaction */) {
                 this.isMoving = true;
                 this.moveStartX = this.x;
                 this.moveStartY = this.y;
@@ -361,7 +430,7 @@ var WhiteBoardText;
                 this.updateView({ isSelected: true, isMoving: true });
                 this.isSelected = true;
             }
-            else if (component == 3) {
+            else if (component == 3 /* TextArea */) {
                 this.textSelecting = true;
             }
             var serverMsgs = [];
@@ -372,6 +441,18 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse move event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseMove = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
@@ -384,55 +465,156 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse up event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseUp = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse click event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseClick = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            /* TODO: Handle text select by click here */
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse double click event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleDoubleClick = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             if (this.isEditing) {
+                /* TODO: Handle text select of words when editing */
             }
             else {
             }
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch start event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchStart = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch move event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchMove = function (e, touchChange, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch end event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchEnd = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch cancel event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchCancel = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse down event on the board, called when this element is being edited (and as required mode is this mode).
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseDown = function (e, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = {
@@ -450,6 +632,21 @@ var WhiteBoardText;
             return retVal;
             var _a;
         };
+        /**   Handle a mouse move event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
+         *
+         *    For Performance reasons avoid sending server messages here unless necessary, wait for mouseUp. Likewise for undo and redo ops, just leave null.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} changeX - The change of the mouse x position, scaled to the SVG zoom.
+         *    @param {number} changeY - The change of the mouse y position, scaled to the SVG zoom.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseMove = function (e, changeX, changeY, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
@@ -487,6 +684,17 @@ var WhiteBoardText;
             retVal.newView = this.currentViewState;
             return retVal;
         };
+        /**   Handle a mouse up event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseUp = function (e, mouseX, mouseY, palleteState) {
             var _this = this;
             var serverMsgs = [];
@@ -517,33 +725,85 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch start event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchStart = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch move event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchMove = function (e, toucheChanges, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch end event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchEnd = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch cancel event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchCancel = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the start of moving this item.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *
+         *    @return {ViewState} An object containing: the new view state
+         */
         Element.prototype.startMove = function () {
             this.isMoving = true;
             this.moveStartX = this.x;
@@ -552,11 +812,28 @@ var WhiteBoardText;
             var retVal = this.currentViewState;
             return retVal;
         };
+        /**   Handle a move of this element, called when this element is moved by the user.
+         *
+         *    This MUST be implemented. DO NOT CHANGE UNLESS NECESSARY.
+         *
+         *    @param {number} changeX - The expected change in this elements x position.
+         *    @param {number} changeY - The expected change in this elements y position.
+         *
+         *    @return {ViewState} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handleMove = function (changeX, changeY) {
             this.move(changeX, changeY, new Date());
             var retVal = this.currentViewState;
             return retVal;
         };
+        /**   Handle the end of moving this item.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse up event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *
+         *    @return {ElementMoveReturn} An object containing: the new view state
+         */
         Element.prototype.endMove = function () {
             this.isMoving = false;
             this.updateView({ isMoving: false });
@@ -567,6 +844,16 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a key press event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected
+         */
         Element.prototype.handleKeyPress = function (e, input, palleteState) {
             var _this = this;
             var serverMsgs = [];
@@ -723,6 +1010,7 @@ var WhiteBoardText;
                     else {
                         if (this.startLeft && this.cursorStart != this.cursorEnd) {
                             newStart = this.cursorStart;
+                            // If the cursor is on the first line do nothng
                             if (this.cursorEnd <= this.textNodes[0].end) {
                                 newEnd = this.cursorEnd;
                             }
@@ -790,6 +1078,7 @@ var WhiteBoardText;
                     else {
                         if (this.startLeft || this.cursorStart == this.cursorEnd) {
                             newStart = this.cursorStart;
+                            // If the cursor is on the last line do nothng
                             if (this.cursorEnd >= this.textNodes[this.textNodes.length - 1].start) {
                                 newEnd = this.cursorEnd;
                             }
@@ -839,7 +1128,9 @@ var WhiteBoardText;
                     if (this.wordEnd > this.operationPos) {
                         this.wordEnd = this.operationPos;
                         this.lastFowardEdit = this.wordEnd;
+                        // There has been a sequence of undos before this input, tidy up the undo/redo merging.
                         if (this.wordStart >= this.operationPos) {
+                            // Throw away previous word and split this word.
                             this.wordStart = this.prevWordStart;
                             this.prevWordStart = null;
                             this.prevWordEnd = null;
@@ -855,6 +1146,7 @@ var WhiteBoardText;
                         var prevStyles_1 = this.styleSet;
                         if (e.ctrlKey) {
                             if (this.cursorStart > 0) {
+                                // TODO: Move to start of previous word
                             }
                         }
                         else {
@@ -868,6 +1160,7 @@ var WhiteBoardText;
                             var prev_1 = -2;
                             var start_1 = -1;
                             editData.insertion = null;
+                            // Check if we are deleting over a line or a paragraph and create contigeous deletions.
                             for (var i_1 = 0; i_1 < sortedSelect_1.length; i_1++) {
                                 if (sortedSelect_1[i_1] - 1 != prev_1) {
                                     if (start_1 >= 0) {
@@ -898,6 +1191,7 @@ var WhiteBoardText;
                             }
                             this.cursorEnd = this.cursorStart;
                         }
+                        /* TODO: Check this condition. */
                         if ((wasSpace && !this.spaceToggle) || (!wasSpace && this.spaceToggle) || this.prevCursorPos != tPrevStart) {
                             var undoStart = this.prevWordStart;
                             var undoEnd = this.prevWordEnd;
@@ -914,6 +1208,31 @@ var WhiteBoardText;
                             }
                             this.lastFowardEdit = null;
                         }
+                        /*
+                        if(wasNewPara)
+                        {
+                            // Merge word undos/redos into paragraph undo/redos beyond previous paragraph.
+                            if(this.prevParaStart != null && this.prevParaEnd != null)
+                            {
+                                let undoStart = this.prevParaStart;
+                                let undoEnd = this.prevParaEnd;
+    
+                                this.operationStack.splice(undoStart, undoEnd - undoStart);
+    
+                                this.prevParaEnd = this.paraEnd - (undoEnd - undoStart);
+                                this.prevParaStart = this.paraStart - (undoEnd - undoStart);
+                                this.operationPos -= undoEnd - undoStart;
+                            }
+                            else
+                            {
+                                this.prevParaEnd = this.paraEnd;
+                                this.prevParaStart = this.paraStart;
+                            }
+    
+                            this.paraStart = this.operationPos + 1;
+                            this.paraEnd = this.paraStart;
+                        }
+                        */
                         var undoPositions_1 = {
                             start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
                         };
@@ -975,6 +1294,7 @@ var WhiteBoardText;
                         this.cursorUndoPositions.push(undoPositions_1);
                         this.cursorRedoPositions.push(redoPositions_1);
                         this.prevCursorPos = this.cursorStart;
+                        /* TODO: Check for more than one space in selection (non-consecutive) if so apply another merge */
                     }
                     break;
                 default:
@@ -987,7 +1307,9 @@ var WhiteBoardText;
                     }
                     if (this.wordEnd > this.operationPos) {
                         this.wordEnd = this.operationPos;
+                        // There has been a sequence of undos before this input, tidy up the undo/redo merging.
                         if (this.wordStart >= this.operationPos) {
+                            // Throw away previous word and split this word.
                             this.wordStart = this.prevWordStart;
                             this.prevWordStart = null;
                             this.prevWordEnd = null;
@@ -1003,6 +1325,7 @@ var WhiteBoardText;
                     sortedSelect.sort(function (a, b) { return b - a; });
                     var prev = -2;
                     var start = -1;
+                    // Create contigeous deletions.
                     for (var i_2 = 0; i_2 < sortedSelect.length; i_2++) {
                         if (sortedSelect[i_2] - 1 != prev) {
                             if (start >= 0) {
@@ -1049,6 +1372,31 @@ var WhiteBoardText;
                         this.wordMerger(undoStart, undoEnd);
                         this.lastFowardEdit = null;
                     }
+                    /*
+                    if(wasNewPara)
+                    {
+                        // Merge word undos/redos into paragraph undo/redos beyond previous paragraph.
+                        if(this.prevParaStart != null && this.prevParaEnd != null)
+                        {
+                            let undoStart = this.prevParaStart;
+                            let undoEnd = this.prevParaEnd;
+    
+                            this.operationStack.splice(undoStart, undoEnd - undoStart);
+    
+                            this.prevParaEnd = this.paraEnd - (undoEnd - undoStart);
+                            this.prevParaStart = this.paraStart - (undoEnd - undoStart);
+                            this.operationPos -= undoEnd - undoStart;
+                        }
+                        else
+                        {
+                            this.prevParaEnd = this.paraEnd;
+                            this.prevParaStart = this.paraStart;
+                        }
+    
+                        this.paraStart = this.operationPos + 1;
+                        this.paraEnd = this.paraStart;
+                    }
+                    */
                     var undoPositions_2 = {
                         start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
                     };
@@ -1123,6 +1471,12 @@ var WhiteBoardText;
             return retVal;
             var _a, _b, _c, _d, _e;
         };
+        /**   Handle a messages sent from the server to this element.
+         *
+         *    @param {ServerMessage} message - The server message that was sent.
+         *
+         *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handleElementServerMessage = function (message) {
             var newView = this.currentViewState;
             var retMsgs = [];
@@ -1143,6 +1497,7 @@ var WhiteBoardText;
                         }
                     }
                     else {
+                        /* TODO: Remove debug code. */
                         console.log('STYLENODE: Unkown edit, ID: ' + nodeData.editId);
                     }
                     newView = this.currentViewState;
@@ -1166,6 +1521,7 @@ var WhiteBoardText;
                     });
                     break;
                 case MessageTypes.DROPPED:
+                    /* TODO: Rollback. */
                     break;
                 case MessageTypes.COMPLETE:
                     while (this.opBuffer.length > 0) {
@@ -1193,6 +1549,7 @@ var WhiteBoardText;
                     var buffer = this.editInBuffer[editData.userId][editData.editId];
                     for (var i = 0; i < editData.styles.length; i++) {
                         var style = editData.styles[i];
+                        // Check for integrity.
                         if (style != null && style != undefined && style.text != null && style.text != undefined
                             && style.seq_num != null && style.seq_num != undefined && style.start != null && style.start != undefined && style.end != null
                             && style.end != undefined && style.style != null && style.style != undefined && style.weight != null && style.weight != undefined
@@ -1228,11 +1585,17 @@ var WhiteBoardText;
             };
             return retVal;
         };
+        /**   Handle the selecting and starting of editing of this element that has not been induced by this elements input handles.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleStartEdit = function () {
             var retVal = this.getDefaultInputReturn();
             var serverMsgs = [];
             this.isSelected = true;
             this.gettingLock = true;
+            /* TODO: This should be set to total number of glyphs. */
             this.cursorStart = this.text.length;
             this.cursorEnd = this.text.length;
             (_a = retVal.palleteChanges).push.apply(_a, this.changeSelect(true));
@@ -1243,6 +1606,11 @@ var WhiteBoardText;
             return retVal;
             var _a;
         };
+        /**   Handle the deselect this element and ending of editing.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleEndEdit = function () {
             var retVal = this.getDefaultInputReturn();
             var serverMsgs = [];
@@ -1258,7 +1626,9 @@ var WhiteBoardText;
             }
             if (lineCount * 2 * this.size < this.height) {
                 this.resize(this.width, lineCount * 2 * this.size, new Date());
+                /* TODO: Add resize message to messages */
             }
+            // Merge letter undo/redos into word undo redos.
             if (this.wordEnd != null) {
                 var undoStart = this.wordStart;
                 var undoEnd = this.wordEnd;
@@ -1278,15 +1648,31 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the deselect this element.
+         *
+         *    @return {ComponentViewState} An object containing: the new view state
+         */
         Element.prototype.handleDeselect = function () {
             this.cursorElems = null;
             this.updateView({ cursor: null, cursorElems: [] });
             return _super.prototype.handleDeselect.call(this);
         };
+        /**   Handle the pasting of data into this element.
+         *
+         *    @param {number} localX - The x position of the mouse with respect to this element.
+         *    @param {number} localY - The y position of the mouse with respect to this element.
+         *    @param {ClipboardEventData} data - The clipboard data to be pasted.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handlePaste = function (localX, localY, data, palleteState) {
             var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // TODO: Handle enriched text and html text.
+            //
             var input = data.plainText;
             if (this.isEditing) {
                 var sortedSelect = this.selectedCharacters.slice();
@@ -1320,6 +1706,31 @@ var WhiteBoardText;
                 var undoEnd = this.prevWordEnd;
                 this.wordMerger(undoStart, undoEnd);
                 this.lastFowardEdit = null;
+                /*
+                if(wasNewPara)
+                {
+                    // Merge word undos/redos into paragraph undo/redos beyond previous paragraph.
+                    if(this.prevParaStart != null && this.prevParaEnd != null)
+                    {
+                        let undoStart = this.prevParaStart;
+                        let undoEnd = this.prevParaEnd;
+
+                        this.operationStack.splice(undoStart, undoEnd - undoStart);
+
+                        this.prevParaEnd = this.paraEnd - (undoEnd - undoStart);
+                        this.prevParaStart = this.paraStart - (undoEnd - undoStart);
+                        this.operationPos -= undoEnd - undoStart;
+                    }
+                    else
+                    {
+                        this.prevParaEnd = this.paraEnd;
+                        this.prevParaStart = this.paraStart;
+                    }
+
+                    this.paraStart = this.operationPos + 1;
+                    this.paraEnd = this.paraStart;
+                }
+                */
                 var undoPositions_3 = {
                     start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: prevCursorStart, bPrevEnd: prevCursorEnd
                 };
@@ -1382,11 +1793,18 @@ var WhiteBoardText;
             this.updateView({
                 textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
             });
+            /* TODO: Handle undo redo and resize */
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             retVal.newView = this.currentViewState;
             return retVal;
             var _a;
         };
+        /**  Handle the cutting of data from this element.
+         *
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected
+         */
         Element.prototype.handleCut = function () {
             var _this = this;
             var serverMsgs = [];
@@ -1394,7 +1812,9 @@ var WhiteBoardText;
             if (this.wordEnd > this.operationPos) {
                 this.wordEnd = this.operationPos;
                 this.lastFowardEdit = this.wordEnd;
+                // There has been a sequence of undos before this input, tidy up the undo/redo merging.
                 if (this.wordStart >= this.operationPos) {
+                    // Throw away previous word and split this word.
                     this.wordStart = this.prevWordStart;
                     this.prevWordStart = null;
                     this.prevWordEnd = null;
@@ -1412,6 +1832,7 @@ var WhiteBoardText;
                 var wasNewPara = false;
                 var sortedSelect = this.selectedCharacters.slice();
                 sortedSelect.sort(function (a, b) { return b - a; });
+                // Check if we are deleting over a line or a paragraph
                 for (var i = 0; i < sortedSelect.length; i++) {
                     if (this.text.charAt(sortedSelect[i]).match(/\s/)) {
                         if (this.wasSpaceLast) {
@@ -1432,6 +1853,7 @@ var WhiteBoardText;
                     serverMsgs.push(msg);
                 }
                 this.cursorEnd = this.cursorStart;
+                /* TODO: Check this condition. */
                 if ((wasSpace && !this.spaceToggle) || (!wasSpace && this.spaceToggle) || this.prevCursorPos != tPrevStart) {
                     var undoStart = this.prevWordStart;
                     var undoEnd = this.prevWordEnd;
@@ -1448,6 +1870,31 @@ var WhiteBoardText;
                     }
                     this.lastFowardEdit = null;
                 }
+                /*
+                if(wasNewPara)
+                {
+                    // Merge word undos/redos into paragraph undo/redos beyond previous paragraph.
+                    if(this.prevParaStart != null && this.prevParaEnd != null)
+                    {
+                        let undoStart = this.prevParaStart;
+                        let undoEnd = this.prevParaEnd;
+
+                        this.operationStack.splice(undoStart, undoEnd - undoStart);
+
+                        this.prevParaEnd = this.paraEnd - (undoEnd - undoStart);
+                        this.prevParaStart = this.paraStart - (undoEnd - undoStart);
+                        this.operationPos -= undoEnd - undoStart;
+                    }
+                    else
+                    {
+                        this.prevParaEnd = this.paraEnd;
+                        this.prevParaStart = this.paraStart;
+                    }
+
+                    this.paraStart = this.operationPos + 1;
+                    this.paraEnd = this.paraStart;
+                }
+                */
                 var undoPositions_4 = {
                     start: prevCursorStart, end: this.cursorStart, prevEnd: prevCursorEnd, bStart: bPrevCursorStart, bPrevEnd: prevCursorEnd
                 };
@@ -1509,6 +1956,7 @@ var WhiteBoardText;
                 this.cursorUndoPositions.push(undoPositions_4);
                 this.cursorRedoPositions.push(redoPositions_4);
                 this.prevCursorPos = this.cursorStart;
+                /* TODO: Check for more than one space in selection (non-consecutive) if so apply another merge */
             }
             if (this.isSelected) {
                 this.findCursorElems();
@@ -1516,33 +1964,54 @@ var WhiteBoardText;
             this.updateView({
                 textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
             });
+            /* TODO: Handle undo redo and resize */
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             retVal.newView = this.currentViewState;
             return retVal;
         };
+        /**   Handle a custom context event on this component, events are dispatched by the pressing of custom buttons set in the CustomContextView.
+         *
+         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleCustomContext = function (item, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Produce a hover info message for this element.
+         *
+         *    @return {HoverMessage} The data to be displayed in the hover info message for this element
+         */
         Element.prototype.handleHover = function () {
             var retVal = { header: '', message: '' };
             return retVal;
         };
+        /**   Handle a change in the pallete for this component. Passed when this element is selected.
+         *
+         *    @param {BoardPallete} pallete - The pallete for this element after changes.
+         *    @param {BoardPalleteChange} change - The changes made to the pallete.
+         *
+         *    @return {ElementPalleteReturn} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handlePalleteChange = function (pallete, change) {
             var _this = this;
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
             var palleteChanges = [];
-            if (change.type == 7) {
+            if (change.type == 7 /* JUSTIFIED */) {
                 var prevVal_1 = this.isJustified;
                 var undoOp = function () {
                     var retMsgs = [];
                     var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.setJustified(prevVal_1);
-                    palleteChanges.push({ type: 7, data: _this.isJustified });
+                    palleteChanges.push({ type: 7 /* JUSTIFIED */, data: _this.isJustified });
                     var payload = { newState: prevVal_1 };
                     var retVal = {
                         id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
@@ -1558,7 +2027,7 @@ var WhiteBoardText;
                     var palleteChanges = [];
                     var centrePos = { x: _this.x + _this.width / 2, y: _this.y + _this.height / 2 };
                     _this.setJustified(pallete.isJustified);
-                    palleteChanges.push({ type: 7, data: _this.isJustified });
+                    palleteChanges.push({ type: 7 /* JUSTIFIED */, data: _this.isJustified });
                     var payload = { newState: _this.isJustified };
                     var retVal = {
                         id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
@@ -1574,12 +2043,12 @@ var WhiteBoardText;
                 retVal.undoOp = null;
                 retVal.redoOp = null;
                 this.setJustified(pallete.isJustified);
-                palleteChanges.push({ type: 7, data: this.isJustified });
+                palleteChanges.push({ type: 7 /* JUSTIFIED */, data: this.isJustified });
                 var payload = { newState: this.isJustified };
                 var msg = { header: MessageTypes.JUSTIFY, payload: payload };
                 serverMsgs.push(msg);
             }
-            else if (change.type == 1) {
+            else if (change.type == 1 /* SIZE */) {
                 var prevVal_2 = this.size;
                 var undoOp = function () {
                     var retMsgs = [];
@@ -1595,7 +2064,7 @@ var WhiteBoardText;
                         textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false,
                         size: _this.size
                     });
-                    palleteChanges.push({ type: 1, data: _this.size });
+                    palleteChanges.push({ type: 1 /* SIZE */, data: _this.size });
                     var payload = { newSize: _this.size };
                     var retVal = {
                         id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
@@ -1620,7 +2089,7 @@ var WhiteBoardText;
                         textNodes: _this.textNodes, width: _this.width, height: _this.height, cursor: _this.cursor, cursorElems: _this.cursorElems, waiting: false,
                         size: _this.size
                     });
-                    palleteChanges.push({ type: 1, data: _this.size });
+                    palleteChanges.push({ type: 1 /* SIZE */, data: _this.size });
                     var payload = { newSize: _this.size };
                     var retVal = {
                         id: _this.id, newView: _this.currentViewState, serverMessages: [], newViewCentre: centrePos, palleteChanges: palleteChanges,
@@ -1645,7 +2114,7 @@ var WhiteBoardText;
                     textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false,
                     size: this.size
                 });
-                palleteChanges.push({ type: 1, data: this.size });
+                palleteChanges.push({ type: 1 /* SIZE */, data: this.size });
                 var payload = { newSize: this.size };
                 var msg = { header: MessageTypes.SIZECHANGE, payload: payload };
                 console.log('Adding size change message.');
@@ -1655,6 +2124,7 @@ var WhiteBoardText;
             else {
                 var styles_1 = [];
                 if (this.selectedCharacters.length > 0) {
+                    // Sort the selected characters
                     var sortedSelect = this.selectedCharacters.slice();
                     sortedSelect.sort(function (a, b) { return a - b; });
                     for (var i = 0; i < this.styleSet.length; i++) {
@@ -1688,13 +2158,16 @@ var WhiteBoardText;
                                 if (style.end <= sortedSelect[j]) {
                                     break;
                                 }
+                                // At this point we actually know the selected position is within this style.
                                 if (styleSplits.length > 0 && styleSplits[styleSplits.length - 1].end < sortedSelect[j]) {
+                                    // Push the original style gap between the previous style.
                                     style.start = styleSplits[styleSplits.length - 1].end;
                                     style.end = sortedSelect[j];
                                     style.text = this.text.substring(style.start, style.end);
                                     style.seq_num = styles_1.length;
                                     styles_1.push(style);
                                 }
+                                // If it's the same as the last thing we pushed just extend.
                                 if (styleSplits.length > 0 && this.isCurrentStyle(styleSplits[styleSplits.length - 1], pallete)) {
                                     if (styleSplits[styleSplits.length - 1].end - styleSplits[styleSplits.length - 1].start < MAX_STYLE_LENGTH) {
                                         styleSplits[styleSplits.length - 1].end++;
@@ -1720,12 +2193,15 @@ var WhiteBoardText;
                                 sortedSelect.splice(0, 1);
                                 j--;
                             }
+                            // If there is any left over style push that on.
                             if (styleSplits[styleSplits.length - 1].end < style.end) {
+                                // Push the original style gap between the previous style.
                                 style.start = styleSplits[styleSplits.length - 1].end;
                                 style.text = this.text.substring(style.start, style.end);
                                 styleSplits.push(style);
                             }
                             var lastStyle = styles_1[styles_1.length - 1];
+                            // Test the endpoints, merge and number.
                             if (styles_1.length > 0 && lastStyle.colour == styleSplits[0].colour && lastStyle.oline == styleSplits[0].oline
                                 && lastStyle.uline == styleSplits[0].uline
                                 && lastStyle.tline == styleSplits[0].tline
@@ -1751,10 +2227,12 @@ var WhiteBoardText;
                 var undoSet_1 = this.styleSet.slice();
                 var cursoorStartPrev_1 = this.cursorStart;
                 var cursoorEndPrev_1 = this.cursorEnd;
+                // TODO: Undo redo merging.
                 var undoOp = function () { return _this.setStyleSet(undoSet_1, cursoorStartPrev_1, cursoorEndPrev_1); };
                 var redoOp = function () { return _this.setStyleSet(styles_1, cursoorStartPrev_1, cursoorEndPrev_1); };
                 this.operationStack.splice(this.operationPos, this.operationStack.length - this.operationPos);
                 this.operationStack[this.operationPos++] = { undo: undoOp, redo: redoOp };
+                // This does not produce whiteboard level undo/redo operations.
                 retVal.undoOp = null;
                 retVal.redoOp = null;
                 retVal.palleteChanges = palleteChanges;
@@ -1773,10 +2251,25 @@ var WhiteBoardText;
             retVal.newView = this.currentViewState;
             return retVal;
         };
+        /**   Handle the requested audio stream.
+         *
+         *    @param {MediaStream} stream - The audio stream.
+         */
         Element.prototype.audioStream = function (stream) {
         };
+        /**   Handle the requested video stream.
+         *
+         *    @param {MediaStream} stream - The video stream.
+         */
         Element.prototype.videoStream = function (stream) {
         };
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // INTERNAL FUNCTIONS
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /**
+         *
+         *
+         */
         Element.prototype.setStyleSet = function (styleSet, cursorStart, cursorEnd) {
             var retMsgs = [];
             var centrePos = { x: this.x + this.width / 2, y: this.y + this.height / 2 };
@@ -1800,6 +2293,10 @@ var WhiteBoardText;
             retVal.serverMessages = this.checkForServerId(retMsgs);
             return retVal;
         };
+        /** Handle the basic resize behaviour.
+         *
+         *
+         */
         Element.prototype.resize = function (width, height, updateTime) {
             this.updateTime = updateTime;
             this.height = height;
@@ -1814,6 +2311,10 @@ var WhiteBoardText;
                 textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems
             });
         };
+        /**
+         *
+         *
+         */
         Element.prototype.stopLock = function () {
             this.gettingLock = false;
             this.editLock = false;
@@ -1821,6 +2322,10 @@ var WhiteBoardText;
             this.cursorElems = [];
             this.updateView({ getLock: false, isEditing: false, cursor: null, cursorElems: [] });
         };
+        /**
+         *
+         *
+         */
         Element.prototype.changeSelect = function (setIdeal) {
             var palleteChanges = [];
             if (setIdeal) {
@@ -1846,11 +2351,15 @@ var WhiteBoardText;
                 var change = {
                     colour: this.styleSet[i].colour, isBold: isBold, isItalic: isItalic, isOLine: isOLine, isULine: isULine, isTLine: isTLine
                 };
-                palleteChanges.push({ type: 8, data: change });
+                palleteChanges.push({ type: 8 /* TEXTCHANGE */, data: change });
             }
             this.updateView({ cursor: this.cursor, cursorElems: this.cursorElems });
             return palleteChanges;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.setEdit = function () {
             this.cursorStart = this.text.length;
             this.cursorEnd = this.text.length;
@@ -1859,6 +2368,10 @@ var WhiteBoardText;
             this.updatePallete(this.changeSelect(true));
             this.updateView({ getLock: false, isEditing: true });
         };
+        /**
+         *
+         *
+         */
         Element.prototype.setJustified = function (state) {
             this.isJustified = state;
             this.calculateTextLines();
@@ -1873,6 +2386,10 @@ var WhiteBoardText;
             }
             this.updateView({ textNodes: this.textNodes, cursor: this.cursor, cursorElems: this.cursorElems });
         };
+        /**
+         *
+         *    @param {number} loc -
+         */
         Element.prototype.findXPos = function (loc) {
             if (this.textNodes.length == 0) {
                 return 0;
@@ -1902,6 +2419,10 @@ var WhiteBoardText;
                 }
             }
         };
+        /**
+         *
+         *    @param
+         */
         Element.prototype.findTextPos = function (x, y) {
             var xFind = 0;
             if (y < 0 || this.textNodes.length == 0) {
@@ -1912,6 +2433,7 @@ var WhiteBoardText;
                 if (lineNum >= this.textNodes.length) {
                     return this.textNodes[this.textNodes.length - 1].end;
                 }
+                /* TODO: Remove debugging code. */
                 if (!this.textNodes[lineNum]) {
                     console.log('Line is: ' + lineNum);
                 }
@@ -1942,6 +2464,8 @@ var WhiteBoardText;
                 }
                 var curr = i - 1;
                 var glyph = sec.glyphs[curr];
+                // i and currMes is now the position to the right of the search point.
+                // We just need to check if left or right is closer then reurn said point.
                 var selPoint = void 0;
                 var glyphStart = sec.startPos + glyph.startAdvance * this.size / 1000;
                 var glyphEnd = glyphStart + glyph.xAdvance * this.size / 1000;
@@ -1954,6 +2478,10 @@ var WhiteBoardText;
                 return selPoint;
             }
         };
+        /**
+         *
+         *
+         */
         Element.prototype.findCursorElems = function () {
             this.cursorElems = [];
             if (this.textNodes.length == 0 && this.isEditing) {
@@ -2029,6 +2557,10 @@ var WhiteBoardText;
                 }
             }
         };
+        /**
+         *
+         *
+         */
         Element.prototype.splitText = function (text) {
             var words = [];
             var j;
@@ -2059,7 +2591,12 @@ var WhiteBoardText;
             }
             return words;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.splitSegments = function (style, wordStart, localStart, word) {
+            // TODO: Language determination and splitting
             var segments = [];
             var wordPos = 0;
             var hasHyphen = false;
@@ -2094,6 +2631,10 @@ var WhiteBoardText;
             segments.push(newSegment);
             return segments;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.splitWithStyles = function (wordStart, localStart, word) {
             var segments = [];
             var styIndex = 0;
@@ -2114,6 +2655,10 @@ var WhiteBoardText;
             segments.push.apply(segments, this.splitSegments(style, wordStart, localStart, text));
             return segments;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.applyDeletion = function (word, deletion) {
             if (deletion.end < word.startPos) {
                 var change = deletion.end - deletion.start;
@@ -2166,6 +2711,7 @@ var WhiteBoardText;
                                 segment.segmentAdvance = -1;
                             }
                             else {
+                                // Segment was removed by deletion.
                                 word.segments.splice(k, 1);
                                 k--;
                             }
@@ -2175,14 +2721,22 @@ var WhiteBoardText;
             }
         };
         Element.prototype.processDeletions = function () {
+            // TODO
         };
         Element.prototype.processInsertions = function () {
+            // TODO
         };
         Element.prototype.processStyleChanges = function () {
+            // TODO
         };
+        /**
+         *
+         *
+         */
         Element.prototype.evaluateChanges = function (editData) {
             var newLinePositions = [];
             var lineStartWord = 0;
+            //let removedLines: Array<number> = [];
             var currentLine = 0;
             var oldLineIndex = 0;
             var newWordData = [];
@@ -2200,6 +2754,7 @@ var WhiteBoardText;
                 for (var j = 0; j < editData.deletions.length; j++) {
                     var deletion = editData.deletions[j];
                     if (this.linePositions[i] >= deletion.start && this.linePositions[i] < deletion.end) {
+                        //removedLines.push(i);
                         removed = true;
                     }
                     else if (this.linePositions[i] >= deletion.end) {
@@ -2243,6 +2798,7 @@ var WhiteBoardText;
                     }
                 }
                 while (word.startPos + word.wordLength == nextWord.startPos) {
+                    // Merge words and set nextWord to null.
                     word.wordLength += nextWord.wordLength;
                     var wordSeg = word.segments[word.segments.length - 1];
                     var sty1 = wordSeg.style;
@@ -2264,6 +2820,7 @@ var WhiteBoardText;
                         wordLength: this.wordData[i + 1].wordLength
                     };
                 }
+                // Push the current line foward to include this word.
                 while (newLinePositions[oldLineIndex] > word.startPos) {
                     newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                     currentLine++;
@@ -2272,6 +2829,7 @@ var WhiteBoardText;
                     wordCount = 0;
                 }
                 if (insertData.length == 0 && editData.insertion != null && editData.insertion.text.length > 0) {
+                    // Insert was spaces only
                     if (word.startPos >= editData.insertion.start) {
                         word.startPos += editData.insertion.text.length;
                     }
@@ -2287,9 +2845,12 @@ var WhiteBoardText;
                         console.log('Went in here.');
                         if (editData.insertion.start == word.startPos + word.wordLength) {
                             console.log('and in here.');
+                            // Insert is at the end of this word.
                             if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                // Word is seperate so just insert new word.
                                 newWordData.push(word);
                                 wordCount++;
+                                // Check for new lines at the start of the insertion.
                                 var startSpaces_1 = editData.insertion.text.substring(0, insert.start);
                                 var newLineIndex_1 = startSpaces_1.indexOf('\n');
                                 var runningPos_1 = insertData[0].start;
@@ -2303,6 +2864,7 @@ var WhiteBoardText;
                                     wordCount = 0;
                                     newLineIndex_1 = startSpaces_1.indexOf('\n');
                                 }
+                                // Generate new segments
                                 var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
                                 var wordAdvance = 0;
                                 for (var k = 0; k < newSegments.length; k++) {
@@ -2321,6 +2883,7 @@ var WhiteBoardText;
                                 var sty2 = insertStyle;
                                 if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
                                     console.log('Made it to the right spot.');
+                                    // Extend the last segment of this word.
                                     var newText = this.text.substring(seg.startPos, seg.startPos + seg.segmentLength + insert.word.length);
                                     var newSegments = this.splitSegments(insertStyle, word.startPos, seg.startPos, newText);
                                     word.wordAdvance -= seg.segmentAdvance;
@@ -2340,6 +2903,7 @@ var WhiteBoardText;
                                     console.log(newWordData);
                                 }
                                 else {
+                                    // Just add another segment and adjust some stuff.
                                     var newText = this.text.substring(editData.insertion.start, editData.insertion.start + insert.word.length);
                                     var newSegments = this.splitSegments(insertStyle, word.startPos, editData.insertion.start - word.startPos, newText);
                                     var wordAdvance = 0;
@@ -2375,8 +2939,10 @@ var WhiteBoardText;
                             }
                             var sty1 = seg.style;
                             var sty2 = insertStyle;
+                            // Add original piece before slice and first insert word
                             if (insertData.length == 1) {
                                 if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                    // Check for new lines at the start of the insertion.
                                     var startSpaces_2 = editData.insertion.text.substring(0, insert.start);
                                     var newLineIndex_2 = startSpaces_2.indexOf('\n');
                                     var runningPos_2 = insertData[0].start;
@@ -2406,6 +2972,7 @@ var WhiteBoardText;
                                     newWordData.push(newStartWord);
                                     wordCount++;
                                     if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                        // New insert is surrounded by spaces so split segment into new words.
                                         var insertSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
                                         var insertWordAdvance = 0;
                                         for (var k = 0; k < insertSegments.length; k++) {
@@ -2417,6 +2984,7 @@ var WhiteBoardText;
                                         };
                                         newWordData.push(insertWord);
                                         wordCount++;
+                                        // Check for new lines at the end of the insertion.
                                         var spacesStart_1 = insertData[0].start + insertData[0].word.length;
                                         var spacesEnd_1 = insert.start + insert.word.length;
                                         var startSpaces_3 = editData.insertion.text.substring(spacesStart_1, spacesEnd_1);
@@ -2432,6 +3000,7 @@ var WhiteBoardText;
                                             wordCount = 0;
                                             newLineIndex_3 = startSpaces_3.indexOf('\n');
                                         }
+                                        // Insert new word for split segment after.
                                         var newEndStart = editData.insertion.start + editData.insertion.text.length;
                                         var segEndText = this.text.substring(newEndStart, seg.segmentLength - (insert.start - (seg.startPos + word.startPos)));
                                         var newEndSegments = this.splitSegments(seg.style, word.startPos, 0, segEndText);
@@ -2455,7 +3024,9 @@ var WhiteBoardText;
                                         wordCount++;
                                     }
                                     else {
+                                        // Check for merger of end segments
                                         if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                            // Extend this segment
                                             var includeNextSeg = false;
                                             var newLength = (seg.segmentLength - (insert.start - (seg.startPos + word.startPos))) + insert.word.length;
                                             if (segIndex < word.segments.length) {
@@ -2531,7 +3102,9 @@ var WhiteBoardText;
                                     }
                                 }
                                 else if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                    // Check for merger of start segments
                                     if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                        // Extend this segment
                                         var newText = this.text.substring(segIndex, insert.start + insert.word.length);
                                         var newStartSegments = this.splitSegments(insertStyle, word.startPos, segIndex, newText);
                                         var startWordAdvance = 0;
@@ -2575,6 +3148,7 @@ var WhiteBoardText;
                                         newWordData.push(newstartWord);
                                         wordCount++;
                                     }
+                                    // Check for new lines at the end of the insertion.
                                     var spacesStart_2 = insertData[0].start + insertData[0].word.length;
                                     var spacesEnd_2 = insert.start + insert.word.length;
                                     var startSpaces_4 = editData.insertion.text.substring(spacesStart_2, spacesEnd_2);
@@ -2590,6 +3164,7 @@ var WhiteBoardText;
                                         wordCount = 0;
                                         newLineIndex_4 = startSpaces_4.indexOf('\n');
                                     }
+                                    // Insert new word after split.
                                     var newSegEnd = seg.startPos + seg.segmentLength + editData.insertion.text.length;
                                     var segEndText = this.text.substring(insert.start + editData.insertion.text.length, newSegEnd);
                                     var newEndSegments = this.splitSegments(seg.style, word.startPos, 0, segEndText);
@@ -2613,6 +3188,7 @@ var WhiteBoardText;
                                     wordCount++;
                                 }
                                 else {
+                                    // Insert new text into word.
                                     if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
                                         var includeNextSeg = false;
                                         var splitLength = seg.segmentLength + insert.word.length;
@@ -2640,6 +3216,7 @@ var WhiteBoardText;
                                         wordCount++;
                                     }
                                     else {
+                                        // Insert new segment splitting segment.
                                         var startText = this.text.substring(seg.startPos, insert.start);
                                         var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, startText);
                                         var newSegments = this.splitSegments(insertStyle, word.startPos, insert.start - word.startPos, insert.word);
@@ -2688,6 +3265,7 @@ var WhiteBoardText;
                             }
                             else {
                                 if (editData.insertion.text.charAt(0).match(/\s/)) {
+                                    // Check for new lines at the start of the insertion.
                                     var startSpaces_5 = editData.insertion.text.substring(0, insert.start);
                                     var newLineIndex_5 = startSpaces_5.indexOf('\n');
                                     var runningPos_5 = insertData[0].start;
@@ -2701,6 +3279,7 @@ var WhiteBoardText;
                                         wordCount = 0;
                                         newLineIndex_5 = startSpaces_5.indexOf('\n');
                                     }
+                                    // Split off first piece as own word and insert first new word.
                                     var segStartText = this.text.substring(seg.startPos, insert.start);
                                     var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, segStartText);
                                     var startWordAdvance = 0;
@@ -2731,7 +3310,9 @@ var WhiteBoardText;
                                 else {
                                     var newSegments = [];
                                     var insertWordAdvance = 0;
+                                    // Merge first piece with first new word
                                     if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                        // Merge segments.
                                         var newWord = this.text.substring(seg.startPos, insert.start + insert.word.length);
                                         if (segIndex > 0) {
                                             newSegments.push.apply(newSegments, word.segments.slice(0, segIndex));
@@ -2739,6 +3320,7 @@ var WhiteBoardText;
                                         newSegments.push.apply(newSegments, this.splitSegments(insertStyle, word.startPos, seg.startPos, newWord));
                                     }
                                     else {
+                                        // Add new segment.
                                         var cutText = this.text.substring(seg.startPos, insert.start);
                                         var cutSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, cutText);
                                         if (segIndex > 0) {
@@ -2761,7 +3343,9 @@ var WhiteBoardText;
                                 }
                             }
                         }
+                        // Insert all isolated words.
                         for (var j = 1; j < insertData.length - 1; j++) {
+                            // Check for new lines at the start of the insertion.
                             var spacesStart_3 = insertData[j - 1].start + insertData[j - 1].word.length;
                             var spacesEnd_3 = insertData[j].start;
                             var startSpaces_6 = editData.insertion.text.substring(spacesStart_3, spacesEnd_3);
@@ -2790,6 +3374,7 @@ var WhiteBoardText;
                             newWordData.push(newWord);
                             wordCount++;
                         }
+                        // Check for new lines.
                         var spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
                         var spacesEnd = insertData[insertData.length - 1].start;
                         var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
@@ -2809,6 +3394,7 @@ var WhiteBoardText;
                         if (editData.insertion.start == word.startPos) {
                             console.log('Did the start insert thing.');
                             if (editData.insertion.text.charAt(editData.insertion.text.length - 1).match(/\s/)) {
+                                // Word is seperate so just insert new word.
                                 var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
                                 var wordAdvance = 0;
                                 for (var k = 0; k < newSegments.length; k++) {
@@ -2820,6 +3406,7 @@ var WhiteBoardText;
                                 };
                                 newWordData.push(newWord);
                                 wordCount++;
+                                // Check for new lines.
                                 var spacesStart_4 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
                                 var spacesEnd_4 = editData.insertion.start + editData.insertion.text.length;
                                 var startSpaces_7 = editData.insertion.text.substring(spacesStart_4, spacesEnd_4);
@@ -2835,6 +3422,7 @@ var WhiteBoardText;
                                     wordCount = 0;
                                     newLineIndex_7 = startSpaces_7.indexOf('\n');
                                 }
+                                // Then push current word.
                                 word.startPos += editData.insertion.text.length;
                                 newWordData.push(word);
                                 wordCount++;
@@ -2844,6 +3432,7 @@ var WhiteBoardText;
                                 var sty1 = word.segments[0].style;
                                 var sty2 = insertStyle;
                                 if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                    // Extend the first segment of this word.
                                     var includeNextSeg = false;
                                     var newLength = seg.segmentLength + insert.word.length;
                                     if (word.segments.length > 1) {
@@ -2870,6 +3459,7 @@ var WhiteBoardText;
                                     wordCount++;
                                 }
                                 else {
+                                    // Just add another segment and adjust some stuff.
                                     var includeNextSeg = false;
                                     var newLength = insert.word.length;
                                     if (word.segments.length > 1) {
@@ -2916,7 +3506,9 @@ var WhiteBoardText;
                             }
                             var sty1 = seg.style;
                             var sty2 = insertStyle;
+                            // Add original piece after slice and if there is more than one insert word add the last.
                             if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                                // Split off last piece as own word and insert last new word.
                                 var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
                                 var insertWordAdvance = 0;
                                 for (var k = 0; k < newSegments.length; k++) {
@@ -2928,6 +3520,7 @@ var WhiteBoardText;
                                 };
                                 newWordData.push(insertWord);
                                 wordCount++;
+                                // Check for new lines.
                                 var spacesStart_5 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
                                 var spacesEnd_5 = editData.insertion.start + editData.insertion.text.length;
                                 var startSpaces_8 = editData.insertion.text.substring(spacesStart_5, spacesEnd_5);
@@ -2977,7 +3570,9 @@ var WhiteBoardText;
                                         cutLength += word.segments[segIndex + 1].segmentLength;
                                     }
                                 }
+                                // Merge first piece with first new word
                                 if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                                    // Merge segments.
                                     var newWord = this.text.substring(insert.start, insert.start + insert.word.length + cutLength);
                                     newSegments = this.splitSegments(insertStyle, word.startPos, 0, newWord);
                                     for (var k = segIndex + 1; k < word.segments.length; k++) {
@@ -2989,6 +3584,7 @@ var WhiteBoardText;
                                     }
                                 }
                                 else {
+                                    // Add new segment.
                                     var cutText = this.text.substring(insert.start + insert.word.length, insert.start + insert.word.length + cutLength);
                                     var cutSegments = this.splitSegments(seg.style, word.startPos, insert.word.length, cutText);
                                     newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
@@ -3018,8 +3614,10 @@ var WhiteBoardText;
                     }
                     else if (!inserted && editData.insertion.start < word.startPos) {
                         console.log('Did the non-insert add.');
+                        // Just add new words. This happens when insert was in spaces.
                         inserted = true;
                         if (editData.insertion.text.charAt(0).match(/\s/)) {
+                            // Check for new lines.
                             var spacesStart = 0;
                             var spacesEnd = insertData[0].start;
                             var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
@@ -3049,6 +3647,7 @@ var WhiteBoardText;
                             newWordData.push(newWord);
                             wordCount++;
                             if (j < insertData.length - 1) {
+                                // Check for new lines.
                                 var spacesStart = insertData[j].start + insertData[j].word.length;
                                 var spacesEnd = editData.insertion.start + editData.insertion.text.length;
                                 var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
@@ -3067,6 +3666,7 @@ var WhiteBoardText;
                             }
                         }
                         if (editData.insertion.text.charAt(editData.insertion.text.length).match(/\s/)) {
+                            // Check for new lines.
                             var spacesStart = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
                             var spacesEnd = editData.insertion.start + editData.insertion.text.length;
                             var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
@@ -3103,6 +3703,7 @@ var WhiteBoardText;
                 if (editData.styleChanges.length > 0 && editData.insertion == null) {
                     var changedSegments = [];
                     var working = [];
+                    // Used to add an extra segment beyond the changes at the end. This assists keeping segments from over splitting.
                     var endNextAdded = false;
                     var changesSegsAdvance = 0;
                     var newSegments = [];
@@ -3113,6 +3714,7 @@ var WhiteBoardText;
                                 var seg = word.segments[k];
                                 if (change.start < seg.startPos + seg.segmentLength && change.end > seg.startPos) {
                                     if (working.length == 0 || working[working.length - 1] == k - 1) {
+                                        // Check for a reset as there was just one segment between sections.
                                         if (endNextAdded) {
                                             endNextAdded = false;
                                         }
@@ -3164,6 +3766,7 @@ var WhiteBoardText;
                 }
             }
             if (editData.insertion != null && !inserted) {
+                // New insert is after all words so add it here.
                 for (var j = 0; j < insertData.length; j++) {
                     var newSegments = this.splitSegments(insertStyle, insertData[j].start, 0, insertData[j].word);
                     var wordAdvance = 0;
@@ -3185,6 +3788,10 @@ var WhiteBoardText;
             console.log(newWordData);
             var _a, _b, _c, _d, _e;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.calculateTextLines = function () {
             var childText = [];
             var currPos = 0;
@@ -3213,6 +3820,7 @@ var WhiteBoardText;
                 var glyphs = [];
                 var currentAdvance = 0;
                 var lineComplete = false;
+                // Keeps the position that a word or space is sliced when a new line is required.
                 var slicePos = 0;
                 var sliceSeg = 0;
                 var wasSpaceLast = false;
@@ -3222,13 +3830,16 @@ var WhiteBoardText;
                 var prevSlicePos = 0;
                 var numSpaces = 0;
                 var lineGlyphCount = 0;
+                // Add words and spaces in between.
                 while (wordNum < wordCount) {
+                    // The text span element to represent a line of glyphs.
                     tspanEl =
                         {
                             x: this.x, y: currY, dx: 0, dy: dy, start: prevGlyphPos, end: 0, endStringPos: 0,
                             spaceRemoved: true, justified: this.isJustified, lineNum: lineCount, sections: []
                         };
                     numSpaces = 0;
+                    // Check for leading spaces.
                     if (wordCount > 0) {
                         if (startPos < this.wordData[wordIdx].startPos) {
                             insertSpace = true;
@@ -3243,6 +3854,7 @@ var WhiteBoardText;
                         if (prevSlicePos > 0) {
                             if (spaceAdvance - sliceAdvance > this.width) {
                                 var tmpAdvance = 0;
+                                // Find the point to split
                                 for (var j = prevSlicePos; j < glyphs.length; j++) {
                                     if (tmpAdvance + glyphs[j].xAdvance > this.width) {
                                         slicePos = j + 1;
@@ -3271,6 +3883,7 @@ var WhiteBoardText;
                             }
                             else {
                                 numSpaces += glyphs.length - prevSlicePos;
+                                // Just add sliced spaces.
                                 var newSec = {
                                     startPos: currentAdvance - sliceAdvance, glyphs: glyphs.slice(prevSlicePos, glyphs.length),
                                     startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
@@ -3291,6 +3904,7 @@ var WhiteBoardText;
                             spaceAdvance = this.processSpaceGlyphs(glyphs, text, start);
                             if (spaceAdvance > this.width) {
                                 var tmpAdvance = 0;
+                                // Find the point to split
                                 for (var j = 0; j < glyphs.length; j++) {
                                     if (tmpAdvance + glyphs[j].xAdvance > this.width) {
                                         slicePos = j + 1;
@@ -3319,6 +3933,7 @@ var WhiteBoardText;
                             }
                             else {
                                 numSpaces += glyphs.length;
+                                // Just add spaces.
                                 var newSec = {
                                     startPos: currentAdvance, glyphs: glyphs,
                                     startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
@@ -3336,10 +3951,12 @@ var WhiteBoardText;
                             if (word.wordAdvance - sliceAdvance > this.width) {
                                 var tmpAdvance = 0;
                                 var segIndex = sliceSeg;
+                                // This word will need splitting.
                                 var fDash = -1;
                                 var fDashSeg = -1;
                                 var fDashGlyph = void 0;
                                 var sections = [];
+                                // Check Sliced word over.
                                 if (word.segments[segIndex].hasHyphen) {
                                     var glyphAdvance = 0;
                                     var seg = word.segments[segIndex];
@@ -3369,6 +3986,7 @@ var WhiteBoardText;
                                 sections.push(newSec);
                                 tmpAdvance += word.segments[segIndex].segmentAdvance;
                                 lineGlyphCount += (endPos_1 - prevSlicePos);
+                                // Now check over the rest.
                                 for (segIndex = sliceSeg + 1; segIndex < word.segments.length && tmpAdvance < this.width; segIndex++) {
                                     slicePos = 0;
                                     if (word.segments[segIndex].hasHyphen) {
@@ -3411,6 +4029,8 @@ var WhiteBoardText;
                                 glyphCount += lineGlyphCount;
                             }
                             else {
+                                // Just add sliced word.
+                                // Add sliced seg first.
                                 var secEnd = word.segments[sliceSeg].glyphs.length;
                                 var newSec = {
                                     startPos: currentAdvance - sliceAdvance, glyphs: word.segments[sliceSeg].glyphs.slice(slicePos, secEnd),
@@ -3418,6 +4038,7 @@ var WhiteBoardText;
                                 };
                                 tspanEl.sections.push(newSec);
                                 currentAdvance += (word.segments[sliceSeg].segmentAdvance - sliceAdvance);
+                                // Then add the rest.
                                 for (var j = sliceSeg + 1; j < word.segments.length; j++) {
                                     var newSec_2 = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
@@ -3434,6 +4055,7 @@ var WhiteBoardText;
                             if (word.wordAdvance > this.width) {
                                 var tmpAdvance = 0;
                                 var segIndex = 0;
+                                // This word will need splitting.
                                 var fDash = -1;
                                 var fDashSeg = -1;
                                 var fDashGlyph = void 0;
@@ -3484,6 +4106,7 @@ var WhiteBoardText;
                                 glyphCount += lineGlyphCount;
                             }
                             else {
+                                // Just add word.
                                 for (var j = 0; j < word.segments.length; j++) {
                                     var newSec = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
@@ -3497,6 +4120,7 @@ var WhiteBoardText;
                             }
                         }
                     }
+                    // Add words and spaces to line until complete.
                     while (!lineComplete && wordIdx < wordCount) {
                         if (insertSpace) {
                             var start = this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength;
@@ -3505,6 +4129,7 @@ var WhiteBoardText;
                             spaceAdvance = this.processSpaceGlyphs(glyphs, text, start);
                             if (spaceAdvance > this.width) {
                                 var tmpAdvance = 0;
+                                // Find the point to split
                                 for (var j = 0; j < glyphs.length; j++) {
                                     if (tmpAdvance + glyphs[j].xAdvance * 1000 / this.size > this.width) {
                                         slicePos = j + 1;
@@ -3533,6 +4158,7 @@ var WhiteBoardText;
                             }
                             else {
                                 numSpaces += glyphs.length;
+                                // Just add spaces.
                                 var newSec = {
                                     startPos: currentAdvance, glyphs: glyphs,
                                     startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
@@ -3548,6 +4174,7 @@ var WhiteBoardText;
                             if (word.wordAdvance > this.width) {
                                 var tmpAdvance = 0;
                                 var segIndex = 0;
+                                // This word will need splitting.
                                 var fDash = -1;
                                 var fDashSeg = -1;
                                 var fDashGlyph = void 0;
@@ -3594,6 +4221,7 @@ var WhiteBoardText;
                                 lineComplete = true;
                             }
                             else {
+                                // Just add word.
                                 for (var j = 0; j < word.segments.length; j++) {
                                     var newSec = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
@@ -3644,6 +4272,7 @@ var WhiteBoardText;
                 if (k + 1 < this.lineData.length) {
                     lineEnd = this.linePositions[k + 1];
                 }
+                // Check for trailing spaces.
                 if (!lineComplete && wordCount > 0 && lineEnd > this.wordData[wordIdx].startPos + this.wordData[wordIdx].wordLength) {
                     sliceAdvance = 0;
                     var first = true;
@@ -3654,6 +4283,7 @@ var WhiteBoardText;
                         first = false;
                         if (spaceAdvance - sliceAdvance > this.width) {
                             var tmpAdvance = 0;
+                            // Find the point to split
                             for (var j = prevSlicePos; j < glyphs.length; j++) {
                                 if (tmpAdvance + glyphs[j].xAdvance > this.width) {
                                     slicePos = j + 1;
@@ -3680,6 +4310,7 @@ var WhiteBoardText;
                         }
                         else {
                             numSpaces += glyphs.length - prevSlicePos;
+                            // Just add sliced spaces.
                             var newSec = {
                                 startPos: currentAdvance, glyphs: glyphs.slice(prevSlicePos, glyphs.length),
                                 startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
@@ -3692,13 +4323,376 @@ var WhiteBoardText;
                         }
                     }
                 }
+                // Tidy up last line.
                 if (!lineComplete) {
                     tspanEl.justified = false;
+                    // This was the last line so we didnt remove a string character.
                     if (k == this.lines.length - 1) {
                         tspanEl.spaceRemoved = false;
                     }
                 }
             }
+            // OLD
+            /*
+            for(let k = 0; k < this.lines.length; k++)
+            {
+                computedTextLength = 0;
+
+                let startSpace: boolean = this.lines[k].startSpace;
+                let wordsT: Array<string> = this.lines[k].words.slice();
+                let spacesT: Array<string> = this.lines[k].spaces.slice();
+                let wordC: number = 0;
+                let spaceC: number = 0;
+                let fDash: number;
+                let wasSpaceLast: boolean;
+
+                while(wordC < wordsT.length || spaceC < spacesT.length)
+                {
+                    let numSpaces = 0;
+                    let lineComplete: boolean = false;
+                    let word: string;
+                    let tmpLineGlyphs = [];
+                    let dropSpace = false;
+                    let stringStart = currPos;
+                    let wordStyles = 0;
+                    wasSpaceLast = false;
+
+                    currY += dy;
+                    let currLength = 0;
+                    let tspanEl : TextNode =
+                    {
+                        x: this.x, y: currY, dx: 0, dy: dy, start: prevGlyphPos, end: 0, endStringPos: 0,
+                        spaceRemoved: true, justified: this.isJustified, lineNum: lineCount, glyphs: []
+                    };
+
+                    if(startSpace)
+                    {
+                        if(spaceC >= spacesT.length)
+                        {
+                            console.error('ERROR: Space array out of bounds');
+                            return [];
+                        }
+
+                        word = spacesT[spaceC];
+                        isSpace = true;
+                        spaceC++;
+                    }
+                    else
+                    {
+                        if(wordC >= wordsT.length)
+                        {
+                            console.error('ERROR: Word array out of bounds');
+                            return [];
+                        }
+
+                        word = wordsT[wordC];
+                        isSpace = false;
+                        wordC++;
+                    }
+
+                    let glyphRun = { glyphs: [], positions: [] };
+                    let wordPos = 0;
+                    let tempGlyphs;
+
+                    // We may be behind on the style position.
+                    while(this.styleSet[currStyle].end <= currPos && currStyle < this.styleSet.length - 1)
+                    {
+                        currStyle++;
+                    }
+
+                    while(currStyle < this.styleSet.length && currPos + word.length > this.styleSet[currStyle].end)
+                    {
+                        this.processGlyphs(glyphRun, this.styleSet[currStyle], word.substring(wordPos, this.styleSet[currStyle].end - currPos), stringStart);
+
+                        stringStart += (this.styleSet[currStyle].end - currPos) - wordPos;
+                        wordPos = this.styleSet[currStyle].end - currPos;
+                        currStyle++;
+                        wordStyles++;
+                    }
+
+                    if(currStyle < this.styleSet.length)
+                    {
+                        this.processGlyphs(glyphRun, this.styleSet[currStyle], word.substring(wordPos, this.styleSet[currStyle].end - currPos), stringStart);
+                    }
+
+                    let wordGlyphs = [];
+                    let fDash = -1;
+                    let fDashGlyph;
+
+                    for(let j = 0; j < glyphRun.positions.length; j++)
+                    {
+                        let charWidth = (glyphRun.positions[j].xAdvance) * this.size / 1000;
+
+                        if(computedTextLength + charWidth < this.width)
+                        {
+                            if(glyphRun.glyphs[j].codePoints.length == 1 && isHyphen(glyphRun.glyphs[j].codePoints[0]))
+                            {
+                                fDash = j;
+                                fDashGlyph = wordGlyphs.length;
+                            }
+
+                            let wordGlyph = { path: glyphRun.glyphs[j].path, stringPositions: glyphRun.glyphs[j].stringPositions,
+                                xAdvance: glyphRun.positions[j].xAdvance, yAdvance: glyphRun.positions[j].yAdvance, xOffset: glyphRun.positions[j].xOffset,
+                                yOffset: glyphRun.positions[j].yOffset, isSpace: isSpace, colour: glyphRun.glyphs[j].colour, uline: glyphRun.glyphs[j].uline,
+                                oline: glyphRun.glyphs[j].oline, tline: glyphRun.glyphs[j].tline };
+
+                            wordGlyphs.push(wordGlyph);
+                            computedTextLength += charWidth;
+
+                            if(isSpace)
+                            {
+                                numSpaces++;
+                            }
+                        }
+                        else
+                        {
+                            // When we complete a line we actually need to wind back the style.
+                            lineComplete = true;
+
+                            currStyle -= wordStyles;
+
+                            if(fDash != -1)
+                            {
+                                // Split the string at dash, use the bit before the dash
+                                let newStr = word.substring(fDash + 1, word.length);
+                                // Insert the new string into the words array after current position
+                                // TODO: Just move word index back and change this item.
+                                wordsT.splice(wordC, 0, newStr);
+
+                                // TODO: Need to fix up the glyph run too I think.
+
+                                currPos += fDash + 1;
+                            }
+                            else
+                            {
+                                if(j == 0)
+                                {
+                                    console.error('TEXTBOX TOO SMALL FOR FIRST LETTERS.');
+                                    return [];
+                                }
+
+                                if(startSpace)
+                                {
+                                    if(j + 1 < word.length)
+                                    {
+                                        // TODO: Just move space index back and change this item.
+                                        spacesT.splice(spaceC, 0, word.substring(j + 1, word.length));
+                                        currPos += j + 1;
+                                    }
+                                    else
+                                    {
+                                        wasSpaceLast = true;
+                                        startSpace = !startSpace;
+                                        currPos += word.length;
+                                    }
+                                }
+                                else
+                                {
+                                    // TODO: Just move word index back and change this item.
+                                    wordsT.splice(wordC, 0, word.substring(j, word.length));
+                                    currPos += j;
+                                    tspanEl.spaceRemoved = false;
+                                }
+                            }
+                            break;
+                        }
+                    }
+
+                    if(!lineComplete)
+                    {
+                        currPos += word.length;
+                        startSpace = !startSpace;
+                    }
+
+                    currLength = computedTextLength;
+                    tmpLineGlyphs.push(...wordGlyphs);
+
+                    while(!lineComplete && (wordC < wordsT.length || spaceC < spacesT.length))
+                    {
+                        wordGlyphs = [];
+                        stringStart = currPos;
+                        wordStyles = 0;
+
+                        // Loop to finish line
+                        if(startSpace)
+                        {
+                            word = spacesT[spaceC++];
+                            isSpace = true;
+                        }
+                        else
+                        {
+                            word = wordsT[wordC++];
+                            isSpace = false;
+                        }
+
+                        let glyphRun = { glyphs: [], positions: [] };
+                        let wordPos = 0;
+                        let tempGlyphs;
+
+                        while(currStyle < this.styleSet.length && currPos + word.length > this.styleSet[currStyle].end)
+                        {
+                            this.processGlyphs(glyphRun, this.styleSet[currStyle], word.substring(wordPos, this.styleSet[currStyle].end - currPos), stringStart);
+
+                            stringStart += (this.styleSet[currStyle].end - currPos) - wordPos;
+                            wordPos = this.styleSet[currStyle].end - currPos;
+                            currStyle++;
+                            wordStyles++;
+                        }
+
+                        if(currStyle < this.styleSet.length)
+                        {
+                            this.processGlyphs(glyphRun, this.styleSet[currStyle], word.substring(wordPos, this.styleSet[currStyle].end - currPos), stringStart);
+                        }
+
+
+                        let tmpLength = computedTextLength;
+
+                        for(let j = 0; j < glyphRun.positions.length; j++)
+                        {
+                            let charWidth = (glyphRun.positions[j].xAdvance) * this.size / 1000;
+                            if(tmpLength + charWidth < this.width)
+                            {
+                                if(glyphRun.glyphs[j].codePoints.length == 1 && isHyphen(glyphRun.glyphs[j].codePoints[0]))
+                                {
+                                    fDash = j;
+                                }
+
+                                let wordGlyph = { path: glyphRun.glyphs[j].path, stringPositions: glyphRun.glyphs[j].stringPositions,
+                                    xAdvance: glyphRun.positions[j].xAdvance, yAdvance: glyphRun.positions[j].yAdvance, xOffset: glyphRun.positions[j].xOffset,
+                                    yOffset: glyphRun.positions[j].yOffset, isSpace: isSpace, colour: glyphRun.glyphs[j].colour,
+                                    uline: glyphRun.glyphs[j].uline, oline: glyphRun.glyphs[j].oline, tline: glyphRun.glyphs[j].tline };
+
+                                wordGlyphs.push(wordGlyph);
+                                tmpLength += charWidth;
+
+                                if(isSpace)
+                                {
+                                    numSpaces++;
+                                }
+                            }
+                            else
+                            {
+                                // When we complete a line we actually need to wind back the style.
+                                lineComplete = true;
+                                currStyle -= wordStyles;
+
+                                if(startSpace)
+                                {
+                                    if(word.length > j + 1)
+                                    {
+                                        spacesT[--spaceC] = word.substring(j + 1, word.length);
+                                        word = word.substring(0, j);
+                                        startSpace = !startSpace;
+                                        currPos++;
+                                    }
+                                    else
+                                    {
+                                        wasSpaceLast = true;
+                                    }
+                                }
+                                else
+                                {
+                                    word = '';
+                                    wordC--;
+                                    startSpace = !startSpace;
+                                    tmpLength = computedTextLength;
+                                    wordGlyphs = [];
+                                    dropSpace = true;
+                                }
+
+                                break;
+                            }
+                        }
+
+                        computedTextLength = tmpLength;
+                        currPos += word.length;
+                        startSpace = !startSpace;
+
+                        tmpLineGlyphs.push(...wordGlyphs);
+                    }
+
+                    if(wordC == wordsT.length && spaceC == spacesT.length && !lineComplete)
+                    {
+                        tspanEl.justified = false;
+
+                        // This was the last line so we didnt remove a string character.
+                        if(k == this.lines.length - 1)
+                        {
+                            tspanEl.spaceRemoved = false;
+                        }
+                    }
+
+                    // Drop out the last space glyph and recalculate length.
+                    if(dropSpace)
+                    {
+                        let removedSpace = tmpLineGlyphs.splice(tmpLineGlyphs.length - 1, 1);
+                        computedTextLength -= removedSpace[0].xAdvance * this.size / 1000;
+                        numSpaces--;
+                    }
+
+                    let reqAdjustment = (this.width - computedTextLength) * 1000 / this.size;
+                    let extraSpace = 0;
+
+                    if(tspanEl.justified)
+                    {
+                        extraSpace = reqAdjustment / numSpaces;
+                    }
+
+                    let lineGlyphs = [];
+                    let currentDist = 0;
+
+                    for(let i = 0; i < tmpLineGlyphs.length; i++)
+                    {
+                        let newGlyph: TextGlyph =
+                        {
+                            path: tmpLineGlyphs[i].path, stringPositions: tmpLineGlyphs[i].stringPositions, startPos: currentDist,
+                            advance: tmpLineGlyphs[i].xAdvance + (tmpLineGlyphs[i].isSpace ? extraSpace : 0),
+                            colour: tmpLineGlyphs[i].colour, uline: tmpLineGlyphs[i].uline, oline: tmpLineGlyphs[i].oline, tline: tmpLineGlyphs[i].tline
+                        };
+
+                        currentDist += tmpLineGlyphs[i].xAdvance;
+
+                        if(tmpLineGlyphs[i].isSpace)
+                        {
+                            currentDist += extraSpace;
+                        }
+
+                        lineGlyphs.push(newGlyph);
+                    }
+
+                    tspanEl.glyphs = lineGlyphs;
+                    tspanEl.endStringPos = currPos;
+                    tspanEl.end = tspanEl.start + lineGlyphs.length;
+
+                    prevGlyphPos = tspanEl.start + lineGlyphs.length + (tspanEl.spaceRemoved ? 1 : 0);
+                    glyphCount += lineGlyphs.length + (tspanEl.spaceRemoved ? 1 : 0);
+
+                    childText.push(tspanEl);
+
+                    lineCount++;
+                    computedTextLength = 0;
+                }
+
+                if(wasSpaceLast)
+                {
+                    currY += dy;
+
+                    // Insert an empty line.
+                    let tspanEl : TextNode =
+                    {
+                        x: this.x, y: currY, dx: 0, dy: dy, start: prevGlyphPos, end: prevGlyphPos, endStringPos: currPos,
+                        spaceRemoved: false, justified: false, lineNum: lineCount, glyphs: []
+                    };
+
+                    childText.push(tspanEl);
+
+                    lineCount++;
+                }
+
+                // A return character separated this line so take it into account.
+                currPos++;
+            }
+            */
             if (lineCount * 2 * this.size > this.height) {
                 this.resize(this.width, lineCount * 2 * this.size, new Date());
                 this.hasResized = true;
@@ -3708,6 +4702,10 @@ var WhiteBoardText;
             return true;
             var _a;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.processGlyphs = function (glyphs, style, word, stringStart) {
             var _this = this;
             var fontSet = 'NORMAL';
@@ -3729,6 +4727,7 @@ var WhiteBoardText;
             if (fontHelper[fontSet] == null || fontHelper[fontSet] == undefined) {
                 var callback = function () {
                     if (!_this.isDeleted) {
+                        // TODO: Adjust cursor start and end after replacement of tofu.
                         console.log("Width now is: " + _this.width);
                         _this.calculateTextLines();
                         if (_this.isSelected) {
@@ -3752,6 +4751,7 @@ var WhiteBoardText;
                     var callbackID = this.getAdditionalFont(fontSet, callback);
                     this.waitingForFont[fontSet] = callbackID;
                 }
+                // Add TOFU in place of font glyphs.
                 tempGlyphs = { glyphs: [], positions: [] };
                 for (var i = 0; i < word.length; i++) {
                     tempGlyphs.glyphs[i] =
@@ -3787,6 +4787,7 @@ var WhiteBoardText;
                     yAdvance: tempGlyphs.positions[i].yAdvance, xOffset: tempGlyphs.positions[i].xOffset, yOffset: tempGlyphs.positions[i].yOffset,
                     isSpace: false, isHyphen: isHyph
                 };
+                // TODO: Vertical Text
                 startAdvance += newGlyph.xAdvance;
                 glyphs[i] = newGlyph;
                 for (var j = 0; j < tempGlyphs.glyphs[i].stringPositions.length; j++) {
@@ -3795,6 +4796,10 @@ var WhiteBoardText;
             }
             return hasHyphen;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.processSpaceGlyphs = function (glyphs, word, stringStart) {
             var tempGlyphs = { glyphs: [], positions: [] };
             var advance = 0;
@@ -3822,6 +4827,10 @@ var WhiteBoardText;
             }
             return advance;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.findXHelper = function (isUp, relative) {
             var i;
             var line;
@@ -3854,6 +4863,8 @@ var WhiteBoardText;
             }
             var curr = i - 1;
             var glyph = sec.glyphs[curr];
+            // i and currMes is now the position to the right of the search point.
+            // We just need to check if left or right is closer then reurn said point.
             var selPoint;
             var glyphStart = sec.startPos + glyph.startAdvance * this.size / 1000;
             var glyphEnd = glyphStart + glyph.xAdvance * this.size / 1000;
@@ -3865,6 +4876,10 @@ var WhiteBoardText;
             }
             return selPoint;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.isCurrentStyle = function (style, pallete) {
             if (style.colour == pallete.colour && style.oline == pallete.isOverline() && style.uline == pallete.isUnderline() &&
                 style.tline == pallete.isThroughline() && style.weight == pallete.getWeight() && style.style == pallete.getStyle()) {
@@ -3874,11 +4889,20 @@ var WhiteBoardText;
                 return false;
             }
         };
+        /**
+         *
+         * @param soretedSelect  The selection to remove sorted in reverse order.
+         */
         Element.prototype.removeSelection = function (sortedSelect) {
             for (var i = 0; i < sortedSelect.length; i++) {
+                // Remove all selected characters and shift style positions.
                 this.removeCharacter(sortedSelect[i]);
             }
         };
+        /**
+         *
+         * This method might be a bit slow as it removes each character individually. TODO: Check for slow behaviour and resolve if necessary.
+         */
         Element.prototype.removeCharacter = function (index) {
             this.text = this.text.substring(0, index) + this.text.substring(index + 1, this.text.length);
             var newStyles = [];
@@ -3886,19 +4910,25 @@ var WhiteBoardText;
                 var sty = this.styleSet[i];
                 var styEnd = sty.end;
                 var styStart = sty.start;
+                // Move the end back if necessary.
                 if (styEnd > index) {
                     styEnd--;
                 }
+                // Move the start back if necessary.
                 if (styStart > index) {
                     styStart--;
                 }
+                // Don't push this style onto the new set if it has been removed.
                 if (styStart != index || styEnd != index) {
+                    // Check to see if we can just extend last style pushed onto new styles.
                     if (newStyles.length > 0 && this.stylesMatch(newStyles[newStyles.length - 1], sty)
                         && newStyles[newStyles.length - 1].end - newStyles[newStyles.length - 1].start + styEnd - styStart <= MAX_STYLE_LENGTH) {
+                        // If this is the same as the previous style and are length compatible then combine
                         newStyles[newStyles.length - 1].end += styEnd - styStart;
                         newStyles[newStyles.length - 1].text = this.text.slice(newStyles[newStyles.length - 1].start, newStyles[newStyles.length - 1].end);
                     }
                     else {
+                        // Push this style onto the new stack
                         newStyles.push({
                             start: styStart, end: styEnd, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
                             style: sty.style, weight: sty.weight, text: this.text.slice(styStart, styEnd), seq_num: newStyles.length
@@ -3908,11 +4938,20 @@ var WhiteBoardText;
             }
             this.styleSet = newStyles;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.stylesMatch = function (style1, style2) {
             return style1.colour == style2.colour && style1.oline == style2.oline && style1.uline == style2.uline && style1.tline == style2.tline
                 && style1.weight == style2.weight;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.insertText = function (text, newStyle) {
+            // Now Insert the string at the stringStart position.
             var isNew = true;
             var textStart = this.text.slice(0, this.stringStart);
             var textEnd = this.text.slice(this.stringStart, this.text.length);
@@ -3920,11 +4959,13 @@ var WhiteBoardText;
             var fullText = textStart + text + textEnd;
             var hasInserted = false;
             var newSty = null;
+            // Create new style set.
             for (var i = 0; i < this.styleSet.length; i++) {
                 var sty = this.styleSet[i];
                 if (sty.start >= this.stringStart) {
                     if (!hasInserted) {
                         if (text.length <= MAX_STYLE_LENGTH) {
+                            // Insert the new style
                             styles.push({
                                 start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
                                 uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
@@ -3932,6 +4973,7 @@ var WhiteBoardText;
                             });
                         }
                         else {
+                            // New Style would be too long so split it up.
                             var splitArray = this.getStyleSplits(text.length);
                             var prevStart = 0;
                             for (var j = 0; j < splitArray.length; j++) {
@@ -3946,8 +4988,10 @@ var WhiteBoardText;
                         newSty = styles[styles.length - 1];
                         hasInserted = true;
                     }
+                    // Completely after selection
                     if (styles.length > 0 && this.stylesMatch(styles[styles.length - 1], sty)
                         && styles[styles.length - 1].end - styles[styles.length - 1].start + sty.end - sty.start <= MAX_STYLE_LENGTH) {
+                        // If this is the same as the previous style and are length compatible then combine
                         styles[styles.length - 1].end += sty.end - sty.start;
                         styles[styles.length - 1].text = fullText.slice(styles[styles.length - 1].start, styles[styles.length - 1].end);
                     }
@@ -3961,6 +5005,7 @@ var WhiteBoardText;
                 }
                 else {
                     if (sty.end < this.stringStart) {
+                        // Completely before selection
                         sty.text = fullText.slice(sty.start, sty.end);
                         styles.push({
                             start: sty.start, end: sty.end, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
@@ -3968,6 +5013,7 @@ var WhiteBoardText;
                         });
                     }
                     else {
+                        // Split by selection
                         if (this.stylesMatch(sty, newStyle)) {
                             if (sty.end - sty.start + text.length <= MAX_STYLE_LENGTH) {
                                 styles.push({
@@ -3976,6 +5022,7 @@ var WhiteBoardText;
                                 });
                             }
                             else {
+                                // New Style would be too long so split it up.
                                 var splitArray = this.getStyleSplits(sty.end - sty.start + text.length);
                                 var prevStart = 0;
                                 for (var j = 0; j < splitArray.length; j++) {
@@ -3991,11 +5038,13 @@ var WhiteBoardText;
                             hasInserted = true;
                         }
                         else {
+                            // Style before the new split
                             styles.push({
                                 start: sty.start, end: this.stringStart, colour: sty.colour, oline: sty.oline, uline: sty.uline, tline: sty.tline,
                                 style: sty.style, weight: sty.weight, text: fullText.slice(sty.start, this.stringStart), seq_num: styles.length
                             });
                             if (text.length <= MAX_STYLE_LENGTH) {
+                                // Insert the new style
                                 styles.push({
                                     start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
                                     uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
@@ -4003,6 +5052,7 @@ var WhiteBoardText;
                                 });
                             }
                             else {
+                                // New Style would be too long so split it up.
                                 var splitArray = this.getStyleSplits(text.length);
                                 var prevStart = 0;
                                 for (var j = 0; j < splitArray.length; j++) {
@@ -4017,6 +5067,7 @@ var WhiteBoardText;
                             newSty = styles[styles.length - 1];
                             hasInserted = true;
                             if (this.stringStart != sty.end) {
+                                // Style after the new split
                                 styles.push({
                                     start: this.stringStart + text.length, end: sty.end + text.length, colour: sty.colour, oline: sty.oline,
                                     uline: sty.uline, tline: sty.tline, style: sty.style, weight: sty.weight,
@@ -4028,7 +5079,9 @@ var WhiteBoardText;
                 }
             }
             if (!hasInserted) {
+                // Insert the new style at the end of the list.
                 if (text.length <= MAX_STYLE_LENGTH) {
+                    // Insert the new style
                     styles.push({
                         start: this.stringStart, end: this.stringStart + text.length, colour: newStyle.colour, oline: newStyle.oline,
                         uline: newStyle.uline, tline: newStyle.tline, style: newStyle.style, weight: newStyle.weight,
@@ -4036,6 +5089,7 @@ var WhiteBoardText;
                     });
                 }
                 else {
+                    // New Style would be too long so split it up.
                     var splitArray = this.getStyleSplits(text.length);
                     var prevStart = 0;
                     for (var j = 0; j < splitArray.length; j++) {
@@ -4053,6 +5107,10 @@ var WhiteBoardText;
             this.styleSet = styles;
             return newSty;
         };
+        /** A helper function to chunk styles to the maximum style size.
+         *
+         *
+         */
         Element.prototype.getStyleSplits = function (length) {
             var slices = [];
             var lengthCount = 0;
@@ -4064,15 +5122,21 @@ var WhiteBoardText;
             console.log(slices);
             return slices;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.newEdit = function () {
             var _this = this;
             this.editCount++;
             if (this.editCount > 5) {
+                // Notify of changes and clear that pesky timeout
                 this.editCount = 0;
                 clearTimeout(this.editTimer);
                 return this.textEdited();
             }
             else {
+                // Set timeout
                 var self_3 = this;
                 clearTimeout(this.editTimer);
                 this.editTimer = setTimeout(function () {
@@ -4083,6 +5147,11 @@ var WhiteBoardText;
                 return null;
             }
         };
+        /** Generate the set of text lines, denoted by the newline characters in the text.
+         *  These are given in terms of arrays of spaces and words.
+         *
+         *
+         */
         Element.prototype.generateLines = function () {
             var linesText = [];
             var lines = [];
@@ -4130,6 +5199,10 @@ var WhiteBoardText;
             }
             this.lines = lines;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.completeEdit = function (userId, editId) {
             var fullText = '';
             var editData = this.editInBuffer[userId][editId];
@@ -4149,6 +5222,10 @@ var WhiteBoardText;
                 textNodes: this.textNodes, width: this.width, height: this.height, cursor: this.cursor, cursorElems: this.cursorElems, waiting: false
             });
         };
+        /**
+         *
+         *
+         */
         Element.prototype.textEdited = function () {
             var editNum = this.editNum++;
             this.editOutBuffer[editNum] = [];
@@ -4159,6 +5236,10 @@ var WhiteBoardText;
             var msg = { header: MessageTypes.EDIT, payload: payload };
             return msg;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.findStringPositions = function () {
             this.selectedCharacters = [];
             var found = [];
@@ -4181,6 +5262,7 @@ var WhiteBoardText;
                     for (var j = 0; j < line.sections.length; j++) {
                         var sec = line.sections[j];
                         if (this.cursorStart < line.start + sec.startGlyph + sec.glyphs.length && this.cursorEnd > line.start + sec.startGlyph) {
+                            // There is a special catch for the final glyph here, when the cursor is at the end of text we need the next glyph back.
                             for (var gPos = this.cursorStart - 1 > line.start ? this.cursorStart - 1 - line.start : 0; gPos < sec.glyphs.length; gPos++) {
                                 var glyph = sec.glyphs[gPos];
                                 if (line.start + sec.startGlyph + j >= this.cursorStart && line.start + sec.startGlyph + j <= this.cursorEnd) {
@@ -4210,6 +5292,7 @@ var WhiteBoardText;
                     if (line.end == this.cursorStart) {
                         newStringStart = largestStringPos + 1;
                     }
+                    // If there is a space removed and the end selection is after this line, add the space string position.
                     if (this.cursorEnd > line.end && line.spaceRemoved) {
                         if (line.sections.length == 0) {
                             if (found[largestStringPos] === undefined) {
@@ -4226,12 +5309,18 @@ var WhiteBoardText;
                     }
                 }
                 else if (i == this.textNodes.length - 1) {
+                    // This was the last line but the cursor is after it (this happens when there was a space removed) we can cheat because it is at the end.
                     newStringStart = this.text.length;
                 }
             }
             this.stringStart = newStringStart;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.wordMerger = function (undoStart, undoEnd) {
+            // Merge letter undo/redos into word undo redos beyond previous word.
             if (this.prevWordStart != null && this.prevWordEnd != null) {
                 var newOp = { undo: this.operationStack[undoStart].undo, redo: this.operationStack[undoEnd - 1].redo };
                 this.cursorUndoPositions[undoStart].end = this.cursorUndoPositions[undoEnd - 1].end;
@@ -4257,9 +5346,14 @@ var WhiteBoardText;
                 this.prevWordEnd = this.wordEnd;
                 this.prevWordStart = this.wordStart;
             }
+            // If there is more than one non-consecutive space, push through again.
             this.wordStart = this.operationPos;
             this.wordEnd = this.wordStart;
         };
+        /**
+         *
+         *
+         */
         Element.prototype.getAdditionalFont = function (fontSet, callback) {
             loadingFonts[fontSet] = true;
             loadCallbacks[fontSet] = [];
@@ -4273,6 +5367,7 @@ var WhiteBoardText;
                 var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
                 var normReq = fontObjectStore.get(fontSet);
                 normReq.onerror = function (event) {
+                    // TODO: Handle errors!
                     console.log("Was error.");
                 };
                 normReq.onsuccess = function (event) {
@@ -4291,6 +5386,7 @@ var WhiteBoardText;
                             var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
                             var req = fontObjectStore.put(fontData);
                             req.onerror = function (event) {
+                                // Handle errors!
                                 console.log("Was error.");
                             };
                         };
@@ -4307,11 +5403,13 @@ var WhiteBoardText;
                             }
                         }
                         else {
+                            // TODO: Generally shouldn't happen but should handle it.
                             console.log("Was null.");
                         }
                     }
                 };
             };
+            /* TODO: Handle these errors, may need to tell user to close and open tab. Also make sure upgrade needed has completed. */
             req.onerror = function (event) {
                 console.error("Database error: " + event.target.errorCode);
             };
@@ -4324,6 +5422,11 @@ var WhiteBoardText;
     }(BoardElement));
     WhiteBoardText.Element = Element;
 })(WhiteBoardText || (WhiteBoardText = {}));
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                                                                            //
+// REGISTER COMPONENT                                                                                                                                         //
+//                                                                                                                                                            //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 var fontList = [];
 fontList['NORMAL'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
 fontList['BOLD'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
@@ -4332,6 +5435,7 @@ fontList['BOLDITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteb
 var fontHelper = [];
 var loadCallbacks = [];
 var loadingFonts = [];
+// Always load the basic latin font set.
 loadingFonts['NORMAL'] = true;
 loadCallbacks['NORMAL'] = [];
 loadingFonts['BOLD'] = true;
@@ -4343,6 +5447,7 @@ loadCallbacks['BOLDITALIC'] = [];
 var getFont = function (fontName, fontObjectStore, db) {
     var req = fontObjectStore.get(fontName);
     req.onerror = function (event) {
+        // Handle errors!
         console.log("Was error.");
     };
     req.onsuccess = function (event) {
@@ -4361,6 +5466,7 @@ var getFont = function (fontName, fontObjectStore, db) {
                 var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
                 var req = fontObjectStore.put(fontData);
                 req.onerror = function (event) {
+                    // Handle errors!
                     console.log("Was error.");
                 };
             };
@@ -4377,6 +5483,7 @@ var getFont = function (fontName, fontObjectStore, db) {
                 }
             }
             else {
+                // TODO: Generally shouldn't happen but should handle it.
                 console.log("Was null.");
             }
         }
@@ -4398,6 +5505,8 @@ req.onupgradeneeded = function (event) {
     var db = event.target.result;
     var objectStore = db.createObjectStore("font-files", { keyPath: "fontName" });
     objectStore.transaction.oncomplete = function (event) {
+        // Store values in the newly created objectStore.
+        // Set here
         var normReq = new XMLHttpRequest();
         normReq.open("GET", fontList['NORMAL'].file, true);
         normReq.responseType = "arraybuffer";
@@ -4412,8 +5521,10 @@ req.onupgradeneeded = function (event) {
             var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
             var req = fontObjectStore.put(fontData);
             req.onerror = function (event) {
+                // Handle errors!
                 console.log("Was error.");
             };
+            // TODO: Test and remove debug code.
             req.onsuccess = function (event) {
                 console.log('Successfully added normal font to database.');
             };
@@ -4433,8 +5544,10 @@ req.onupgradeneeded = function (event) {
             var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
             var req = fontObjectStore.put(fontData);
             req.onerror = function (event) {
+                // Handle errors!
                 console.log("Was error.");
             };
+            // TODO: Test and remove debug code.
             req.onsuccess = function (event) {
                 console.log('Successfully added BOLD font to database.');
             };
@@ -4454,8 +5567,10 @@ req.onupgradeneeded = function (event) {
             var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
             var req = fontObjectStore.put(fontData);
             req.onerror = function (event) {
+                // Handle errors!
                 console.log("Was error.");
             };
+            // TODO: Test and remove debug code.
             req.onsuccess = function (event) {
                 console.log('Successfully added ITALIC font to database.');
             };
@@ -4475,8 +5590,10 @@ req.onupgradeneeded = function (event) {
             var fontObjectStore = db.transaction("font-files", "readwrite").objectStore("font-files");
             var req = fontObjectStore.put(fontData);
             req.onerror = function (event) {
+                // Handle errors!
                 console.log("Was error.");
             };
+            // TODO: Test and remove debug code.
             req.onsuccess = function (event) {
                 console.log('Successfully added BOLDITALIC font to database.');
             };
@@ -4485,6 +5602,7 @@ req.onupgradeneeded = function (event) {
     };
 };
 req.onblocked = function () {
+    // This will occur when another tab is open, ask user to close.
     console.error("Database is locked but needs upgrading.");
 };
 registerComponent(WhiteBoardText.MODENAME, WhiteBoardText.Element, WhiteBoardText.Pallete);

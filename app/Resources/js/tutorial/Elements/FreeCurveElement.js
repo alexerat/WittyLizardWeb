@@ -1,42 +1,72 @@
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+/** Free Curve Whiteboard Component.
+*
+* This allows the user to free draw curves that will be smoothed and rendered to SVG Beziers.
+*
+*/
 var FreeCurve;
 (function (FreeCurve) {
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    // MODEL                                                                                                                                                  //
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * The name of the mode associated with this component.
+     */
     FreeCurve.MODENAME = 'FREECURVE';
-    var PalleteChangeType;
-    (function (PalleteChangeType) {
-        PalleteChangeType[PalleteChangeType["COLOUR"] = 0] = "COLOUR";
-        PalleteChangeType[PalleteChangeType["SIZE"] = 1] = "SIZE";
-    })(PalleteChangeType || (PalleteChangeType = {}));
+    /**
+     * The set of possible colours for free curves.
+     * Used in interfacing between component view and state.
+     */
     var PalleteColour = {
         BLACK: 'black',
         BLUE: 'blue',
         RED: 'red',
         GREEN: 'green'
     };
+    /**
+     * The set of possible sizes for free curves.
+     * Used in interfacing between component view and state.
+     */
     var PalleteSize = {
         XSMALL: 2.0,
         SMALL: 5.0,
         MEDIUM: 10.0,
         LARGE: 20.0
     };
-    var ViewComponents;
-    (function (ViewComponents) {
-        ViewComponents[ViewComponents["View"] = 0] = "View";
-        ViewComponents[ViewComponents["Interaction"] = 1] = "Interaction";
-    })(ViewComponents || (ViewComponents = {}));
-    var CustomContextItems;
-    (function (CustomContextItems) {
-    })(CustomContextItems || (CustomContextItems = {}));
+    /**
+     * Message types that can be sent between the user and server.
+     */
     var MessageTypes = {
         IGNORE: 1,
         POINT: 2,
         POINTMISSED: 3,
         MISSINGPOINT: 4
     };
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    // CONTROLLER                                                                                                                                             //
+    //                                                                                                                                                        //
+    //                                                                                                                                                        //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /** Free Curve Whiteboard Pallete.
+    *
+    * This is the class that will be used to store the state and control the pallete for this component.
+    *
+    */
     var Pallete = (function (_super) {
         __extends(Pallete, _super);
         function Pallete() {
@@ -91,11 +121,11 @@ var FreeCurve;
             return cursorType;
         };
         Pallete.prototype.handleChange = function (change) {
-            if (change.type == 0) {
+            if (change.type == 0 /* COLOUR */) {
                 this.colour = change.data;
                 this.updateView({ colour: change.data });
             }
-            else if (change.type == 1) {
+            else if (change.type == 1 /* SIZE */) {
                 this.baseSize = change.data;
                 this.updateView({ size: change.data });
             }
@@ -107,8 +137,17 @@ var FreeCurve;
         return Pallete;
     }(BoardPallete));
     FreeCurve.Pallete = Pallete;
+    /** Free Curve Whiteboard Element.
+    *
+    * This is the class that will be used to store the state and control elements of this component.
+    *
+    */
     var Element = (function (_super) {
         __extends(Element, _super);
+        /**   Create the element as per the supplied parameters.
+        *
+        *     @return Element The new element created as per the supplied parameters
+        */
         function Element(id, userId, x, y, width, height, callbacks, numPoints, curveSet, colour, size, serverId, updateTime) {
             var _this = _super.call(this, FreeCurve.MODENAME, id, x, y, width, height, userId, callbacks, serverId, updateTime) || this;
             _this.pointBuffer = [];
@@ -175,6 +214,10 @@ var FreeCurve;
             _this.currentViewState = newCurveView;
             return _this;
         }
+        /**   Create the element from the creation data, return null if not valid.
+        *
+        *     @return Element The element.
+        */
         Element.createElement = function (data) {
             if (data.pointList != null && data.pointList != undefined) {
                 var pallete = data.palleteState;
@@ -244,6 +287,15 @@ var FreeCurve;
                 return null;
             }
         };
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // EXPOSED FUNCTIONS
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /**   Generate the message that would be sent to the server to generate this element.
+         *
+         *    This should be a single message, more messages can be sent once serverId is returned. (see setServerId)
+         *
+         *    @return {UserMessage} The message to generate this element.
+         */
         Element.prototype.getNewMsg = function () {
             var pointMessages = [];
             for (var i = 0; i < this.pointBuffer.length; i++) {
@@ -256,17 +308,48 @@ var FreeCurve;
             };
             return msg;
         };
+        /**   Generate the clipboard data that this element should produce when copied, either as a single selected item or whilst editing.
+         *
+         *    This should be a set of different clipboard data formats.
+         *
+         *    @return {Array<ClipBoardItem>} The clipboard items.
+         */
         Element.prototype.getClipboardData = function () {
+            // TODO:
             return null;
         };
+        /**   Generate the SVG string description of this objects display to be copied  when user copies multiple items.
+         *
+         *    This should be a string containing the svg description to display this item.
+         *
+         *    @return {string} The clipboard items.
+         */
         Element.prototype.getClipboardSVG = function () {
+            // TODO:
             return null;
         };
+        /**   Sets the serverId of this element and returns a list of server messages to send.
+         *
+         *    @param {number} id - The server ID for this element.
+         *    @return {Array<UserMessage>} - The set of messages to send to the communication server.
+         */
         Element.prototype.setServerId = function (id) {
             _super.prototype.setServerId.call(this, id);
             var messages = [];
             return messages;
         };
+        /**   Handle a mouse down event on this element or one of it's sub-components. Only called when board is in SELECT mode.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseDown = function (e, localX, localY, palleteState, component, subId) {
             var cursorType;
             this.isMoving = true;
@@ -284,66 +367,196 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse move event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseMove = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse up event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseUp = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse click event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleMouseClick = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse double click event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleDoubleClick = function (e, localX, localY, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch start event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchStart = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch move event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchMove = function (e, touchChange, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch end event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchEnd = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch cancel event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *    @param {ViewComponents} [component] - The type of subcomponent.
+         *    @param {number} [subId] - The ID of the subcomponent
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleTouchCancel = function (e, localTouches, palleteState, component, subId) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse down event on the board, called when this element is being edited (and as required mode is this mode).
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseDown = function (e, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: false,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse move event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
+         *
+         *    For Performance reasons avoid sending server messages here unless necessary, wait for mouseUp. Likewise for undo and redo ops, just leave null.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} changeX - The change of the mouse x position, scaled to the SVG zoom.
+         *    @param {number} changeY - The change of the mouse y position, scaled to the SVG zoom.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseMove = function (e, changeX, changeY, mouseX, mouseY, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
@@ -356,6 +569,17 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a mouse up event on the board, called when this element is selected and in select mode.
+         *    Otherwise when this item is being edited (and as required mode is this mode).
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} mouseX - The mouse x position, scaled to the SVG zoom.
+         *    @param {number} mouseY - The mouse y position, scaled to the SVG zoom.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardMouseUp = function (e, mouseX, mouseY, palleteState) {
             var _this = this;
             var serverMsgs = [];
@@ -378,33 +602,85 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch start event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchStart = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = {
                 newView: this.currentViewState, undoOp: null, redoOp: null, serverMessages: [], palleteChanges: [], isSelected: true,
                 newViewCentre: null, cursor: null, infoMessage: null, alertMessage: null, move: null, wasDelete: null, wasRestore: null
             };
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch move event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchMove = function (e, toucheChanges, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch end event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchEnd = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a touch cancel event on the board, called when this element is selected.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleBoardTouchCancel = function (e, touches, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the start of moving this item.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *
+         *    @return {ViewState} An object containing: the new view state
+         */
         Element.prototype.startMove = function () {
             this.isMoving = true;
             this.moveStartX = this.x;
@@ -413,11 +689,28 @@ var FreeCurve;
             var retVal = this.currentViewState;
             return retVal;
         };
+        /**   Handle a move of this element, called when this element is moved by the user.
+         *
+         *    This MUST be implemented. DO NOT CHANGE UNLESS NECESSARY.
+         *
+         *    @param {number} changeX - The expected change in this elements x position.
+         *    @param {number} changeY - The expected change in this elements y position.
+         *
+         *    @return {ViewState} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handleMove = function (changeX, changeY) {
             this.move(changeX, changeY, new Date());
             var retVal = this.currentViewState;
             return retVal;
         };
+        /**   Handle the end of moving this item.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse up event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *
+         *    @return {ElementMoveReturn} An object containing: the new view state
+         */
         Element.prototype.endMove = function () {
             this.isMoving = false;
             this.updateView({ isMoving: false });
@@ -428,12 +721,29 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a key press event on this element or one of it's sub-components.
+         *
+         *    @param {MouseEvent} e - The mouse event data associated with the mouse down event.
+         *    @param {number} localX - The relative position of the event to this elemens x position.
+         *    @param {number} localY - The relative position of the event to this elemens y position.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleKeyPress = function (e, input, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a messages sent from the server to this element.
+         *
+         *    @param {} message - The server message that was sent.
+         *
+         *    @return {ElementMessageReturn} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handleElementServerMessage = function (message) {
             var newView = this.currentViewState;
             var retMsgs = [];
@@ -444,6 +754,7 @@ var FreeCurve;
             switch (message.header) {
                 case MessageTypes.POINT:
                     var data = message.payload;
+                    // Make sure we know about this curve.
                     if (this.numRecieved != this.numPoints) {
                         if (!this.pointBuffer[data.num]) {
                             this.pointBuffer[data.num] = { x: data.x, y: data.y };
@@ -499,6 +810,11 @@ var FreeCurve;
             };
             return retVal;
         };
+        /**   Handle the selecting and starting of editing of this element that has not been induced by this elements input handles.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleStartEdit = function () {
             var retVal = this.getDefaultInputReturn();
             var serverMsgs = [];
@@ -508,6 +824,11 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the deselect this element and ending of editing.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleEndEdit = function () {
             var retVal = this.getDefaultInputReturn();
             var serverMsgs = [];
@@ -517,40 +838,99 @@ var FreeCurve;
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the copying of data from this element.
+         *
+         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         */
         Element.prototype.handleCopy = function (e, palleteState) {
         };
+        /**   Handle the pasting of data into this element.
+         *
+         *    @param {number} localX - The x position of the mouse with respect to this element.
+         *    @param {number} localY - The y position of the mouse with respect to this element.
+         *    @param {ClipboardEventData} data - The clipboard data to be pasted.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handlePaste = function (localX, localY, data, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**  Handle the cutting of data from this element.
+         *
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected
+         */
         Element.prototype.handleCut = function () {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle a custom context event on this component, events are dispatched by the pressing of custom buttons set in the CustomContextView.
+         *
+         *    @param {ClipboardEvent} e - The clipboard event data associated with the copy event.
+         *    @param {Pallete} palleteState - The current state of the pallete for this component.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, undo operation, redo operation, messages to be sent to the comm server,
+         *    required changes to the pallete state, whether to set this element as selected, whether to to move the current view
+         */
         Element.prototype.handleCustomContext = function (item, palleteState) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Produce a hover info message for this element.
+         *
+         *    @return {HoverMessage} The data to be displayed in the hover info message for this element
+         */
         Element.prototype.handleHover = function () {
             var retVal = { header: '', message: '' };
             return retVal;
         };
+        /**   Handle a change in the pallete for this component. Passed when this element is selected.
+         *
+         *    @param {BoardPallete} pallete - The pallete for this element after changes.
+         *    @param {BoardPalleteChange} change - The changes made to the pallete.
+         *
+         *    @return {ElementInputReturn} An object containing: the new view state, messages to be sent to the comm server
+         */
         Element.prototype.handlePalleteChange = function (pallete, change) {
             var serverMsgs = [];
             var retVal = this.getDefaultInputReturn();
+            // Event Unimplemented: Implementation goes here.
             retVal.serverMessages = this.checkForServerId(serverMsgs);
             return retVal;
         };
+        /**   Handle the requested audio stream.
+         *
+         *    @param {MediaStream} stream - The audio stream.
+         */
         Element.prototype.audioStream = function (stream) {
         };
+        /**   Handle the requested video stream.
+         *
+         *    @param {MediaStream} stream - The video stream.
+         */
         Element.prototype.videoStream = function (stream) {
         };
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // INTERNAL FUNCTIONS
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /** Convert the list of points describing the Bezier curve into a string.
+         *
+         * This speeds up the rendering as this does not have to be recreated during the render pass.
+         */
         Element.prototype.createCurveText = function () {
             var param = "M" + this.curveSet[0].x + "," + this.curveSet[0].y;
             param = param + " C" + this.curveSet[1].x + "," + this.curveSet[1].y;
@@ -567,4 +947,9 @@ var FreeCurve;
     }(BoardElement));
     FreeCurve.Element = Element;
 })(FreeCurve || (FreeCurve = {}));
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                                                                            //
+// REGISTER COMPONENT                                                                                                                                         //
+//                                                                                                                                                            //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 registerComponent(FreeCurve.MODENAME, FreeCurve.Element, FreeCurve.Pallete);

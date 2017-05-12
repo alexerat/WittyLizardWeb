@@ -120,22 +120,27 @@ function FitCurve(d, nPts, error) {
     var retVal = FitCubic(d, 0, nPts - 1, leftTangent, rightTangent, error);
     return bezierData;
 }
+/*
+ *  FitCubic :
+ *  	Fit a Bezier curve to a (sub)set of digitized points
+ */
 function FitCubic(d, first, last, leftTangent, rightTangent, error) {
-    var bezCurve = [];
-    var u;
-    var uPrime;
+    var bezCurve = []; /* Control points of fitted Bezier curve*/
+    var u; /* Parameter values for point  */
+    var uPrime; /* Improved parameter values */
     var maxRet;
-    var maxError;
-    var splitPoint;
-    var nPts;
-    var iterationError;
-    var maxIterations = 4;
-    var tHatCenter;
+    var maxError; /* Maximum fitting error	 */
+    var splitPoint; /* Point to split point set at	 */
+    var nPts; /* Number of points in subset  */
+    var iterationError; /* Error below which you try iterating  */
+    var maxIterations = 4; /* Max times to try iterating  */
+    var tHatCenter; /* Unit tangent vector at splitPoint */
     var tHatLeft;
     var tHatRight;
     var i;
     iterationError = error * error;
     nPts = last - first + 1;
+    /*  Use heuristic if region only has two points in it */
     if (nPts == 2) {
         var dist = VDist(d[last], d[first]) / 3.0;
         bezCurve[0] = {};
@@ -158,8 +163,11 @@ function FitCubic(d, first, last, leftTangent, rightTangent, error) {
         segcount++;
         return;
     }
+    /*  Parameterize points, and attempt to fit curve */
     u = ChordLengthParameterize(d, first, last);
     bezCurve = GenerateBezier(d, first, last, u, leftTangent, rightTangent);
+    /*  Find max deviation of points to fitted curve */
+    //maxRet = ComputeMaxError(d, first, last, bezCurve, u, splitPoint);
     maxRet = ComputeMaxError(d, first, last, bezCurve, u);
     maxError = maxRet[0];
     splitPoint = maxRet[1];
@@ -176,10 +184,13 @@ function FitCubic(d, first, last, leftTangent, rightTangent, error) {
         segcount++;
         return;
     }
+    /*  If error not too large, try some reparameterization  */
+    /*  and iteration */
     if (maxError < iterationError) {
         for (i = 0; i < maxIterations; i++) {
             uPrime = Reparameterize(d, first, last, u, bezCurve);
             bezCurve = GenerateBezier(d, first, last, uPrime, leftTangent, rightTangent);
+            //maxRet = ComputeMaxError(d, first, last, bezCurve, uPrime, splitPoint);
             maxRet = ComputeMaxError(d, first, last, bezCurve, uPrime);
             maxError = maxRet[0];
             splitPoint = maxRet[1];
@@ -225,11 +236,13 @@ function FitCubic(d, first, last, leftTangent, rightTangent, error) {
         }
         splitarr[i - first] = c;
     }
+    /* zoek naar omslagpunten */
     for (i = 0; i < nPts - 1; i++) {
         splitarr[i] ^= splitarr[i + 1];
     }
     best = splitPoint;
     mdist = 0xffffff;
+    /* eventueel nog optimaliseren naar meerdere omslagen na elkaar ?? */
     for (i = 1; i < nPts - 3; i++) {
         if (splitarr[i]) {
             dist = (i + first + 1) - splitPoint;
@@ -253,20 +266,25 @@ function FitCubic(d, first, last, leftTangent, rightTangent, error) {
     FitCubic(d, splitPoint, last, tHatRight, rightTangent, error);
     return;
 }
+/*
+ *  GenerateBezier :
+ *  Use least-squares method to find Bezier control points for region.
+ */
 function GenerateBezier(d, first, last, uPrime, tHat1, tHat2) {
     var i;
-    var A = [];
-    var nPts;
-    var C = [];
-    var X = [];
-    var det_C0_C1;
+    var A = []; /* Precomputed rhs for eqn	*/
+    var nPts; /* Number of pts in sub-curve */
+    var C = []; /* Matrix C		*/
+    var X = []; /* Matrix X			*/
+    var det_C0_C1; /* Determinants of matrices	*/
     var det_C0_X;
     var det_X_C1;
-    var alpha_l;
+    var alpha_l; /* Alpha values, left and right	*/
     var alpha_r;
-    var tmp;
-    var bezCurve = [];
+    var tmp; /* Utility variable		*/
+    var bezCurve = []; /* RETURN bezier curve ctl pts	*/
     nPts = last - first + 1;
+    /* Compute the A's	*/
     for (i = 0; i < nPts; i++) {
         var v1;
         var v2;
@@ -278,6 +296,7 @@ function GenerateBezier(d, first, last, uPrime, tHat1, tHat2) {
         A[i][0] = v1;
         A[i][1] = v2;
     }
+    /* Create the C and X matrices	*/
     C[0] = [];
     C[1] = [];
     C[0][0] = 0.0;
@@ -302,14 +321,17 @@ function GenerateBezier(d, first, last, uPrime, tHat1, tHat2) {
         X[0] += VDot(A[i][0], tmp);
         X[1] += VDot(A[i][1], tmp);
     }
+    /* Compute the determinants of C and X	*/
     det_C0_C1 = C[0][0] * C[1][1] - C[1][0] * C[0][1];
     det_C0_X = C[0][0] * X[1] - C[0][1] * X[0];
     det_X_C1 = X[0] * C[1][1] - X[1] * C[0][1];
+    /* Finally, derive alpha values	*/
     if (det_C0_C1 == 0.0) {
         det_C0_C1 = (C[0][0] * C[1][1]) * 10e-12;
     }
     alpha_l = det_X_C1 / det_C0_C1;
     alpha_r = det_C0_X / det_C0_C1;
+    /*  If alpha negative, use the Wu/Barsky heuristic (see text) */
     if (alpha_l < 0.0 || alpha_r < 0.0) {
         var dist = VDist(d[last], d[first]) / 3.0;
         bezCurve[0] = {};
@@ -322,6 +344,10 @@ function GenerateBezier(d, first, last, uPrime, tHat1, tHat2) {
         bezCurve[1] = VAdd(bezCurve[0], VScale(tHat1, dist));
         return bezCurve;
     }
+    /*  First and last control points of the Bezier curve are */
+    /*  positioned exactly at the first and last data points */
+    /*  Control points 1 and 2 are positioned an alpha distance out */
+    /*  on the tangent vectors, left and right, respectively */
     bezCurve[0] = {};
     bezCurve[0].x = d[first].x;
     bezCurve[0].y = d[first].y;
@@ -332,52 +358,72 @@ function GenerateBezier(d, first, last, uPrime, tHat1, tHat2) {
     bezCurve[1] = VAdd(bezCurve[0], VScale(tHat1, alpha_l));
     return bezCurve;
 }
+/*
+ *  Reparameterize:
+ *	Given set of points and their parameterization, try to find
+ *   a better parameterization.
+ */
 function Reparameterize(d, first, last, u, bezCurve) {
     var i;
-    var uPrime = [];
+    var uPrime = []; /*  New parameter values	*/
     for (i = first; i <= last; i++) {
         uPrime[i - first] = NewtonRaphsonRootFind(bezCurve, d[i], u[i - first]);
     }
     return uPrime;
 }
+/*
+ *  NewtonRaphsonRootFind :
+ *	Use Newton-Raphson iteration to find better root.
+ */
 function NewtonRaphsonRootFind(Q, P, u) {
     var numerator;
     var denominator;
-    var Q1 = [];
-    var Q2 = [];
+    var Q1 = []; // Q'
+    var Q2 = []; // Q''
     var Q_u;
     var Q1_u;
-    var Q2_u;
-    var uPrime;
+    var Q2_u; /*u evaluated at Q, Q', & Q''	*/
+    var uPrime; /*  Improved u			*/
     var i;
+    /* Compute Q(u)	*/
     Q_u = Bezier(3, Q, u);
+    /* Generate control vertices for Q'	*/
     for (i = 0; i <= 2; i++) {
         Q1[i] = {};
         Q1[i].x = (Q[i + 1].x - Q[i].x) * 3.0;
         Q1[i].y = (Q[i + 1].y - Q[i].y) * 3.0;
     }
+    /* Generate control vertices for Q'' */
     for (i = 0; i <= 1; i++) {
         Q2[i] = {};
         Q2[i].x = (Q1[i + 1].x - Q1[i].x) * 2.0;
         Q2[i].y = (Q1[i + 1].y - Q1[i].y) * 2.0;
     }
+    /* Compute Q'(u) and Q''(u)	*/
     Q1_u = Bezier(2, Q1, u);
     Q2_u = Bezier(1, Q2, u);
+    /* Compute f(u)/f'(u) */
     numerator = (Q_u.x - P.x) * (Q1_u.x) + (Q_u.y - P.y) * (Q1_u.y);
     denominator = (Q1_u.x) * (Q1_u.x) + (Q1_u.y) * (Q1_u.y) + (Q_u.x - P.x) * (Q2_u.x) + (Q_u.y - P.y) * (Q2_u.y);
+    /* u = u - f(u)/f'(u) */
     uPrime = u - (numerator / denominator);
     return uPrime;
 }
+/*
+ *  Bezier :
+ *  	Evaluate a Bezier curve at a particular parameter value
+ */
 function Bezier(degree, V, t) {
     var i;
     var j;
-    var Q;
-    var Vtemp = [];
+    var Q; /* Point on curve at parameter t	*/
+    var Vtemp = []; /* Local copy of control points		*/
     for (i = 0; i <= degree; i++) {
         Vtemp[i] = { x: 0, y: 0 };
         Vtemp[i].x = V[i].x;
         Vtemp[i].y = V[i].y;
     }
+    /* Triangle computation	*/
     for (i = 1; i <= degree; i++) {
         for (j = 0; j <= degree - i; j++) {
             Vtemp[j].x = (1.0 - t) * Vtemp[j].x + t * Vtemp[j + 1].x;
@@ -387,6 +433,10 @@ function Bezier(degree, V, t) {
     Q = Vtemp[0];
     return Q;
 }
+/*
+ *  B0, B1, B2, B3 :
+ *	Bezier multipliers
+ */
 function B0(u) {
     var tmp = 1.0 - u;
     return (tmp * tmp * tmp);
@@ -402,6 +452,10 @@ function B2(u) {
 function B3(u) {
     return (u * u * u);
 }
+/*
+ * ComputeLeftTangent, ComputeRightTangent, ComputeCenterTangent :
+ *Approximate unit tangents at endpoints and "center" of digitized curve
+ */
 function ComputeLeftTangent(d, end) {
     var tHat1;
     tHat1 = VSub(d[end + 1], d[end]);
@@ -436,9 +490,14 @@ function ComputeCenterTangent_oud(d, center) {
     tHatR.y = -tHatCenter.y;
     return [tHatL, tHatR];
 }
+/*
+ *  ChordLengthParameterize :
+ *	Assign parameter values to digitized points
+ *	using relative distances between points.
+ */
 function ChordLengthParameterize(d, first, last) {
     var i;
-    var u = [];
+    var u = []; /*  Parameterization		*/
     u[0] = 0.0;
     for (i = first + 1; i <= last; i++) {
         u[i - first] = u[i - first - 1] + VDist(d[i], d[i - 1]);
@@ -448,12 +507,17 @@ function ChordLengthParameterize(d, first, last) {
     }
     return u;
 }
+/*
+ *  ComputeMaxError :
+ *	Find the maximum squared distance of digitized points
+ *	to fitted curve.
+*/
 function ComputeMaxError(d, first, last, bezCurve, u) {
     var i;
-    var maxDist;
-    var dist;
-    var P;
-    var v;
+    var maxDist; /*  Maximum error		*/
+    var dist; /*  Current error		*/
+    var P; /*  Point on curve		*/
+    var v; /*  Vector from point to curve	*/
     var splitPoint;
     splitPoint = (last - first + 1) / 2;
     maxDist = 0.0;

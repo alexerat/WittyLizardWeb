@@ -3,10 +3,10 @@
 # http://symfony.com/doc/current/best_practices/configuration.html#infrastructure-related-configuration
 parameters:
 
-    database.host: development.czc3frgnbanm.ap-southeast-2.rds.amazonaws.com
+    database.host: 130.211.247.213
     database.port: 3306
     database.name: Users
-    database.user: root
+    database.user: whiteboard
     database.password: u;Fq>5QPqVvAhsCy
 
     # You should uncomment this if you want use pdo_sqlite

@@ -1,4 +1,10 @@
 {
+    "compilerOptions": {
+        "target": "es5",
+        "lib": [ "es6", "dom", "dom.iterable", "scripthost" ],
+        "watch": true
+    },
+
     "files":
     [
         "./tutorial/WhiteBoardController.ts",
@@ -12,7 +18,6 @@
         "./tutorial/Elements/UploadView.ts",
         "./tutorial/Elements/HighlightElement.ts",
         "./tutorial/Elements/HighlightView.ts",
-        "./tutorial/TextWorker.ts",
         "./tutorial/fitcurves.ts",
         "./typings/react.d.ts",
         "./typings/react-dom.d.ts",

@@ -4,7 +4,7 @@ security:
     encoders:
         AppBundle\Entity\UserTable:
             algorithm: bcrypt
-
+            
     # http://symfony.com/doc/current/book/security.html#where-do-users-come-from-user-providers
     providers:
         user_db_provider:

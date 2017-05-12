@@ -3,6 +3,13 @@ var EraseSize = {
     MEDIUM: 5,
     LARGE: 10
 };
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 var SVGSpinner = React.createClass({ displayName: 'SVGSpinner',
     render: function () {
         var background = React.createElement('circle', {
@@ -21,6 +28,13 @@ var SVGSpinner = React.createClass({ displayName: 'SVGSpinner',
         return React.createElement('g', null, background, bar, highlight);
     }
 });
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 var SVGProgress = React.createClass({ displayName: 'SVGProgress',
     render: function () {
         var background = React.createElement('circle', {
@@ -38,6 +52,13 @@ var SVGProgress = React.createClass({ displayName: 'SVGProgress',
         return React.createElement('g', null, text, background, bar);
     }
 });
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 var SVGComponent = React.createClass({ displayName: 'SVGComponent',
     render: function () {
         var displayElements = [];
@@ -107,6 +128,13 @@ var SVGComponent = React.createClass({ displayName: 'SVGComponent',
         }, displayElements);
     }
 });
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 var ControlComponent = React.createClass({ displayName: 'ControlComponent',
     render: function () {
         var state = this.props.state;
@@ -173,6 +201,13 @@ var ControlComponent = React.createClass({ displayName: 'ControlComponent',
         var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, modeButtons);
         return React.createElement('div', { className: 'large-1 small-2 columns', id: 'whiteboard-controler' }, modeCont, pallete);
     } });
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
     getInitialState: function () {
         return {
@@ -254,6 +289,13 @@ var WhiteBoardView = React.createClass({ displayName: 'Whiteboard',
             state: { mode: state.mode, components: state.components, palleteState: state.palleteState, eraseSize: state.eraseSize },
             dispatcher: { modeChange: dispatcher.modeChange, palleteChange: dispatcher.palleteChange, changeEraseSize: dispatcher.changeEraseSize }
         });
+        /* TODO: Paste does not currently work in context.
+        let contextMenu = React.createElement('menu',
+            { type: 'context', id: 'whiteboard-context', key: 'context' },
+            React.createElement('menuitem', { label: 'Copy',  onClick: dispatcher.contextCopy }),
+            React.createElement('menuitem', { label: 'Cut',   onClick: dispatcher.contextCut }),
+            React.createElement('menuitem', { label: 'Paste', onClick: dispatcher.contextPaste }));
+        */
         var contextMenu = React.createElement('menu', { type: 'context', id: 'whiteboard-context', key: 'context' }, React.createElement('menuitem', { label: 'Copy', onClick: dispatcher.contextCopy }), React.createElement('menuitem', { label: 'Cut', onClick: dispatcher.contextCut }));
         var infoElems = [];
         for (var i = 0; i < state.infoElements.size; i++) {
