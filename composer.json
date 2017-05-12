@@ -54,7 +54,7 @@
             "@symfony-scripts"
         ],
         "post-deploy-cmd": [
-            "chmod -R ug+w $APP_DIR/var && mkdir $APP_DIR/src/AppBundle/Resources && $APP_DIR/src/AppBundle/Resources/public && ln -s $APP_DIR/app/Resources/css $APP_DIR/src/AppBundle/Resources/public/css && ln -s $APP_DIR/app/Resources/js $APP_DIR/src/AppBundle/Resources/public/js"
+            "chmod -R ug+w $APP_DIR/var && mkdir $APP_DIR/src/AppBundle/Resources && mkdir $APP_DIR/src/AppBundle/Resources/public && ln -s $APP_DIR/app/Resources/css $APP_DIR/src/AppBundle/Resources/public/css && ln -s $APP_DIR/app/Resources/js $APP_DIR/src/AppBundle/Resources/public/js"
         ]
     },
     "config": {
