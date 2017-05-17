@@ -5,7 +5,7 @@ parameters:
     mailer_user: null
     mailer_password: null
     database.unix_socket: /cloudsql/wittylizard-162000:asia-east1:wittylizard-devsql
-    database.host: null
+    database.host: '130.211.247.213'
     database.port: 3306
     database.name: Users
     database.user: root
