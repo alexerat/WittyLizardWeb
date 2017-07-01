@@ -4,11 +4,9 @@ parameters:
     mailer_host: 127.0.0.1
     mailer_user: null
     mailer_password: null
-    database.unix_socket: /cloudsql/wittylizard-162000:asia-east1:wittylizard-devsql
-    database.host: '130.211.247.213'
+    database.host: 146.148.89.71
     database.port: 3306
     database.name: Users
     database.user: root
-    database.password: nevermore!123
-
+    database.password: x19ifgHD3vID4ke3
     secret: 7e501ffeb426888ea59e63aa15b931a7f9d28d24

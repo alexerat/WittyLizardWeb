@@ -104,7 +104,7 @@ class TutorialRoomController extends Controller
             return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Server not assigned.'));
         }
 
-        $serverToken = $roomServer->getEndPoint();
+        $serverToken = 'https://rooms.wittylizard.com';
 
         $roomPart->setJoinTime(new \DateTime("now"));
 
@@ -308,7 +308,7 @@ class TutorialRoomController extends Controller
             return $this->render('tutorial/room-error.html.twig', array('errorInfo' => 'Server not assigned.'));
         }
 
-        $serverToken = $roomServer->getEndPoint();
+        $serverToken = 'https://rooms.wittylizard.com';
 
         $em->flush();
 

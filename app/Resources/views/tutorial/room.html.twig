@@ -219,9 +219,9 @@
             {
                 localStream = mediaStream;
 
-                mediaSocket = io("{{serverToken}}" + ':9001/media', { query: "sessId=" + "{{sessionId}}" });
+                mediaSocket = io('https://rooms.wittylizard.com:995/media', { query: "sessId=" + "{{sessionId}}" });
                 initMedia();
-                boardSocket = io("{{serverToken}}" + ':9001/board', { query: "sessId=" + "{{sessionId}}" });
+                boardSocket = io('https://rooms.wittylizard.com:995/board', { query: "sessId=" + "{{sessionId}}" });
                 initBoard();
             });
             p.catch(function(err) { console.log(err.name); });

@@ -4,7 +4,9 @@ manual_scaling:
   instances: 1
 env_variables:
   DATABASE_HOST: '130.211.247.213'
-  DATABASE_USER: 'whiteboard'
-  DATABASE_PASSWORD: 'u;Fq>5QPqVvAhsCy'
+  DATABASE_PORT: '3306'
+  DATABASE_NAME: 'Users'
+  DATABASE_USER: 'root'
+  DATABASE_PASSWORD: 'x19ifgHD3vID4ke3'
 runtime_config:
     document_root: web
