@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "lib": [ "es6", "dom", "dom.iterable", "scripthost" ],
+        "watch": true
+    },
+
+    "files":
+    [
+        "./app/Resources/js/tutorial/WhiteBoardController.ts",
+        "./app/Resources/js/tutorial/WhiteBoardWorker.ts",
+        "./app/Resources/js/tutorial/WhiteBoardView.ts",
+        "./app/Resources/js/tutorial/Elements/FreeCurveElement.ts",
+        "./app/Resources/js/tutorial/Elements/FreeCurveView.ts",
+        "./app/Resources/js/tutorial/Elements/WhiteBoardTextElement.ts",
+        "./app/Resources/js/tutorial/Elements/WhiteBoardTextView.ts",
+        "./app/Resources/js/tutorial/Elements/UploadElement.ts",
+        "./app/Resources/js/tutorial/Elements/UploadView.ts",
+        "./app/Resources/js/tutorial/Elements/HighlightElement.ts",
+        "./app/Resources/js/tutorial/Elements/HighlightView.ts",
+        "./app/Resources/js/tutorial/fitcurves.ts",
+        "./app/Resources/js/typings/immutable.d.ts",
+        "./app/Resources/js/typings/whiteboard.d.ts"
+    ]
+}

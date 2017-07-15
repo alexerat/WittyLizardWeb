@@ -27,7 +27,7 @@ var UploadView;
         IFRAME: 'IFRAME',
         LINK: 'LINK'
     };
-    var BUCKETURL = 'https://wittylizard-162000.appspot.com/whiteboard_storage';
+    var BUCKETURL = 'https://wittylizard-168912.appspot.com/UserUploads';
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                                                                                                                        //
     //                                                                                                                                                        //
@@ -57,9 +57,7 @@ var UploadView;
     var ElementView = (function (_super) {
         __extends(ElementView, _super);
         function ElementView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React function to determine if component should update.
          *
@@ -276,9 +274,7 @@ var UploadView;
     var ModeView = (function (_super) {
         __extends(ModeView, _super);
         function ModeView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React render function
          *
@@ -310,9 +306,7 @@ var UploadView;
     var PalleteView = (function (_super) {
         __extends(PalleteView, _super);
         function PalleteView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React render function
          *
@@ -334,9 +328,7 @@ var UploadView;
     var CustomContextView = (function (_super) {
         __extends(CustomContextView, _super);
         function CustomContextView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React render function
          *

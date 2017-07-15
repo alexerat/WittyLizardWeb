@@ -1,4 +1,5 @@
-/// <reference path="../typings/lib.webworker.d.ts" />
+declare function postMessage(message: any, transfer?: any[]): void;
+declare function importScripts(...urls: string[]): void;
 
 /**
  * Message types that can be sent between the user and server.

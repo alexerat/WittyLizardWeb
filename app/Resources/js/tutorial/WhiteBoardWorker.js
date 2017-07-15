@@ -1,4 +1,3 @@
-/// <reference path="../typings/lib.webworker.d.ts" />
 /**
  * Message types that can be sent between the user and server.
  */

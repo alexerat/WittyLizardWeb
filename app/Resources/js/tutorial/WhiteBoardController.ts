@@ -768,21 +768,21 @@ interface ObjectConstructor {
 }
 interface WhiteBoardDispatcher
 {
-    elementMouseOver: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseOut: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseDown: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseMove: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseUp: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseClick: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
-    elementMouseDoubleClick: (id: number, e: React.MouseEvent, component?: number, subId?: number) => void;
+    elementMouseOver: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseOut: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseDown: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseMove: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseUp: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseClick: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
+    elementMouseDoubleClick: (id: number, e: React.MouseEvent<Element>, component?: number, subId?: number) => void;
 
-    elementTouchStart: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
-    elementTouchMove: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
-    elementTouchEnd: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
-    elementTouchCancel: (id: number, e: React.TouchEvent, component?: number, subId?: number) => void;
+    elementTouchStart: (id: number, e: React.TouchEvent<Element>, component?: number, subId?: number) => void;
+    elementTouchMove: (id: number, e: React.TouchEvent<Element>, component?: number, subId?: number) => void;
+    elementTouchEnd: (id: number, e: React.TouchEvent<Element>, component?: number, subId?: number) => void;
+    elementTouchCancel: (id: number, e: React.TouchEvent<Element>, component?: number, subId?: number) => void;
 
-    elementDragOver: (id: number, e: React.DragEvent, component?: number, subId?: number) => void;
-    elementDrop: (id: number, e: React.DragEvent, component?: number, subId?: number) => void;
+    elementDragOver: (id: number, e: React.DragEvent<Element>, component?: number, subId?: number) => void;
+    elementDrop: (id: number, e: React.DragEvent<Element>, component?: number, subId?: number) => void;
 
     palleteChange: (change: BoardPalleteChange) => void;
     changeEraseSize: (newSize: number) => void;
@@ -790,26 +790,26 @@ interface WhiteBoardDispatcher
     clearAlert: (id: number) => void;
     modeChange: (newMode: string) => void;
 
-    mouseWheel: (e: React.WheelEvent) => void;
-    mouseDown: (e: React.MouseEvent) => void;
-    mouseMove: (e: React.MouseEvent) => void;
-    mouseUp: (e: React.MouseEvent) => void;
-    mouseClick: (e: React.MouseEvent) => void;
+    mouseWheel: (e: React.WheelEvent<Element>) => void;
+    mouseDown: (e: React.MouseEvent<Element>) => void;
+    mouseMove: (e: React.MouseEvent<Element>) => void;
+    mouseUp: (e: React.MouseEvent<Element>) => void;
+    mouseClick: (e: React.MouseEvent<Element>) => void;
 
-    touchStart: (e: React.TouchEvent) => void;
-    touchMove: (e: React.TouchEvent) => void;
-    touchEnd: (e: React.TouchEvent) => void;
-    touchCancel: (e: React.TouchEvent) => void;
+    touchStart: (e: React.TouchEvent<Element>) => void;
+    touchMove: (e: React.TouchEvent<Element>) => void;
+    touchEnd: (e: React.TouchEvent<Element>) => void;
+    touchCancel: (e: React.TouchEvent<Element>) => void;
 
-    contextCopy: (e: React.MouseEvent) => void;
-    contextCut: (e: React.MouseEvent) => void;
-    contextPaste: (e: React.MouseEvent) => void;
-    onCopy: (e: React.ClipboardEvent) => void;
-    onPaste: (e: React.ClipboardEvent) => void;
-    onCut: (e: React.ClipboardEvent) => void;
+    contextCopy: (e: React.MouseEvent<Element>) => void;
+    contextCut: (e: React.MouseEvent<Element>) => void;
+    contextPaste: (e: React.MouseEvent<Element>) => void;
+    onCopy: (e: React.ClipboardEvent<Element>) => void;
+    onPaste: (e: React.ClipboardEvent<Element>) => void;
+    onCut: (e: React.ClipboardEvent<Element>) => void;
 
-    dragOver: (e: React.DragEvent) => void;
-    drop: (e: React.DragEvent) => void;
+    dragOver: (e: React.DragEvent<Element>) => void;
+    drop: (e: React.DragEvent<Element>) => void;
 }
 
 interface Operation

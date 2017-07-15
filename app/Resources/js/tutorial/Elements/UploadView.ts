@@ -19,7 +19,7 @@ namespace UploadView
         LINK: 'LINK'
     };
 
-    const BUCKETURL = 'https://wittylizard-162000.appspot.com/whiteboard_storage';
+    const BUCKETURL = 'https://wittylizard-168912.appspot.com/UserUploads';
 
     /**
      * A description of the view state for elements in this component.
@@ -94,7 +94,6 @@ namespace UploadView
     */
     export class ElementView extends React.Component<any, {}>
     {
-        propTypes = {};
         props: ComponentProp;
 
         /** React function to determine if component should update.
@@ -390,8 +389,6 @@ namespace UploadView
     */
     export class ModeView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: ModeProp;
 
         /** React render function
@@ -426,8 +423,6 @@ namespace UploadView
     */
     export class PalleteView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: PalleteProp;
 
         /** React render function
@@ -449,8 +444,6 @@ namespace UploadView
     */
     export class CustomContextView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: PalleteProp;
 
         /** React render function

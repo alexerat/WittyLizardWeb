@@ -142,63 +142,63 @@ var ControlComponent = React.createClass({ displayName: 'ControlComponent',
         var modeButtons = [];
         var pallete = null;
         var eraseButt = React.createElement('button', {
-            className: 'button mode-button', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); },
+            key: 'eraseButton', className: 'button mode-button', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); },
             onClick: function () { return dispatcher.modeChange(BoardModes.ERASE); }
         }, 'E');
         var selectButt = React.createElement('button', {
-            className: 'button mode-button', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); },
+            key: 'selectButton', className: 'button mode-button', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); },
             onClick: function () { return dispatcher.modeChange(BoardModes.SELECT); }
         }, 'S');
         if (state.mode == BoardModes.ERASE) {
             eraseButt = React.createElement('button', {
-                className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                key: 'eraseButton', className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
             }, 'E');
             var smallButt = React.createElement('button', {
-                className: 'button mode-button', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); },
+                key: 'smallButton', className: 'button mode-button', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); },
                 onClick: function () { return dispatcher.changeEraseSize(EraseSize.SMALL); }
             }, 'S');
             var medButt = React.createElement('button', {
-                className: 'button mode-button', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); },
+                key: 'mediumButton', className: 'button mode-button', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); },
                 onClick: function () { return dispatcher.changeEraseSize(EraseSize.MEDIUM); }
             }, 'M');
             var largeButt = React.createElement('button', {
-                className: 'button mode-button', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); },
+                key: 'largeButton', className: 'button mode-button', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); },
                 onClick: function () { return dispatcher.changeEraseSize(EraseSize.LARGE); }
             }, 'L');
             if (state.eraseSize == EraseSize.SMALL) {
                 smallButt = React.createElement('button', {
-                    className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                    key: 'smallButton', className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'S');
             }
             else if (state.eraseSize == EraseSize.MEDIUM) {
                 medButt = React.createElement('button', {
-                    className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                    key: 'mediumButton', className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'M');
             }
             else if (state.eraseSize == EraseSize.LARGE) {
                 largeButt = React.createElement('button', {
-                    className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                    key: 'largeButton', className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
                 }, 'L');
             }
             var sizeCont = React.createElement('div', {
-                className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
+                key: 'sizeContainer', className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
             }, smallButt, medButt, largeButt);
-            pallete = React.createElement('div', null, sizeCont);
+            pallete = React.createElement('div', { key: 'pallete' }, sizeCont);
         }
         else if (state.mode == BoardModes.SELECT) {
             selectButt = React.createElement('button', {
-                className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
+                key: 'selectButton', className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function (e) { e.preventDefault(); }, onClick: function () { }
             }, 'S');
         }
         else if (state.mode != '') {
-            pallete = React.createElement(state.components.get(state.mode).PalleteView, { state: state.palleteState, dispatcher: dispatcher.palleteChange });
+            pallete = React.createElement(state.components.get(state.mode).PalleteView, { key: 'pallete', state: state.palleteState, dispatcher: dispatcher.palleteChange });
         }
         modeButtons.push(selectButt);
         modeButtons.push(eraseButt);
         state.components.forEach(function (component) {
             modeButtons.push(React.createElement(component.ModeView, { key: component.componentName, mode: state.mode, dispatcher: dispatcher.modeChange }));
         });
-        var modeCont = React.createElement('div', { className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, modeButtons);
+        var modeCont = React.createElement('div', { key: 'modeContainer', className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup' }, modeButtons);
         return React.createElement('div', { className: 'large-1 small-2 columns', id: 'whiteboard-controler' }, modeCont, pallete);
     } });
 /*

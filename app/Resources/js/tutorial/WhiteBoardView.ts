@@ -113,7 +113,7 @@ render: function()
  *
  *
  */
-var SVGComponent = React.createClass({displayName: 'SVGComponent',
+let SVGComponent = React.createClass({displayName: 'SVGComponent',
 render: function()
 {
     let displayElements = [];
@@ -143,33 +143,33 @@ render: function()
     {
         let dispater: ComponentDispatcher =
         {
-            mouseOver:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseOver:   (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseOver(id, e, component, subComp); }; })(element.id),
-            mouseOut:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseOut:   (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseOut(id, e, component, subComp); }; })(element.id),
-            mouseDown:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseDown:   (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseDown(id, e, component, subComp); }; })(element.id),
-            mouseMove:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseMove:   (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseMove(id, e, component, subComp); }; })(element.id),
-            mouseUp:   (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseUp:   (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseUp(id, e, component, subComp); }; })(element.id),
-            mouseClick:  (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            mouseClick:  (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseClick(id, e, component, subComp); }; })(element.id),
-            doubleClick: (function(id) { return (e: React.MouseEvent, component?: number, subComp?: number) =>
+            doubleClick: (function(id) { return (e: React.MouseEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementMouseDoubleClick(id, e, component, subComp); }; })(element.id),
 
-            touchStart: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
+            touchStart: (function(id) { return (e: React.TouchEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchStart(id, e, component, subComp); }; })(element.id),
-            touchMove: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
+            touchMove: (function(id) { return (e: React.TouchEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchMove(id, e, component, subComp); }; })(element.id),
-            touchEnd: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
+            touchEnd: (function(id) { return (e: React.TouchEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchEnd(id, e, component, subComp); }; })(element.id),
-            touchCancel: (function(id) { return (e: React.TouchEvent, component?: number, subComp?: number) =>
+            touchCancel: (function(id) { return (e: React.TouchEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementTouchCancel(id, e, component, subComp); }; })(element.id),
 
-            dragOver: (function(id) { return (e: React.DragEvent, component?: number, subComp?: number) =>
+            dragOver: (function(id) { return (e: React.DragEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementDragOver(id, e, component, subComp); }; })(element.id),
-            drop: (function(id) { return (e: React.DragEvent, component?: number, subComp?: number) =>
+            drop: (function(id) { return (e: React.DragEvent<Element>, component?: number, subComp?: number) =>
                 { dispatcher.elementDrop(id, e, component, subComp); }; })(element.id),
         };
 
@@ -195,7 +195,7 @@ render: function()
  *
  *
  */
-var ControlComponent = React.createClass({displayName: 'ControlComponent',
+let ControlComponent = React.createClass({displayName: 'ControlComponent',
 render: function()
 {
     let state : WhiteBoardViewState = this.props.state as WhiteBoardViewState;
@@ -204,79 +204,79 @@ render: function()
     let modeButtons = [];
 
     let pallete = null;
-    let eraseButt = React.createElement('button',
+    let eraseButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
     {
-        className: 'button mode-button', id: 'erase-button', onKeyUp: function(e) { e.preventDefault(); },
+        key: 'eraseButton', className: 'button mode-button', id: 'erase-button', onKeyUp: function(e) { e.preventDefault(); },
         onClick: () => dispatcher.modeChange(BoardModes.ERASE)
     }, 'E');
-    let selectButt = React.createElement('button',
+    let selectButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
     {
-        className: 'button mode-button', id: 'select-button', onKeyUp: function(e) { e.preventDefault(); },
+        key: 'selectButton', className: 'button mode-button', id: 'select-button', onKeyUp: function(e) { e.preventDefault(); },
         onClick: () => dispatcher.modeChange(BoardModes.SELECT)
     }, 'S');
 
     if(state.mode == BoardModes.ERASE)
     {
-        eraseButt = React.createElement('button',
+        eraseButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
         {
-            className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
+             key: 'eraseButton', className: 'button mode-button pressed-mode', id: 'erase-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
         }, 'E');
 
-        let smallButt = React.createElement('button',
+        let smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
         {
-            className: 'button mode-button', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); },
+             key: 'smallButton', className: 'button mode-button', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); },
             onClick: () => dispatcher.changeEraseSize(EraseSize.SMALL)
         }, 'S');
-        let medButt   = React.createElement('button',
+        let medButt   = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
         {
-            className: 'button mode-button', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); },
+            key: 'mediumButton', className: 'button mode-button', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); },
             onClick: () => dispatcher.changeEraseSize(EraseSize.MEDIUM)
         }, 'M');
-        let largeButt = React.createElement('button',
+        let largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
         {
-            className: 'button mode-button', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); },
+            key: 'largeButton', className: 'button mode-button', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); },
             onClick: () => dispatcher.changeEraseSize(EraseSize.LARGE)
         }, 'L');
 
         if(state.eraseSize == EraseSize.SMALL)
         {
-            smallButt = React.createElement('button',
+            smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
-                className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
+                 key: 'smallButton', className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
             }, 'S');
         }
         else if(state.eraseSize == EraseSize.MEDIUM)
         {
-            medButt = React.createElement('button',
+            medButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
-                className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
+                 key: 'mediumButton', className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
             }, 'M');
         }
         else if(state.eraseSize == EraseSize.LARGE)
         {
-            largeButt = React.createElement('button',
+            largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
-                className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
+                 key: 'largeButton', className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
             }, 'L');
         }
 
         let sizeCont = React.createElement('div',
         {
-            className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
+             key: 'sizeContainer', className: 'whiteboard-controlgroup', id: 'whiteboard-sizegroup'
         }, smallButt, medButt, largeButt);
 
-        pallete = React.createElement('div', null, sizeCont);
+        pallete = React.createElement('div', { key: 'pallete' }, sizeCont);
     }
     else if(state.mode == BoardModes.SELECT)
     {
-        selectButt = React.createElement('button',
+        selectButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
         {
-            className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
+            key: 'selectButton', className: 'button mode-button pressed-mode', id: 'select-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
         }, 'S');
     }
     else if(state.mode != '')
     {
-        pallete = React.createElement(state.components.get(state.mode).PalleteView, { state: state.palleteState, dispatcher: dispatcher.palleteChange });
+        pallete = React.createElement(state.components.get(state.mode).PalleteView, { key: 'pallete', state: state.palleteState, dispatcher: dispatcher.palleteChange });
     }
 
     modeButtons.push(selectButt);
@@ -287,7 +287,7 @@ render: function()
         modeButtons.push(React.createElement(component.ModeView, { key: component.componentName, mode: state.mode, dispatcher: dispatcher.modeChange }));
     });
 
-    let modeCont = React.createElement('div', {className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup'}, modeButtons);
+    let modeCont = React.createElement('div', { key: 'modeContainer', className: 'whiteboard-controlgroup', id: 'whiteboard-modegroup'}, modeButtons);
     return React.createElement('div', {className: 'large-1 small-2 columns', id: 'whiteboard-controler'}, modeCont, pallete);
 }});
 
@@ -299,7 +299,7 @@ render: function()
  *
  *
  */
-var WhiteBoardView = React.createClass({displayName: 'Whiteboard',
+let WhiteBoardView = React.createClass({displayName: 'Whiteboard',
 getInitialState: function()
 {
     return {
@@ -324,38 +324,38 @@ getInitialState: function()
         {
             palleteChange:           (change: BoardPalleteChange) => {},
             changeEraseSize:         (newSize: number)            => {},
-            elementMouseOver:        (id: number, e: React.MouseEvent)  => {},
-            elementMouseOut:         (id: number, e: React.MouseEvent)  => {},
-            elementMouseDown:        (id: number, e: React.MouseEvent)  => {},
-            elementMouseMove:        (id: number, e: React.MouseEvent)  => {},
-            elementMouseUp:          (id: number, e: React.MouseEvent)  => {},
-            elementMouseClick:       (id: number, e: React.MouseEvent)  => {},
-            elementMouseDoubleClick: (id: number, e: React.MouseEvent)  => {},
-            elementTouchStart:       (id: number, e: React.TouchEvent)  => {},
-            elementTouchMove:        (id: number, e: React.TouchEvent)  => {},
-            elementTouchEnd:         (id: number, e: React.TouchEvent)  => {},
-            elementTouchCancel:      (id: number, e: React.TouchEvent)  => {},
-            elementDragOver:         (id: number, e: React.DragEvent)   => {},
-            elementDrop:             (id: number, e: React.DragEvent)   => {},
+            elementMouseOver:        (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseOut:         (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseDown:        (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseMove:        (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseUp:          (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseClick:       (id: number, e: React.MouseEvent<Element>)  => {},
+            elementMouseDoubleClick: (id: number, e: React.MouseEvent<Element>)  => {},
+            elementTouchStart:       (id: number, e: React.TouchEvent<Element>)  => {},
+            elementTouchMove:        (id: number, e: React.TouchEvent<Element>)  => {},
+            elementTouchEnd:         (id: number, e: React.TouchEvent<Element>)  => {},
+            elementTouchCancel:      (id: number, e: React.TouchEvent<Element>)  => {},
+            elementDragOver:         (id: number, e: React.DragEvent<Element>)   => {},
+            elementDrop:             (id: number, e: React.DragEvent<Element>)   => {},
             clearAlert:              (id: number)                 => {},
             modeChange:              (newMode: string)            => {},
-            onCopy:                  (e: React.ClipboardEvent)          => {},
-            onCut:                   (e: React.ClipboardEvent)          => {},
-            onPaste:                 (e: React.ClipboardEvent)          => {},
-            contextCopy:             (e: React.MouseEvent)              => {},
-            contextCut:              (e: React.MouseEvent)              => {},
-            contextPaste:            (e: React.MouseEvent)              => {},
-            mouseDown:               (e: React.MouseEvent)              => {},
-            mouseWheel:              (e: React.WheelEvent)              => {},
-            mouseMove:               (e: React.MouseEvent)              => {},
-            mouseUp:                 (e: React.MouseEvent)              => {},
-            mouseClick:              (e: React.MouseEvent)              => {},
-            touchStart:              (e: React.TouchEvent)              => {},
-            touchMove:               (e: React.TouchEvent)              => {},
-            touchEnd:                (e: React.TouchEvent)              => {},
-            touchCancel:             (e: React.TouchEvent)              => {},
-            dragOver:                (e: React.DragEvent)               => {},
-            drop:                    (e: React.DragEvent)               => {}
+            onCopy:                  (e: React.ClipboardEvent<Element>)          => {},
+            onCut:                   (e: React.ClipboardEvent<Element>)          => {},
+            onPaste:                 (e: React.ClipboardEvent<Element>)          => {},
+            contextCopy:             (e: React.MouseEvent<Element>)              => {},
+            contextCut:              (e: React.MouseEvent<Element>)              => {},
+            contextPaste:            (e: React.MouseEvent<Element>)              => {},
+            mouseDown:               (e: React.MouseEvent<Element>)              => {},
+            mouseWheel:              (e: React.WheelEvent<Element>)              => {},
+            mouseMove:               (e: React.MouseEvent<Element>)              => {},
+            mouseUp:                 (e: React.MouseEvent<Element>)              => {},
+            mouseClick:              (e: React.MouseEvent<Element>)              => {},
+            touchStart:              (e: React.TouchEvent<Element>)              => {},
+            touchMove:               (e: React.TouchEvent<Element>)              => {},
+            touchEnd:                (e: React.TouchEvent<Element>)              => {},
+            touchCancel:             (e: React.TouchEvent<Element>)              => {},
+            dragOver:                (e: React.DragEvent<Element>)               => {},
+            drop:                    (e: React.DragEvent<Element>)               => {}
         }
 
     } as WhiteBoardViewState;
@@ -425,7 +425,7 @@ render: function()
     {
         let alertMsg : AlertElement = state.alertElements.first();
 
-        let alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: (e: React.MouseEvent) => { dispatcher.clearAlert(0); } },
+        let alertElem = React.createElement('div', { className: 'alert callout alert-message', onClick: (e: React.MouseEvent<HTMLDivElement>) => { dispatcher.clearAlert(0); } },
             React.createElement('h5', null, alertMsg.type), React.createElement('p', null, alertMsg.message));
 
         return  (React.createElement("div", {className: "expanded row", id: "whiteboard-row"}, whitElem, contElem, alertElem, infoElems, contextMenu));

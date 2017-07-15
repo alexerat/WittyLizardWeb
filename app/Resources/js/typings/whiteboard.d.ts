@@ -158,21 +158,21 @@ interface ComponentViewState {
     getLock: boolean;
 }
 interface ComponentDispatcher {
-    mouseOver:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    mouseOut:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    mouseDown:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    mouseMove:   (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    mouseUp:     (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    mouseClick:  (e: React.MouseEvent, component?: number, subComp?: number) => void;
-    doubleClick: (e: React.MouseEvent, component?: number, subComp?: number) => void;
+    mouseOver:   (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    mouseOut:   (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    mouseDown:   (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    mouseMove:   (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    mouseUp:     (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    mouseClick:  (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
+    doubleClick: (e: React.MouseEvent<Element>, component?: number, subComp?: number) => void;
 
-    touchStart: (e: React.TouchEvent, component?: number, subComp?: number) => void;
-    touchMove: (e: React.TouchEvent, component?: number, subComp?: number) => void;
-    touchEnd: (e: React.TouchEvent, component?: number, subComp?: number) => void;
-    touchCancel: (e: React.TouchEvent, component?: number, subComp?: number) => void;
+    touchStart: (e: React.TouchEvent<Element>, component?: number, subComp?: number) => void;
+    touchMove: (e: React.TouchEvent<Element>, component?: number, subComp?: number) => void;
+    touchEnd: (e: React.TouchEvent<Element>, component?: number, subComp?: number) => void;
+    touchCancel: (e: React.TouchEvent<Element>, component?: number, subComp?: number) => void;
 
-    dragOver: (e: React.DragEvent, component?: number, subComp?: number) => void;
-    drop: (e: React.DragEvent, component?: number, subComp?: number) => void;
+    dragOver: (e: React.DragEvent<Element>, component?: number, subComp?: number) => void;
+    drop: (e: React.DragEvent<Element>, component?: number, subComp?: number) => void;
 }
 interface ComponentProp {
     state: ComponentViewState;

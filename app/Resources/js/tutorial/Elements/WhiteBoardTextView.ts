@@ -155,8 +155,6 @@ namespace WhiteBoardTextView {
     */
     export class ElementView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: ComponentProp;
 
         /** React function to determine if component should update.
@@ -205,11 +203,11 @@ namespace WhiteBoardTextView {
                             transform: 'translate(' + glyph.startAdvance + ',' + 0 + ')' + 'scale(1, -1)'
                         }
 
-                        glyphs.push(React.createElement('path', glyphArgs));
+                        glyphs.push(React.createElement<React.SVGAttributes<SVGPathElement>,SVGPathElement>('path', glyphArgs));
 
                         if(glyph.uline)
                         {
-                            glyphs.push(React.createElement('line',
+                            glyphs.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                             {
                                 x1: glyph.startAdvance, y1: 300,
                                 x2: glyph.startAdvance + glyph.xAdvance, y2: 300,
@@ -219,7 +217,7 @@ namespace WhiteBoardTextView {
 
                         if(glyph.oline)
                         {
-                            glyphs.push(React.createElement('line',
+                            glyphs.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                             {
                                 x1: glyph.startAdvance, y1: -1300,
                                 x2: glyph.startAdvance + glyph.xAdvance, y2: -1300,
@@ -229,7 +227,7 @@ namespace WhiteBoardTextView {
 
                         if(glyph.tline)
                         {
-                            glyphs.push(React.createElement('line',
+                            glyphs.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                             {
                                 x1: glyph.startAdvance, y1: -500,
                                 x2: glyph.startAdvance + glyph.xAdvance, y2: -500,
@@ -238,7 +236,7 @@ namespace WhiteBoardTextView {
                         }
                     }
 
-                    let newElem = React.createElement('g',
+                    let newElem = React.createElement<React.SVGAttributes<SVGSVGElement>,SVGSVGElement>('g',
                     {
                         key: textElem.lineNum, transform: 'scale(' + state.size / 1000 + ',' + state.size / 1000 + ')' +
                         'translate(' + sectionData.startPos + ', 0)'
@@ -248,7 +246,7 @@ namespace WhiteBoardTextView {
                 }
 
 
-                return React.createElement('g',
+                return React.createElement<React.SVGAttributes<SVGSVGElement>,SVGSVGElement>('g',
                 {
                     key: textElem.lineNum, transform: 'translate(' + 0 + ',' + (textElem.lineNum + 1) * (2 * state.size) + ')'
                 }, sections);
@@ -256,7 +254,7 @@ namespace WhiteBoardTextView {
 
             if(mode == BoardModes.SELECT && !state.isMoving && !state.isResizing && !state.remLock)
             {
-                borderBoxes.push(React.createElement('rect',
+                borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>("rect",
                 {
                     key: 'move', x: 0, y: 0, width: state.width, height: state.height,
                     fill: 'none', strokeWidth: state.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
@@ -266,7 +264,7 @@ namespace WhiteBoardTextView {
 
             if(state.cursor != null)
             {
-                hightLightBoxes.push(React.createElement('line',
+                hightLightBoxes.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                 {
                     x1: state.cursor.x, y1: state.cursor.y,
                     x2: state.cursor.x, y2: state.cursor.y + state.cursor.height,
@@ -280,7 +278,7 @@ namespace WhiteBoardTextView {
                 {
                     var selElem = state.cursorElems[i];
                     selCount++;
-                    hightLightBoxes.push(React.createElement('rect',
+                    hightLightBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
                     {
                         x: selElem.x, y: selElem.y, width: selElem.width, height: selElem.height,
                         fill: '#0066ff', stroke: 'none', fillOpacity: 0.3, key: selCount
@@ -289,7 +287,7 @@ namespace WhiteBoardTextView {
             }
             if(state.isEditing)
             {
-                borderBoxes.push(React.createElement('rect',
+                borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
                 {
                     key: 'locEdit', x: 0, y: 0, width: state.width, height: state.height,
                     fill: 'none', stroke: 'black', strokeWidth: 2, strokeDasharray: '5,5', className: 'blinking'
@@ -297,21 +295,21 @@ namespace WhiteBoardTextView {
 
                 if(!state.isMoving && !state.isResizing)
                 {
-                    borderBoxes.push(React.createElement('line',
+                    borderBoxes.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                     {
                         key: 'moveTop', x1: 0, y1: 0, x2: 0 + state.width - state.size * 0.25, y2: 0,
                         fill: 'none', strokeWidth: state.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
                         onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Interaction); }
                     }));
 
-                    borderBoxes.push(React.createElement('line',
+                    borderBoxes.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                     {
                         key: 'moveLeft', x1: 0, y1: 0, x2: 0, y2: 0 + state.height - state.size * 0.25,
                         fill: 'none', strokeWidth: state.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
                         onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Interaction); }
                     }));
 
-                    borderBoxes.push(React.createElement('line',
+                    borderBoxes.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                     {
                         key: 'resizeBottom', x1: 0, y1: 0 + state.height,
                         x2: 0 + state.width - state.size * 0.25, y2: 0 + state.height,
@@ -319,7 +317,7 @@ namespace WhiteBoardTextView {
                         onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Resize, ResizeComponents.Bottom); }
                     }));
 
-                    borderBoxes.push(React.createElement('line',
+                    borderBoxes.push(React.createElement<React.SVGAttributes<SVGLineElement>,SVGLineElement>('line',
                     {
                         key: 'resizeRight', x1: 0 + state.width, y1: 0,
                         x2: 0 + state.width, y2: 0 + state.height - state.size * 0.25,
@@ -327,7 +325,7 @@ namespace WhiteBoardTextView {
                         onMouseDown: (e) => { dispatcher.mouseDown(e, ViewComponents.Resize, ResizeComponents.Right); }
                     }));
 
-                    borderBoxes.push(React.createElement('rect',
+                    borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
                     {
                         key: 'resizeCorner', x: 0 + state.width - state.size * 0.25,
                         y: 0  + state.height - state.size * 0.25,
@@ -338,7 +336,7 @@ namespace WhiteBoardTextView {
             }
             else if(state.getLock)
             {
-                borderBoxes.push(React.createElement('rect',
+                borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
                 {
                     key: 'getEdit', x: 0, y: 0, width: state.width, height: state.height, fill: 'none',
                     stroke: 'red', strokeWidth: 2
@@ -346,14 +344,14 @@ namespace WhiteBoardTextView {
             }
             else if(state.remLock)
             {
-                borderBoxes.push(React.createElement('rect',
+                borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
                 {
                     key: 'remEdit', x: 0, y: 0, width: state.width, height: state.height,
                     fill: 'none', stroke: 'red', strokeWidth: 2, strokeDasharray: '5,5', className: 'blinking'
                 }));
             }
 
-            borderBoxes.push(React.createElement('rect',
+            borderBoxes.push(React.createElement<React.SVGAttributes<SVGRectElement>,SVGRectElement>('rect',
             {
                 key: 'selBox', x: 0, y: 0, width: state.width, height: state.height, fill: 'none',
                 opacity: 0, pointerEvents: 'fill',
@@ -361,7 +359,10 @@ namespace WhiteBoardTextView {
                 onClick: (e) => { if(e.detail == 2) { dispatcher.doubleClick(e); } }
             }));
 
-            return React.createElement('g', { transform: 'translate(' + state.x + ',' + state.y + ')' }, hightLightBoxes, lineElems, borderBoxes);
+            return React.createElement<React.SVGAttributes<SVGSVGElement>,SVGSVGElement>('g', 
+            { 
+                transform: 'translate(' + state.x + ',' + state.y + ')' 
+            }, hightLightBoxes, lineElems, borderBoxes);
         }
     }
 
@@ -382,14 +383,14 @@ namespace WhiteBoardTextView {
         {
             if(this.props.mode == MODENAME)
             {
-                return React.createElement('button',
+                return React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'text-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'T');
             }
             else
             {
-                return React.createElement('button',
+                return React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button', id: 'text-button', onKeyUp: function(e) { e.preventDefault(); },
                     onClick: () => { this.props.dispatcher(MODENAME) }
@@ -424,38 +425,39 @@ namespace WhiteBoardTextView {
             let olineButt;
             let justButt;
 
-            let blackButt = React.createElement('button',
+            
+            let blackButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.BLACK })
             });
-            let blueButt  = React.createElement('button',
+            let blueButt  = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.BLUE })
             });
-            let redButt   = React.createElement('button',
+            let redButt   = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.RED })
             });
-            let greenButt = React.createElement('button',
+            let greenButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.GREEN })
             });
 
-            let smallButt = React.createElement('button',
+            let smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.SMALL })
             }, 'S');
-            let medButt   = React.createElement('button',
+            let medButt   = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.MEDIUM })
             }, 'M');
-            let largeButt = React.createElement('button',
+            let largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.LARGE })
@@ -463,28 +465,28 @@ namespace WhiteBoardTextView {
 
             if(state.colour == 'black')
             {
-                blackButt = React.createElement('button',
+                blackButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == 'blue')
             {
-                blueButt = React.createElement('button',
+                blueButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == 'red')
             {
-                redButt = React.createElement('button',
+                redButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == 'green')
             {
-                greenButt = React.createElement('button',
+                greenButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
@@ -492,21 +494,21 @@ namespace WhiteBoardTextView {
 
             if(state.size == PalleteSize.SMALL)
             {
-                smallButt = React.createElement('button',
+                smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'S');
             }
             else if(state.size == PalleteSize.MEDIUM)
             {
-                medButt = React.createElement('button',
+                medButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'M');
             }
             else if(state.size == PalleteSize.LARGE)
             {
-                largeButt = React.createElement('button',
+                largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'L');
@@ -525,7 +527,7 @@ namespace WhiteBoardTextView {
 
             if(state.isBold)
             {
-                boldButt = React.createElement('button',
+                boldButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'bold-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.BOLD, data: false })
@@ -533,7 +535,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                boldButt = React.createElement('button',
+                boldButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'bold-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.BOLD, data: true })
@@ -542,7 +544,7 @@ namespace WhiteBoardTextView {
 
             if(state.isItalic)
             {
-                italButt = React.createElement('button',
+                italButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'italic-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.ITALIC, data: false })
@@ -550,7 +552,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                italButt = React.createElement('button',
+                italButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'italic-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.ITALIC, data: true })
@@ -559,7 +561,7 @@ namespace WhiteBoardTextView {
 
             if(state.isULine)
             {
-                ulineButt = React.createElement('button',
+                ulineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'uline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.UNDERLINE, data: false })
@@ -567,7 +569,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                ulineButt = React.createElement('button',
+                ulineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'uline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.UNDERLINE, data: true })
@@ -575,7 +577,7 @@ namespace WhiteBoardTextView {
             }
             if(state.isTLine)
             {
-                tlineButt = React.createElement('button',
+                tlineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'tline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.THROUGHLINE, data: false })
@@ -583,7 +585,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                tlineButt = React.createElement('button',
+                tlineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'tline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.THROUGHLINE, data: true })
@@ -591,7 +593,7 @@ namespace WhiteBoardTextView {
             }
             if(state.isOLine)
             {
-                olineButt = React.createElement('button',
+                olineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'oline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.OVERLINE, data: false })
@@ -599,7 +601,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                olineButt = React.createElement('button',
+                olineButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'oline-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.OVERLINE, data: true })
@@ -608,7 +610,7 @@ namespace WhiteBoardTextView {
 
             if(state.isJustified)
             {
-                justButt = React.createElement('button',
+                justButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button pressed-style', id: 'justify-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.JUSTIFIED, data: false })
@@ -616,7 +618,7 @@ namespace WhiteBoardTextView {
             }
             else
             {
-                justButt = React.createElement('button',
+                justButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button style-button', id: 'justify-button',
                     onKeyUp: function(e) { e.preventDefault(); }, onClick: () => dispatcher({ type: PalleteChangeType.JUSTIFIED, data: true })
@@ -641,8 +643,6 @@ namespace WhiteBoardTextView {
     */
     export class CustomContextView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: PalleteProp;
 
         /** React render function

@@ -4015,6 +4015,11 @@ const MessageTypes = {
          */
         private evaluateChanges(editData: EditData)
         {
+            // TODO: Remove debug code.
+            console.log("Edit data is:");
+            console.log(editData);
+
+
             let newLinePositions: Array<number> = [];
             let lineStartWord: number = 0;
             //let removedLines: Array<number> = [];
@@ -4032,6 +4037,9 @@ const MessageTypes = {
             {
                 insertData = this.splitText(editData.insertion.text);
                 insertStyle = editData.insertion.style;
+                console.log('Insertion detected. Data is:');
+                console.log(insertData);
+                console.log(insertStyle);
             }
 
             for(let i = 0; i < this.linePositions.length; i++)
@@ -4070,73 +4078,83 @@ const MessageTypes = {
             let wordCount: number = 0;
             let totalCount: number = 0;
 
-            for(let i = 0; i < this.wordData.length - 1; i++)
+            for(let i = 0; i < this.wordData.length; i++)
             {
-                if(nextWord == null)
+                if(this.wordData.length > 1)
+                {
+                    if(nextWord == null)
+                    {
+                        word = {
+                            startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
+                            wordLength: this.wordData[i].wordLength
+                        };
+
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
+
+                        for(let j = 0; j < editData.deletions.length; j++)
+                        {
+                            this.applyDeletion(word, editData.deletions[j]);
+                            this.applyDeletion(nextWord, editData.deletions[j]);
+                        }
+                    }
+                    else
+                    {
+                        word = nextWord;
+
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
+
+                        for(let j = 0; j < editData.deletions.length; j++)
+                        {
+                            this.applyDeletion(nextWord, editData.deletions[j]);
+                        }
+                    }
+
+                    while(word.startPos + word.wordLength == nextWord.startPos)
+                    {
+                        // Merge words and set nextWord to null.
+                        word.wordLength += nextWord.wordLength;
+
+                        let wordSeg = word.segments[word.segments.length - 1];
+                        let sty1 = wordSeg.style;
+                        let sty2 = nextWord.segments[0].style;
+
+                        for(let j = 0; j < nextWord.segments.length; j++)
+                        {
+                            nextWord.segments[j].startPos += word.wordLength;
+                        }
+
+                        if(sty1.style == sty2.style && sty1.weight == sty2.weight)
+                        {
+                            wordSeg.segmentLength += nextWord.segments[0].segmentLength;
+                            wordSeg.segmentAdvance = -1;
+                            word.segments.push(...nextWord.segments.slice(1, nextWord.segments.length));
+                        }
+                        else
+                        {
+                            word.segments.push(...nextWord.segments.slice(0, nextWord.segments.length));
+                        }
+
+                        i++;
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
+                    }
+                }
+                else
                 {
                     word = {
                         startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
                         wordLength: this.wordData[i].wordLength
                     };
-
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
-                    };
-
-                    for(let j = 0; j < editData.deletions.length; j++)
-                    {
-                        this.applyDeletion(word, editData.deletions[j]);
-                        this.applyDeletion(nextWord, editData.deletions[j]);
-                    }
                 }
-                else
-                {
-                    word = nextWord;
-
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
-                    };
-
-                    for(let j = 0; j < editData.deletions.length; j++)
-                    {
-                        this.applyDeletion(nextWord, editData.deletions[j]);
-                    }
-                }
-
-                while(word.startPos + word.wordLength == nextWord.startPos)
-                {
-                    // Merge words and set nextWord to null.
-                    word.wordLength += nextWord.wordLength;
-
-                    let wordSeg = word.segments[word.segments.length - 1];
-                    let sty1 = wordSeg.style;
-                    let sty2 = nextWord.segments[0].style;
-
-                    for(let j = 0; j < nextWord.segments.length; j++)
-                    {
-                        nextWord.segments[j].startPos += word.wordLength;
-                    }
-
-                    if(sty1.style == sty2.style && sty1.weight == sty2.weight)
-                    {
-                        wordSeg.segmentLength += nextWord.segments[0].segmentLength;
-                        wordSeg.segmentAdvance = -1;
-                        word.segments.push(...nextWord.segments.slice(1, nextWord.segments.length));
-                    }
-                    else
-                    {
-                        word.segments.push(...nextWord.segments.slice(0, nextWord.segments.length));
-                    }
-
-                    i++;
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
-                    };
-                }
-
+                
                 // Push the current line foward to include this word.
                 while(newLinePositions[oldLineIndex] > word.startPos)
                 {
@@ -4573,7 +4591,7 @@ const MessageTypes = {
                                             newLength += splitSegments[k].segmentLength;
                                         }
 
-                                        let startSegments = [...splitSegments, ...newSegments];
+                                        let startSegments: Array<any> = [...splitSegments, ...newSegments];
 
                                         if(segIndex > 0)
                                         {
@@ -4901,24 +4919,27 @@ const MessageTypes = {
                             wordCount++;
                         }
 
-                        // Check for new lines.
-                        let spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
-                        let spacesEnd = insertData[insertData.length - 1].start;
-                        let startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
-                        let newLineIndex = startSpaces.indexOf('\n');
-                        let runningPos = spacesStart;
-                        while(newLineIndex >= 0)
+                        if(insertData.length > 1)
                         {
-                            runningPos += newLineIndex;
-                            startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
-                            newLinePositions.splice(currentLine, 0, runningPos);
-                            newLineData[currentLine] = { startWord: totalCount, count: wordCount };
-                            currentLine++;
-                            totalCount += wordCount;
-                            wordCount = 0;
-                            newLineIndex = startSpaces.indexOf('\n');
+                            // Check for new lines.
+                            let spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
+                            let spacesEnd = insertData[insertData.length - 1].start;
+                            let startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                            let newLineIndex = startSpaces.indexOf('\n');
+                            let runningPos = spacesStart;
+                            while(newLineIndex >= 0)
+                            {
+                                runningPos += newLineIndex;
+                                startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                newLinePositions.splice(currentLine, 0, runningPos);
+                                newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                currentLine++;
+                                totalCount += wordCount;
+                                wordCount = 0;
+                                newLineIndex = startSpaces.indexOf('\n');
+                            }
                         }
-
+                        
                         insert = insertData[insertData.length - 1];
 
                         if(editData.insertion.start == word.startPos)
@@ -5451,11 +5472,18 @@ const MessageTypes = {
                 }
             }
 
+            if(newLineData.length == 0)
+            {
+                newLineData[currentLine] = { startWord: 0, count: wordCount };
+            }
+
             this.lineData = newLineData;
             this.linePositions = newLinePositions;
             this.wordData = newWordData;
             console.log('New word data is:');
             console.log(newWordData);
+            console.log('Line data is:');
+            console.log(newLineData);
         }
 
         /**
@@ -5485,6 +5513,8 @@ const MessageTypes = {
 
             for(let k = 0; k < this.lineData.length; k++)
             {
+                console.log('Processing line ' + k);
+
                 computedTextLength = 0;
 
                 let wordNum: number = 0;
@@ -5493,7 +5523,6 @@ const MessageTypes = {
                 let startPos: number = k > 0 ? this.linePositions[k - 1] + 1 : 0;
                 let endPos: number = k < this.lineData.length - 1 ? this.linePositions[k] : this.text.length;
                 let insertSpace: boolean = false;
-                let glyphs: Array<GlyphData> = [];
                 let currentAdvance: number = 0;
                 let lineComplete: boolean = false;
                 // Keeps the position that a word or space is sliced when a new line is required.
@@ -5543,6 +5572,7 @@ const MessageTypes = {
                             if(spaceAdvance - sliceAdvance > this.width)
                             {
                                 let tmpAdvance = 0;
+
                                 // Find the point to split
                                 for(let j = prevSlicePos; j < glyphs.length; j++)
                                 {
@@ -5706,7 +5736,7 @@ const MessageTypes = {
 
                                 let newSec: Section = {
                                     startPos: tmpAdvance - sliceAdvance, glyphs: word.segments[segIndex].glyphs.slice(prevSlicePos, endPos),
-                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[prevSlicePos].stringPositions[0]
                                 };
                                 sections.push(newSec);
                                 tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -5747,7 +5777,7 @@ const MessageTypes = {
 
                                     let newSec: Section = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec);
                                     tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -5772,7 +5802,7 @@ const MessageTypes = {
                                 let secEnd = word.segments[sliceSeg].glyphs.length;
                                 let newSec: Section = {
                                     startPos: currentAdvance - sliceAdvance, glyphs: word.segments[sliceSeg].glyphs.slice(slicePos, secEnd),
-                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[slicePos].stringPositions[0]
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[sliceSeg].glyphs[slicePos].stringPositions[0]
                                 };
 
                                 tspanEl.sections.push(newSec);
@@ -5783,7 +5813,7 @@ const MessageTypes = {
                                 {
                                     let newSec: Section = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
 
                                     tspanEl.sections.push(newSec);
@@ -5844,7 +5874,7 @@ const MessageTypes = {
 
                                     let newSec: Section = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec);
                                     tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -5869,7 +5899,7 @@ const MessageTypes = {
                                 {
                                     let newSec: Section = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
 
                                     tspanEl.sections.push(newSec);
@@ -5993,7 +6023,7 @@ const MessageTypes = {
 
                                     let newSec: Section = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec);
                                     lineGlyphCount += endPos;
@@ -6019,7 +6049,7 @@ const MessageTypes = {
                                 {
                                     let newSec: Section = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
 
                                     tspanEl.sections.push(newSec);
@@ -6541,6 +6571,9 @@ const MessageTypes = {
             this.textNodes = childText;
             this.glyphCount = glyphCount;
 
+
+            console.log('Glyph count is: ' + glyphCount + '. New text nodes are: ');
+            console.log(this.textNodes);
             return true;
         }
 
@@ -7567,10 +7600,20 @@ const MessageTypes = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 let fontList = [];
 
+// Amazon Code.
+/*
 fontList['NORMAL'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
 fontList['BOLD'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
 fontList['ITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Italic.ttf", ver: 1, style: "ITALIC" };
 fontList['BOLDITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-BoldItalic.ttf", ver: 1, style: "BOLDITALIC" };
+*/
+
+// Google Code
+fontList['NORMAL'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
+fontList['BOLD'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
+fontList['ITALIC'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Italic.ttf", ver: 1, style: "ITALIC" };
+fontList['BOLDITALIC'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-BoldItalic.ttf", ver: 1, style: "BOLDITALIC" };
+
 
 let fontHelper = [];
 let loadCallbacks: Array<Array<() => void>> = [];

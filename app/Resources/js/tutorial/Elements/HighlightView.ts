@@ -335,8 +335,6 @@ namespace HighlightView
     */
     export class CustomContextView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: PalleteProp;
 
         /** React render function

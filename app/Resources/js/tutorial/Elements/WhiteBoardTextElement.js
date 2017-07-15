@@ -2734,6 +2734,9 @@ var WhiteBoardText;
          *
          */
         Element.prototype.evaluateChanges = function (editData) {
+            // TODO: Remove debug code.
+            console.log("Edit data is:");
+            console.log(editData);
             var newLinePositions = [];
             var lineStartWord = 0;
             //let removedLines: Array<number> = [];
@@ -2747,6 +2750,9 @@ var WhiteBoardText;
             if (editData.insertion != null) {
                 insertData = this.splitText(editData.insertion.text);
                 insertStyle = editData.insertion.style;
+                console.log('Insertion detected. Data is:');
+                console.log(insertData);
+                console.log(insertStyle);
             }
             for (var i = 0; i < this.linePositions.length; i++) {
                 var removed = false;
@@ -2772,52 +2778,60 @@ var WhiteBoardText;
             var nextWord = null;
             var wordCount = 0;
             var totalCount = 0;
-            for (var i = 0; i < this.wordData.length - 1; i++) {
-                if (nextWord == null) {
-                    word = {
-                        startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
-                        wordLength: this.wordData[i].wordLength
-                    };
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
-                    };
-                    for (var j = 0; j < editData.deletions.length; j++) {
-                        this.applyDeletion(word, editData.deletions[j]);
-                        this.applyDeletion(nextWord, editData.deletions[j]);
+            for (var i = 0; i < this.wordData.length; i++) {
+                if (this.wordData.length > 1) {
+                    if (nextWord == null) {
+                        word = {
+                            startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
+                            wordLength: this.wordData[i].wordLength
+                        };
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
+                        for (var j = 0; j < editData.deletions.length; j++) {
+                            this.applyDeletion(word, editData.deletions[j]);
+                            this.applyDeletion(nextWord, editData.deletions[j]);
+                        }
+                    }
+                    else {
+                        word = nextWord;
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
+                        for (var j = 0; j < editData.deletions.length; j++) {
+                            this.applyDeletion(nextWord, editData.deletions[j]);
+                        }
+                    }
+                    while (word.startPos + word.wordLength == nextWord.startPos) {
+                        // Merge words and set nextWord to null.
+                        word.wordLength += nextWord.wordLength;
+                        var wordSeg = word.segments[word.segments.length - 1];
+                        var sty1 = wordSeg.style;
+                        var sty2 = nextWord.segments[0].style;
+                        for (var j = 0; j < nextWord.segments.length; j++) {
+                            nextWord.segments[j].startPos += word.wordLength;
+                        }
+                        if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
+                            wordSeg.segmentLength += nextWord.segments[0].segmentLength;
+                            wordSeg.segmentAdvance = -1;
+                            (_a = word.segments).push.apply(_a, nextWord.segments.slice(1, nextWord.segments.length));
+                        }
+                        else {
+                            (_b = word.segments).push.apply(_b, nextWord.segments.slice(0, nextWord.segments.length));
+                        }
+                        i++;
+                        nextWord = {
+                            startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
+                            wordLength: this.wordData[i + 1].wordLength
+                        };
                     }
                 }
                 else {
-                    word = nextWord;
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
-                    };
-                    for (var j = 0; j < editData.deletions.length; j++) {
-                        this.applyDeletion(nextWord, editData.deletions[j]);
-                    }
-                }
-                while (word.startPos + word.wordLength == nextWord.startPos) {
-                    // Merge words and set nextWord to null.
-                    word.wordLength += nextWord.wordLength;
-                    var wordSeg = word.segments[word.segments.length - 1];
-                    var sty1 = wordSeg.style;
-                    var sty2 = nextWord.segments[0].style;
-                    for (var j = 0; j < nextWord.segments.length; j++) {
-                        nextWord.segments[j].startPos += word.wordLength;
-                    }
-                    if (sty1.style == sty2.style && sty1.weight == sty2.weight) {
-                        wordSeg.segmentLength += nextWord.segments[0].segmentLength;
-                        wordSeg.segmentAdvance = -1;
-                        (_a = word.segments).push.apply(_a, nextWord.segments.slice(1, nextWord.segments.length));
-                    }
-                    else {
-                        (_b = word.segments).push.apply(_b, nextWord.segments.slice(0, nextWord.segments.length));
-                    }
-                    i++;
-                    nextWord = {
-                        startPos: this.wordData[i + 1].startPos, wordAdvance: this.wordData[i + 1].wordAdvance, segments: this.wordData[i + 1].segments,
-                        wordLength: this.wordData[i + 1].wordLength
+                    word = {
+                        startPos: this.wordData[i].startPos, wordAdvance: this.wordData[i].wordAdvance, segments: this.wordData[i].segments,
+                        wordLength: this.wordData[i].wordLength
                     };
                 }
                 // Push the current line foward to include this word.
@@ -2851,18 +2865,18 @@ var WhiteBoardText;
                                 newWordData.push(word);
                                 wordCount++;
                                 // Check for new lines at the start of the insertion.
-                                var startSpaces_1 = editData.insertion.text.substring(0, insert.start);
-                                var newLineIndex_1 = startSpaces_1.indexOf('\n');
-                                var runningPos_1 = insertData[0].start;
-                                while (newLineIndex_1 >= 0) {
-                                    runningPos_1 += newLineIndex_1;
-                                    startSpaces_1 = startSpaces_1.substring(newLineIndex_1, startSpaces_1.length);
-                                    newLinePositions.splice(currentLine, 0, runningPos_1);
+                                var startSpaces = editData.insertion.text.substring(0, insert.start);
+                                var newLineIndex = startSpaces.indexOf('\n');
+                                var runningPos = insertData[0].start;
+                                while (newLineIndex >= 0) {
+                                    runningPos += newLineIndex;
+                                    startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos);
                                     newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                     currentLine++;
                                     totalCount += wordCount;
                                     wordCount = 0;
-                                    newLineIndex_1 = startSpaces_1.indexOf('\n');
+                                    newLineIndex = startSpaces.indexOf('\n');
                                 }
                                 // Generate new segments
                                 var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insert.word);
@@ -2943,18 +2957,18 @@ var WhiteBoardText;
                             if (insertData.length == 1) {
                                 if (editData.insertion.text.charAt(0).match(/\s/)) {
                                     // Check for new lines at the start of the insertion.
-                                    var startSpaces_2 = editData.insertion.text.substring(0, insert.start);
-                                    var newLineIndex_2 = startSpaces_2.indexOf('\n');
-                                    var runningPos_2 = insertData[0].start;
-                                    while (newLineIndex_2 >= 0) {
-                                        runningPos_2 += newLineIndex_2;
-                                        startSpaces_2 = startSpaces_2.substring(newLineIndex_2, startSpaces_2.length);
-                                        newLinePositions.splice(currentLine, 0, runningPos_2);
+                                    var startSpaces = editData.insertion.text.substring(0, insert.start);
+                                    var newLineIndex = startSpaces.indexOf('\n');
+                                    var runningPos = insertData[0].start;
+                                    while (newLineIndex >= 0) {
+                                        runningPos += newLineIndex;
+                                        startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos);
                                         newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                         currentLine++;
                                         totalCount += wordCount;
                                         wordCount = 0;
-                                        newLineIndex_2 = startSpaces_2.indexOf('\n');
+                                        newLineIndex = startSpaces.indexOf('\n');
                                     }
                                     var segStartText = this.text.substring(seg.startPos, insert.start);
                                     var newStartSegments = this.splitSegments(seg.style, word.startPos, seg.startPos, segStartText);
@@ -2985,20 +2999,20 @@ var WhiteBoardText;
                                         newWordData.push(insertWord);
                                         wordCount++;
                                         // Check for new lines at the end of the insertion.
-                                        var spacesStart_1 = insertData[0].start + insertData[0].word.length;
-                                        var spacesEnd_1 = insert.start + insert.word.length;
-                                        var startSpaces_3 = editData.insertion.text.substring(spacesStart_1, spacesEnd_1);
-                                        var newLineIndex_3 = startSpaces_3.indexOf('\n');
-                                        var runningPos_3 = insertData[0].start + insertData[0].word.length;
-                                        while (newLineIndex_3 >= 0) {
-                                            runningPos_3 += newLineIndex_3;
-                                            startSpaces_3 = startSpaces_3.substring(newLineIndex_3, startSpaces_3.length);
-                                            newLinePositions.splice(currentLine, 0, runningPos_3);
+                                        var spacesStart = insertData[0].start + insertData[0].word.length;
+                                        var spacesEnd = insert.start + insert.word.length;
+                                        var startSpaces_1 = editData.insertion.text.substring(spacesStart, spacesEnd);
+                                        var newLineIndex_1 = startSpaces_1.indexOf('\n');
+                                        var runningPos_1 = insertData[0].start + insertData[0].word.length;
+                                        while (newLineIndex_1 >= 0) {
+                                            runningPos_1 += newLineIndex_1;
+                                            startSpaces_1 = startSpaces_1.substring(newLineIndex_1, startSpaces_1.length);
+                                            newLinePositions.splice(currentLine, 0, runningPos_1);
                                             newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                             currentLine++;
                                             totalCount += wordCount;
                                             wordCount = 0;
-                                            newLineIndex_3 = startSpaces_3.indexOf('\n');
+                                            newLineIndex_1 = startSpaces_1.indexOf('\n');
                                         }
                                         // Insert new word for split segment after.
                                         var newEndStart = editData.insertion.start + editData.insertion.text.length;
@@ -3149,20 +3163,20 @@ var WhiteBoardText;
                                         wordCount++;
                                     }
                                     // Check for new lines at the end of the insertion.
-                                    var spacesStart_2 = insertData[0].start + insertData[0].word.length;
-                                    var spacesEnd_2 = insert.start + insert.word.length;
-                                    var startSpaces_4 = editData.insertion.text.substring(spacesStart_2, spacesEnd_2);
-                                    var newLineIndex_4 = startSpaces_4.indexOf('\n');
-                                    var runningPos_4 = insertData[0].start + insertData[0].word.length;
-                                    while (newLineIndex_4 >= 0) {
-                                        runningPos_4 += newLineIndex_4;
-                                        startSpaces_4 = startSpaces_4.substring(newLineIndex_4, startSpaces_4.length);
-                                        newLinePositions.splice(currentLine, 0, runningPos_4);
+                                    var spacesStart = insertData[0].start + insertData[0].word.length;
+                                    var spacesEnd = insert.start + insert.word.length;
+                                    var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                                    var newLineIndex = startSpaces.indexOf('\n');
+                                    var runningPos = insertData[0].start + insertData[0].word.length;
+                                    while (newLineIndex >= 0) {
+                                        runningPos += newLineIndex;
+                                        startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos);
                                         newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                         currentLine++;
                                         totalCount += wordCount;
                                         wordCount = 0;
-                                        newLineIndex_4 = startSpaces_4.indexOf('\n');
+                                        newLineIndex = startSpaces.indexOf('\n');
                                     }
                                     // Insert new word after split.
                                     var newSegEnd = seg.startPos + seg.segmentLength + editData.insertion.text.length;
@@ -3266,18 +3280,18 @@ var WhiteBoardText;
                             else {
                                 if (editData.insertion.text.charAt(0).match(/\s/)) {
                                     // Check for new lines at the start of the insertion.
-                                    var startSpaces_5 = editData.insertion.text.substring(0, insert.start);
-                                    var newLineIndex_5 = startSpaces_5.indexOf('\n');
-                                    var runningPos_5 = insertData[0].start;
-                                    while (newLineIndex_5 >= 0) {
-                                        runningPos_5 += newLineIndex_5;
-                                        startSpaces_5 = startSpaces_5.substring(newLineIndex_5, startSpaces_5.length);
-                                        newLinePositions.splice(currentLine, 0, runningPos_5);
+                                    var startSpaces = editData.insertion.text.substring(0, insert.start);
+                                    var newLineIndex = startSpaces.indexOf('\n');
+                                    var runningPos = insertData[0].start;
+                                    while (newLineIndex >= 0) {
+                                        runningPos += newLineIndex;
+                                        startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                        newLinePositions.splice(currentLine, 0, runningPos);
                                         newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                         currentLine++;
                                         totalCount += wordCount;
                                         wordCount = 0;
-                                        newLineIndex_5 = startSpaces_5.indexOf('\n');
+                                        newLineIndex = startSpaces.indexOf('\n');
                                     }
                                     // Split off first piece as own word and insert first new word.
                                     var segStartText = this.text.substring(seg.startPos, insert.start);
@@ -3346,20 +3360,20 @@ var WhiteBoardText;
                         // Insert all isolated words.
                         for (var j = 1; j < insertData.length - 1; j++) {
                             // Check for new lines at the start of the insertion.
-                            var spacesStart_3 = insertData[j - 1].start + insertData[j - 1].word.length;
-                            var spacesEnd_3 = insertData[j].start;
-                            var startSpaces_6 = editData.insertion.text.substring(spacesStart_3, spacesEnd_3);
-                            var newLineIndex_6 = startSpaces_6.indexOf('\n');
-                            var runningPos_6 = insertData[j - 1].start + insertData[j - 1].word.length;
-                            while (newLineIndex_6 >= 0) {
-                                runningPos_6 += newLineIndex_6;
-                                startSpaces_6 = startSpaces_6.substring(newLineIndex_6, startSpaces_6.length);
-                                newLinePositions.splice(currentLine, 0, runningPos_6);
+                            var spacesStart = insertData[j - 1].start + insertData[j - 1].word.length;
+                            var spacesEnd = insertData[j].start;
+                            var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                            var newLineIndex = startSpaces.indexOf('\n');
+                            var runningPos = insertData[j - 1].start + insertData[j - 1].word.length;
+                            while (newLineIndex >= 0) {
+                                runningPos += newLineIndex;
+                                startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                newLinePositions.splice(currentLine, 0, runningPos);
                                 newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                 currentLine++;
                                 totalCount += wordCount;
                                 wordCount = 0;
-                                newLineIndex_6 = startSpaces_6.indexOf('\n');
+                                newLineIndex = startSpaces.indexOf('\n');
                             }
                             console.log('Went through loop.');
                             var newSegments = this.splitSegments(insertStyle, word.startPos, 0, insertData[j].word);
@@ -3374,21 +3388,23 @@ var WhiteBoardText;
                             newWordData.push(newWord);
                             wordCount++;
                         }
-                        // Check for new lines.
-                        var spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
-                        var spacesEnd = insertData[insertData.length - 1].start;
-                        var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
-                        var newLineIndex = startSpaces.indexOf('\n');
-                        var runningPos = spacesStart;
-                        while (newLineIndex >= 0) {
-                            runningPos += newLineIndex;
-                            startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
-                            newLinePositions.splice(currentLine, 0, runningPos);
-                            newLineData[currentLine] = { startWord: totalCount, count: wordCount };
-                            currentLine++;
-                            totalCount += wordCount;
-                            wordCount = 0;
-                            newLineIndex = startSpaces.indexOf('\n');
+                        if (insertData.length > 1) {
+                            // Check for new lines.
+                            var spacesStart = insertData[insertData.length - 2].start + insertData[insertData.length - 2].word.length;
+                            var spacesEnd = insertData[insertData.length - 1].start;
+                            var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                            var newLineIndex = startSpaces.indexOf('\n');
+                            var runningPos = spacesStart;
+                            while (newLineIndex >= 0) {
+                                runningPos += newLineIndex;
+                                startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                newLinePositions.splice(currentLine, 0, runningPos);
+                                newLineData[currentLine] = { startWord: totalCount, count: wordCount };
+                                currentLine++;
+                                totalCount += wordCount;
+                                wordCount = 0;
+                                newLineIndex = startSpaces.indexOf('\n');
+                            }
                         }
                         insert = insertData[insertData.length - 1];
                         if (editData.insertion.start == word.startPos) {
@@ -3407,20 +3423,20 @@ var WhiteBoardText;
                                 newWordData.push(newWord);
                                 wordCount++;
                                 // Check for new lines.
-                                var spacesStart_4 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
-                                var spacesEnd_4 = editData.insertion.start + editData.insertion.text.length;
-                                var startSpaces_7 = editData.insertion.text.substring(spacesStart_4, spacesEnd_4);
-                                var newLineIndex_7 = startSpaces_7.indexOf('\n');
-                                var runningPos_7 = spacesStart_4;
-                                while (newLineIndex_7 >= 0) {
-                                    runningPos_7 += newLineIndex_7;
-                                    startSpaces_7 = startSpaces_7.substring(newLineIndex_7, startSpaces_7.length);
-                                    newLinePositions.splice(currentLine, 0, runningPos_7);
+                                var spacesStart = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
+                                var spacesEnd = editData.insertion.start + editData.insertion.text.length;
+                                var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                                var newLineIndex = startSpaces.indexOf('\n');
+                                var runningPos = spacesStart;
+                                while (newLineIndex >= 0) {
+                                    runningPos += newLineIndex;
+                                    startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos);
                                     newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                     currentLine++;
                                     totalCount += wordCount;
                                     wordCount = 0;
-                                    newLineIndex_7 = startSpaces_7.indexOf('\n');
+                                    newLineIndex = startSpaces.indexOf('\n');
                                 }
                                 // Then push current word.
                                 word.startPos += editData.insertion.text.length;
@@ -3521,20 +3537,20 @@ var WhiteBoardText;
                                 newWordData.push(insertWord);
                                 wordCount++;
                                 // Check for new lines.
-                                var spacesStart_5 = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
-                                var spacesEnd_5 = editData.insertion.start + editData.insertion.text.length;
-                                var startSpaces_8 = editData.insertion.text.substring(spacesStart_5, spacesEnd_5);
-                                var newLineIndex_8 = startSpaces_8.indexOf('\n');
-                                var runningPos_8 = spacesStart_5;
-                                while (newLineIndex_8 >= 0) {
-                                    runningPos_8 += newLineIndex_8;
-                                    startSpaces_8 = startSpaces_8.substring(newLineIndex_8, startSpaces_8.length);
-                                    newLinePositions.splice(currentLine, 0, runningPos_8);
+                                var spacesStart = insertData[insertData.length - 1].start + insertData[insertData.length - 1].word.length;
+                                var spacesEnd = editData.insertion.start + editData.insertion.text.length;
+                                var startSpaces = editData.insertion.text.substring(spacesStart, spacesEnd);
+                                var newLineIndex = startSpaces.indexOf('\n');
+                                var runningPos = spacesStart;
+                                while (newLineIndex >= 0) {
+                                    runningPos += newLineIndex;
+                                    startSpaces = startSpaces.substring(newLineIndex, startSpaces.length);
+                                    newLinePositions.splice(currentLine, 0, runningPos);
                                     newLineData[currentLine] = { startWord: totalCount, count: wordCount };
                                     currentLine++;
                                     totalCount += wordCount;
                                     wordCount = 0;
-                                    newLineIndex_8 = startSpaces_8.indexOf('\n');
+                                    newLineIndex = startSpaces.indexOf('\n');
                                 }
                                 var cutStart = editData.insertion.start + editData.insertion.text.length;
                                 var cutLength = seg.startPos + seg.segmentLength + word.startPos - editData.insertion.start;
@@ -3781,11 +3797,16 @@ var WhiteBoardText;
                     wordCount++;
                 }
             }
+            if (newLineData.length == 0) {
+                newLineData[currentLine] = { startWord: 0, count: wordCount };
+            }
             this.lineData = newLineData;
             this.linePositions = newLinePositions;
             this.wordData = newWordData;
             console.log('New word data is:');
             console.log(newWordData);
+            console.log('Line data is:');
+            console.log(newLineData);
             var _a, _b, _c, _d, _e;
         };
         /**
@@ -3810,6 +3831,7 @@ var WhiteBoardText;
                 return;
             }
             for (var k = 0; k < this.lineData.length; k++) {
+                console.log('Processing line ' + k);
                 computedTextLength = 0;
                 var wordNum = 0;
                 var wordIdx = this.lineData[k].startWord;
@@ -3817,7 +3839,6 @@ var WhiteBoardText;
                 var startPos = k > 0 ? this.linePositions[k - 1] + 1 : 0;
                 var endPos = k < this.lineData.length - 1 ? this.linePositions[k] : this.text.length;
                 var insertSpace = false;
-                var glyphs = [];
                 var currentAdvance = 0;
                 var lineComplete = false;
                 // Keeps the position that a word or space is sliced when a new line is required.
@@ -3981,7 +4002,7 @@ var WhiteBoardText;
                                 }
                                 var newSec = {
                                     startPos: tmpAdvance - sliceAdvance, glyphs: word.segments[segIndex].glyphs.slice(prevSlicePos, endPos_1),
-                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[prevSlicePos].stringPositions[0]
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[prevSlicePos].stringPositions[0]
                                 };
                                 sections.push(newSec);
                                 tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -4013,7 +4034,7 @@ var WhiteBoardText;
                                     }
                                     var newSec_1 = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_2),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec_1);
                                     tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -4034,7 +4055,7 @@ var WhiteBoardText;
                                 var secEnd = word.segments[sliceSeg].glyphs.length;
                                 var newSec = {
                                     startPos: currentAdvance - sliceAdvance, glyphs: word.segments[sliceSeg].glyphs.slice(slicePos, secEnd),
-                                    startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[slicePos].stringPositions[0]
+                                    startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[sliceSeg].glyphs[slicePos].stringPositions[0]
                                 };
                                 tspanEl.sections.push(newSec);
                                 currentAdvance += (word.segments[sliceSeg].segmentAdvance - sliceAdvance);
@@ -4042,7 +4063,7 @@ var WhiteBoardText;
                                 for (var j = sliceSeg + 1; j < word.segments.length; j++) {
                                     var newSec_2 = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
                                     tspanEl.sections.push(newSec_2);
                                     currentAdvance += word.segments[j].segmentAdvance;
@@ -4090,7 +4111,7 @@ var WhiteBoardText;
                                     }
                                     var newSec = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_3),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec);
                                     tmpAdvance += word.segments[segIndex].segmentAdvance;
@@ -4110,7 +4131,7 @@ var WhiteBoardText;
                                 for (var j = 0; j < word.segments.length; j++) {
                                     var newSec = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
                                     tspanEl.sections.push(newSec);
                                     currentAdvance += word.segments[j].segmentAdvance;
@@ -4204,7 +4225,7 @@ var WhiteBoardText;
                                     }
                                     var newSec = {
                                         startPos: tmpAdvance, glyphs: word.segments[segIndex].glyphs.slice(0, endPos_4),
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[segIndex].glyphs[0].stringPositions[0]
                                     };
                                     sections.push(newSec);
                                     lineGlyphCount += endPos_4;
@@ -4225,7 +4246,7 @@ var WhiteBoardText;
                                 for (var j = 0; j < word.segments.length; j++) {
                                     var newSec = {
                                         startPos: currentAdvance, glyphs: word.segments[j].glyphs,
-                                        startGlyph: lineGlyphCount + glyphCount, stringStart: glyphs[0].stringPositions[0]
+                                        startGlyph: lineGlyphCount + glyphCount, stringStart: word.segments[j].glyphs[0].stringPositions[0]
                                     };
                                     tspanEl.sections.push(newSec);
                                     currentAdvance += word.segments[j].segmentAdvance;
@@ -4699,6 +4720,8 @@ var WhiteBoardText;
             }
             this.textNodes = childText;
             this.glyphCount = glyphCount;
+            console.log('Glyph count is: ' + glyphCount + '. New text nodes are: ');
+            console.log(this.textNodes);
             return true;
             var _a;
         };
@@ -5428,10 +5451,18 @@ var WhiteBoardText;
 //                                                                                                                                                            //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 var fontList = [];
+// Amazon Code.
+/*
 fontList['NORMAL'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
 fontList['BOLD'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
 fontList['ITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-Italic.ttf", ver: 1, style: "ITALIC" };
 fontList['BOLDITALIC'] = { file: "https://s3-ap-southeast-2.amazonaws.com/whiteboard-storage/NotoSans-BoldItalic.ttf", ver: 1, style: "BOLDITALIC" };
+*/
+// Google Code
+fontList['NORMAL'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Regular.ttf", ver: 1, style: "NORMAL" };
+fontList['BOLD'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Bold.ttf", ver: 1, style: "BOLD" };
+fontList['ITALIC'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-Italic.ttf", ver: 1, style: "ITALIC" };
+fontList['BOLDITALIC'] = { file: "https://wittylizard-168912.appspot.com/Fonts/NotoSans-BoldItalic.ttf", ver: 1, style: "BOLDITALIC" };
 var fontHelper = [];
 var loadCallbacks = [];
 var loadingFonts = [];

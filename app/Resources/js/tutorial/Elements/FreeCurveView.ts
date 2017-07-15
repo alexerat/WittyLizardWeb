@@ -174,11 +174,11 @@ namespace FreeCurveView
                         {
                             key: 'interaction', cx: state.point.x, cy: state.point.y, r: state.size / 2 + (2.5 * viewScale), fill: state.colour, opacity: 0,
                             cursor: 'move',
-                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseDown: (e: React.MouseEvent) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e: React.MouseEvent) =>
+                            onMouseOver: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseDown: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent<SVGElement>) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -196,10 +196,10 @@ namespace FreeCurveView
                         items.push(React.createElement('circle',
                         {
                             key: 'interaction', cx: state.point.x, cy: state.point.y, r: state.size / 2 + (eraseSize * viewScale), fill: state.colour, opacity: 0,
-                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e: React.MouseEvent) =>
+                            onMouseOver: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent<SVGElement>) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -242,11 +242,11 @@ namespace FreeCurveView
                         {
                             key: 'interaction', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size + (5 * viewScale),
                             strokeLinecap: 'round', opacity: 0, cursor: 'move', pointerEvents: 'stroke',
-                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseDown: (e: React.MouseEvent) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e: React.MouseEvent) =>
+                            onMouseOver: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseDown: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseDown(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent<SVGElement>) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -265,10 +265,10 @@ namespace FreeCurveView
                         {
                             key: 'interaction', d: state.param, fill: 'none', stroke: state.colour, strokeWidth: state.size + (eraseSize * viewScale),
                             strokeLinecap: 'round', opacity: 0, pointerEvents: 'stroke',
-                            onMouseOver: (e: React.MouseEvent) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
-                            onMouseOut: (e: React.MouseEvent) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
-                            onMouseMove: (e: React.MouseEvent) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
-                            onClick: (e: React.MouseEvent) =>
+                            onMouseOver: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOver(e, ViewComponents.Interaction, null); },
+                            onMouseOut: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseOut(e, ViewComponents.Interaction, null); },
+                            onMouseMove: (e: React.MouseEvent<SVGElement>) => { dispatcher.mouseMove(e, ViewComponents.Interaction, null); },
+                            onClick: (e: React.MouseEvent<SVGElement>) =>
                             {
                                 if(e.detail == 2)
                                 {
@@ -315,14 +315,14 @@ namespace FreeCurveView
         {
             if(this.props.mode == MODENAME)
             {
-                return React.createElement('button',
+                return React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'draw-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'D');
             }
             else
             {
-                return React.createElement('button',
+                return React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button', id: 'draw-button', onKeyUp: function(e) { e.preventDefault(); },
                     onClick: () => { this.props.dispatcher(MODENAME) }
@@ -350,38 +350,38 @@ namespace FreeCurveView
             let state = this.props.state as PalleteViewState;
             let dispatcher = this.props.dispatcher;
 
-            let blackButt = React.createElement('button',
+            let blackButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.BLACK })
             });
-            let blueButt  = React.createElement('button',
+            let blueButt  = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.BLUE })
             });
-            let redButt   = React.createElement('button',
+            let redButt   = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.RED })
             });
-            let greenButt = React.createElement('button',
+            let greenButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button colour-button', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.COLOUR, data: PalleteColour.GREEN })
             });
 
-            let smallButt = React.createElement('button',
+            let smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.SMALL })
             }, 'S');
-            let medButt   = React.createElement('button',
+            let medButt   = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.MEDIUM })
             }, 'M');
-            let largeButt = React.createElement('button',
+            let largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
             {
                 className: 'button mode-button', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); },
                 onClick: () => dispatcher({ type: PalleteChangeType.SIZE, data: PalleteSize.LARGE })
@@ -389,28 +389,28 @@ namespace FreeCurveView
 
             if(state.colour == PalleteColour.BLACK)
             {
-                blackButt = React.createElement('button',
+                blackButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'black-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == PalleteColour.BLUE)
             {
-                blueButt = React.createElement('button',
+                blueButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'blue-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == PalleteColour.RED)
             {
-                redButt = React.createElement('button',
+                redButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'red-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
             }
             else if(state.colour == PalleteColour.GREEN)
             {
-                greenButt = React.createElement('button',
+                greenButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button colour-button pressed-colour', id: 'green-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 });
@@ -418,21 +418,21 @@ namespace FreeCurveView
 
             if(state.size == PalleteSize.SMALL)
             {
-                smallButt = React.createElement('button',
+                smallButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'small-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'S');
             }
             else if(state.size == PalleteSize.MEDIUM)
             {
-                medButt = React.createElement('button',
+                medButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'medium-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'M');
             }
             else if(state.size == PalleteSize.LARGE)
             {
-                largeButt = React.createElement('button',
+                largeButt = React.createElement<React.HTMLAttributes<HTMLButtonElement>,HTMLButtonElement>('button',
                 {
                     className: 'button mode-button pressed-mode', id: 'large-button', onKeyUp: function(e) { e.preventDefault(); }, onClick: () => {}
                 }, 'L');
@@ -461,8 +461,6 @@ namespace FreeCurveView
     */
     export class CustomContextView extends React.Component<any, {}>
     {
-        propTypes = {};
-
         props: PalleteProp;
 
         /** React render function

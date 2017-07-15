@@ -53,9 +53,7 @@ var WhiteBoardTextView;
     var ElementView = (function (_super) {
         __extends(ElementView, _super);
         function ElementView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React function to determine if component should update.
          *
@@ -125,7 +123,7 @@ var WhiteBoardTextView;
                 }, sections);
             });
             if (mode == BoardModes.SELECT && !state.isMoving && !state.isResizing && !state.remLock) {
-                borderBoxes.push(React.createElement('rect', {
+                borderBoxes.push(React.createElement("rect", {
                     key: 'move', x: 0, y: 0, width: state.width, height: state.height,
                     fill: 'none', strokeWidth: state.size * 0.5, opacity: 0, cursor: 'move', pointerEvents: 'stroke',
                     onMouseDown: function (e) { dispatcher.mouseDown(e, 2 /* Interaction */); }
@@ -204,7 +202,9 @@ var WhiteBoardTextView;
                     dispatcher.doubleClick(e);
                 } }
             }));
-            return React.createElement('g', { transform: 'translate(' + state.x + ',' + state.y + ')' }, hightLightBoxes, lineElems, borderBoxes);
+            return React.createElement('g', {
+                transform: 'translate(' + state.x + ',' + state.y + ')'
+            }, hightLightBoxes, lineElems, borderBoxes);
         };
         return ElementView;
     }(React.Component));
@@ -423,9 +423,7 @@ var WhiteBoardTextView;
     var CustomContextView = (function (_super) {
         __extends(CustomContextView, _super);
         function CustomContextView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React render function
          *

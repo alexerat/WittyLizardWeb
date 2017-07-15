@@ -219,9 +219,9 @@
             {
                 localStream = mediaStream;
 
-                mediaSocket = io('https://rooms.wittylizard.com:700/media', { query: "sessId=" + "{{sessionId}}" });
+                mediaSocket = io('https://rooms.wittylizard.com:700/media', { query: 'sessId=' + '{{sessionId}}' + '&' + "roomId=" + '{{roomToken}}'});
                 initMedia();
-                boardSocket = io('https://rooms.wittylizard.com:700/board', { query: "sessId=" + "{{sessionId}}" });
+                boardSocket = io('https://rooms.wittylizard.com:700/board', { query: 'sessId=' + '{{sessionId}}' + '&' + "roomId=" + '{{roomToken}}' });
                 initBoard();
             });
             p.catch(function(err) { console.log(err.name); });

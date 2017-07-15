@@ -279,9 +279,7 @@ var HighlightView;
     var CustomContextView = (function (_super) {
         __extends(CustomContextView, _super);
         function CustomContextView() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-            _this.propTypes = {};
-            return _this;
+            return _super !== null && _super.apply(this, arguments) || this;
         }
         /** React render function
          *
