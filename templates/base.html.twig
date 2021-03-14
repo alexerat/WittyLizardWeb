@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{% block title %}Wittylizard{% endblock %}</title>
+
+        {% block stylesheets %}
+            <link rel="stylesheet" href="{{ asset('build/normalize.css') }}" />
+            <link rel="stylesheet" href="{{ asset('build/foundation.css') }}" />
+            <link rel="stylesheet" href="{{ asset('build/base.css') }}" />
+        {% endblock %}
+    </head>
+    <body>
+        {% block framework %}
+            <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+            <script src="{{ asset('build/what-input.min.js') }}"></script>
+            <script src="{{ asset('build/foundation.js') }}"></script>
+            <script src="{{ asset('build/base.js') }}"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.6.4/jquery.contextMenu.min.js"></script>
+        {% endblock %}
+
+        <div class="top-bar">
+            <div id="site-header"></div>
+        </div>
+
+        <div class="off-canvas-wrapper" style='height: calc(100% - 93px);'>
+            <div class="off-canvas-wrapper-inner" style='height: 100%;' data-off-canvas-wrapper>
+
+
+
+                <div class="off-canvas position-left" id="offCanvasLeft" data-off-canvas></div>
+
+                <div class="off-canvas-content"  style='height: 100%;' data-off-canvas-content>
+
+                    <div class='row column'  style='height: 100%; overflow-y: auto; width: 100%; margin-left: auto; margin-right: auto; padding-top: 3px; padding-bottom: 3px; max-width: initial;'>
+                        {% block body %}{% endblock %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% block javascripts %}
+            <script> 
+                $(document).foundation();
+                $(function() {
+                    $.contextMenu("html5");
+                });
+
+                var webStore = {}; 
+
+                function setVariable(name, item)
+                {
+                    if(webStore[name] != undefined)
+                        console.log('The variable name "' + name + '" was previously stored.');
+                    webStore[name] = item;
+                }
+
+                function getVariable(name)
+                {
+                    if(webStore[name] == undefined)
+                        console.log('The variable name "' + name + '" was not defined.');
+                    return webStore[name];
+                }
+
+                setVariable('environment', '{{app.environment}}'); 
+            </script>
+        {% endblock %}
+        {% if app.environment == 'dev' %}
+            {% block tests %}{% endblock %}
+        {% endif %}
+    </body>
+</html>

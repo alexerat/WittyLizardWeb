@@ -7,19 +7,34 @@
 
     "files":
     [
-        "./app/Resources/js/tutorial/WhiteBoardController.ts",
-        "./app/Resources/js/tutorial/WhiteBoardWorker.ts",
-        "./app/Resources/js/tutorial/WhiteBoardView.ts",
-        "./app/Resources/js/tutorial/Elements/FreeCurveElement.ts",
-        "./app/Resources/js/tutorial/Elements/FreeCurveView.ts",
-        "./app/Resources/js/tutorial/Elements/WhiteBoardTextElement.ts",
-        "./app/Resources/js/tutorial/Elements/WhiteBoardTextView.ts",
-        "./app/Resources/js/tutorial/Elements/UploadElement.ts",
-        "./app/Resources/js/tutorial/Elements/UploadView.ts",
-        "./app/Resources/js/tutorial/Elements/HighlightElement.ts",
-        "./app/Resources/js/tutorial/Elements/HighlightView.ts",
-        "./app/Resources/js/tutorial/fitcurves.ts",
-        "./app/Resources/js/typings/immutable.d.ts",
-        "./app/Resources/js/typings/whiteboard.d.ts"
+        "./assets/js/tutorial/WhiteBoardCrossTypes.ts",
+        "./assets/js/tutorial/WhiteBoardController.ts",
+        "./assets/js/tutorial/WhiteBoardWorker.ts",
+        "./assets/js/tutorial/WhiteBoardView.ts",
+        "./assets/js/tutorial/Elements/FreeCurveElement.ts",
+        "./assets/js/tutorial/Elements/FreeCurveView.ts",
+        "./assets/js/tutorial/Elements/WhiteBoardTextElement.ts",
+        "./assets/js/tutorial/Elements/WhiteBoardTextView.ts",
+        "./assets/js/tutorial/Elements/UploadElement.ts",
+        "./assets/js/tutorial/Elements/UploadView.ts",
+        "./assets/js/tutorial/Elements/HighlightElement.ts",
+        "./assets/js/tutorial/Elements/HighlightView.ts",
+        "./assets/js/tutorial/fitcurves.ts",
+
+        "./assets/js/tutorial/util.ts",
+        "./assets/js/tutorial/EventEmitter.ts",
+        "./assets/js/tutorial/Negotiator.ts",
+        "./assets/js/tutorial/PeerHandler.ts",
+        "./assets/js/tutorial/MediaContainer.ts",
+        
+
+        "./assets/js/TopBar.ts",
+        "./assets/js/SideBar.ts",
+        "./assets/js/pages/site_frame.ts",
+
+        "./assets/js/ReactDeclarations.ts",
+
+        "./assets/js/typings/immutable.d.ts",
+        "./assets/js/typings/whiteboard.d.ts",
     ]
 }

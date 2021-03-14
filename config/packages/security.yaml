@@ -1,0 +1,55 @@
+security:
+    encoders:
+        App\Entity\UserTable:
+            algorithm: 'argon2i'
+            # maximum memory (in KiB) that may be used to compute the Argon2 hash
+            memory_cost: 1024
+            #  number of times the Argon2 hash algorithm will be run
+            time_cost: 2
+            # number of threads to use for computing the Argon2 hash
+            threads: 2
+            
+    # http://symfony.com/doc/current/book/security.html#where-do-users-come-from-user-providers
+    providers:
+        user_db_provider:
+            entity:
+                class: App:UserTable
+                property: username
+
+    firewalls:
+        # disables authentication for assets and the profiler, adapt it according to your needs
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        login:
+            pattern: ^/login$
+            anonymous: ~
+
+        register:
+            pattern: ^/register$
+            anonymous: ~
+
+
+        secured_area:
+            pattern: ^/
+            form_login:
+                login_path: /login
+                check_path: /login_check
+                csrf_token_generator: security.csrf.token_manager
+            logout:
+                path:   /logout
+                target: /
+
+        default:
+            anonymous: ~
+
+
+
+            # activate different ways to authenticate
+
+            # http_basic: ~
+            # http://symfony.com/doc/current/book/security.html#a-configuring-how-your-users-will-authenticate
+
+            # form_login: ~
+            # http://symfony.com/doc/current/cookbook/security/form_login_setup.html

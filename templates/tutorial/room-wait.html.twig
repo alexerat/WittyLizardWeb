@@ -1,0 +1,11 @@
+{% extends 'site_frame.html.twig' %}
+
+{% block body %}
+    <article>
+        <script src="{{ asset('build/WaitingList.js') }}"></script>
+
+        <form action="../{{ roomToken }}" method="post">
+            <input type="submit" value="Join Room">
+        </form>
+    </article>
+{% endblock %}

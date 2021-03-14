@@ -1,0 +1,72 @@
+{% extends 'site_frame.html.twig' %}
+
+{% block framework %}
+    {{ parent() }}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.3/socket.io.js"></script>
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('build/room.css') }}" />
+    <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Noto+Sans'>
+{% endblock %}
+
+{% block body %}
+    {{ parent() }}
+    <div style="display:table; width: 100%; height: 100%;">
+        <div id="media-app"></div>
+        <div id="whiteboard-app"></div>
+    </div>
+{% endblock %}
+
+
+{% block javascripts %}
+    {{ parent() }}
+
+    <script> 
+        setVariable('roomToken', '{{roomToken}}');
+        setVariable('serverToken','{{serverToken}}');
+        setVariable('sessionId','{{sessionId}}');
+        setVariable('isHost','{{isHost}}');
+
+        var components = Immutable.Map();
+
+        var registerComponentView = function(componentName, ElementView, PalleteView, ModeView, DrawHandle)
+        {
+            console.log('Registering view for: ' + componentName);
+            let newComp =
+            {
+                componentName: componentName, ElementView: ElementView, PalleteView: PalleteView, ModeView: ModeView, DrawHandle: DrawHandle
+            };
+            components = components.set(componentName, newComp);
+
+            console.log('View Regisered.');
+        }
+    </script>
+
+    <script src="{{ asset('build/room.js') }}"></script>
+
+    <article>
+        <script src="{{ asset('build/curve_view.js') }}"></script>
+        <script src="{{ asset('build/text_view.js') }}"></script>
+        <script src="{{ asset('build/upload_view.js') }}"></script>
+        <script src="{{ asset('build/highlight_view.js') }}"></script>
+
+        <script> 
+
+        // Push other view names and other controllers.
+        // TODO: Dynamic component loading.
+        let componentFiles = [];
+        componentFiles.push("{{ asset('build/curve_element.js') }}"); 
+        componentFiles.push("{{ asset('build/text_element.js') }}"); 
+        componentFiles.push("{{ asset('build/upload_element.js') }}"); 
+        componentFiles.push("{{ asset('build/highlight_element.js') }}"); 
+        setVariable('workerUrlGlobal', "{{ asset('build/whiteboard_worker.js') }}");
+        </script>
+
+    </article>
+{% endblock %}
+
+{% block tests %}
+    {{ parent() }}
+{% endblock %}
